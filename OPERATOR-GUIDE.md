@@ -3,7 +3,7 @@
 ## For Jason (RC remote) and Malaki (joystick)
 
 This machine has **two ways to drive it**: an RC remote controller and a
-joystick mounted on the boom. An Arduino Nano sits in the middle and
+joystick. An Arduino Nano sits in the middle and
 decides which input controls the tracks based on a 3-position switch on
 the remote.
 
