@@ -42,8 +42,8 @@ CHANNELS = [
     ("d7",   "D7 — CH5 Override",    "green",       (800, 2200), 1500, "us"),
     ("a0",   "A0 — Joystick Y",      "purple",      (0, 1023),   512,  "ADC"),
     ("a1",   "A1 — Joystick X",      "darkcyan",    (0, 1023),   512,  "ADC"),
-    ("lesc", "L — Left ESC Out",     "darkorange",  (800, 2200), 1500, "us"),
-    ("resc", "R — Right ESC Out",    "saddlebrown", (800, 2200), 1500, "us"),
+    ("lesc", "L — Left ESC (40%)",  "darkorange",  (1200, 1800), 1500, "us"),
+    ("resc", "R — Right ESC (40%)", "saddlebrown", (1200, 1800), 1500, "us"),
 ]
 
 # Indices of servo-range channels that get 1000/2000 reference lines
@@ -88,6 +88,11 @@ for i, (key, label, color, ylim, center, unit) in enumerate(CHANNELS):
 for i in SERVO_CHANNELS:
     axes[i].axhline(y=1000, color="gray", linestyle=":", alpha=0.3)
     axes[i].axhline(y=2000, color="gray", linestyle=":", alpha=0.3)
+
+# ESC output limit lines (40% power cap = 1300-1700us)
+for i in [5, 6]:
+    axes[i].axhline(y=1300, color="red", linestyle="--", alpha=0.4, label="40% limit")
+    axes[i].axhline(y=1700, color="red", linestyle="--", alpha=0.4)
 
 axes[-1].set_xlabel("Samples")
 plt.tight_layout()

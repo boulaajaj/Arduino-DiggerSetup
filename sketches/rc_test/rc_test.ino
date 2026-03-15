@@ -51,9 +51,13 @@ const int  JOY_CENTER       = 512;
 const int  SERVO_CENTER     = 1500;
 const int  SERVO_MIN        = 1000;
 const int  SERVO_MAX        = 2000;
+const int  POWER_LIMIT_PCT  = 40;     // Max output as % of full range
+const int  OUTPUT_MIN       = SERVO_CENTER - (500L * POWER_LIMIT_PCT / 100); // 1300
+const int  OUTPUT_MAX       = SERVO_CENTER + (500L * POWER_LIMIT_PCT / 100); // 1700
 const int  MODE_LOW_THRESH  = 1250;   // CH5 below = Mode 1
 const int  MODE_HIGH_THRESH = 1750;   // CH5 above = Mode 3
-const long SMOOTH_TAU       = 800;    // EMA time constant (ms)
+const long SMOOTH_TAU_UP    = 800;    // EMA time constant for acceleration (ms)
+const long SMOOTH_TAU_DOWN  = 400;    // EMA time constant for deceleration (ms)
 const long FAILSAFE_TIMEOUT = 500;    // Neutral after this long without RC (ms)
 const int  SERIAL_INTERVAL  = 50;     // Serial output every N ms (20 Hz)
 
@@ -256,22 +260,40 @@ void loop() {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. EMA Smoothing (800ms time constant)
+  // 6. Power Limit (40% max output)
+  //    Clamp left/right to OUTPUT_MIN..OUTPUT_MAX (1300-1700us)
   // ---------------------------------------------------------------------------
-  float alpha = (float)dt / (SMOOTH_TAU + (float)dt);
-  smoothLeft  += alpha * (left  - smoothLeft);
-  smoothRight += alpha * (right - smoothRight);
-  int outLeft  = constrain((int)(smoothLeft  + 0.5f), SERVO_MIN, SERVO_MAX);
-  int outRight = constrain((int)(smoothRight + 0.5f), SERVO_MIN, SERVO_MAX);
+  left  = constrain(left,  OUTPUT_MIN, OUTPUT_MAX);
+  right = constrain(right, OUTPUT_MIN, OUTPUT_MAX);
 
   // ---------------------------------------------------------------------------
-  // 7. Write to ESCs
+  // 7. Asymmetric EMA Smoothing
+  //    Accelerating (away from center): 800ms — gentle ramp up
+  //    Decelerating (toward center):    400ms — quick stop
+  // ---------------------------------------------------------------------------
+  float targetDistL = abs(left  - SERVO_CENTER);
+  float smoothDistL = abs(smoothLeft  - SERVO_CENTER);
+  long tauL = (targetDistL > smoothDistL) ? SMOOTH_TAU_UP : SMOOTH_TAU_DOWN;
+  float alphaL = (float)dt / (tauL + (float)dt);
+  smoothLeft += alphaL * (left - smoothLeft);
+
+  float targetDistR = abs(right - SERVO_CENTER);
+  float smoothDistR = abs(smoothRight - SERVO_CENTER);
+  long tauR = (targetDistR > smoothDistR) ? SMOOTH_TAU_UP : SMOOTH_TAU_DOWN;
+  float alphaR = (float)dt / (tauR + (float)dt);
+  smoothRight += alphaR * (right - smoothRight);
+
+  int outLeft  = constrain((int)(smoothLeft  + 0.5f), OUTPUT_MIN, OUTPUT_MAX);
+  int outRight = constrain((int)(smoothRight + 0.5f), OUTPUT_MIN, OUTPUT_MAX);
+
+  // ---------------------------------------------------------------------------
+  // 8. Write to ESCs
   // ---------------------------------------------------------------------------
   escLeft.writeMicroseconds(outLeft);
   escRight.writeMicroseconds(outRight);
 
   // ---------------------------------------------------------------------------
-  // 8. Serial Output (rate-limited)
+  // 9. Serial Output (rate-limited)
   // ---------------------------------------------------------------------------
   if (now - prevSerialTime >= SERIAL_INTERVAL) {
     prevSerialTime = now;
