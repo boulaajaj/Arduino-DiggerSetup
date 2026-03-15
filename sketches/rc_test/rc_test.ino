@@ -158,6 +158,13 @@ int joyToServo(int adcValue) {
   return map(adcValue, 0, 1023, SERVO_MIN, SERVO_MAX);
 }
 
+// Scale full input range (1000-2000) proportionally to limited output range.
+// 50% stick → 20% output, 100% stick → 40% output. No wasted travel.
+int scalePower(int value) {
+  long delta = value - SERVO_CENTER;  // -500 to +500
+  return SERVO_CENTER + (int)(delta * POWER_LIMIT_PCT / 100);
+}
+
 // =============================================================================
 // Setup
 // =============================================================================
@@ -260,11 +267,12 @@ void loop() {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. Power Limit (40% max output)
-  //    Clamp left/right to OUTPUT_MIN..OUTPUT_MAX (1300-1700us)
+  // 6. Power Scaling (40% proportional)
+  //    Maps full input range to 40% output range — no wasted stick travel.
+  //    100% stick → 40% output, 50% stick → 20% output, etc.
   // ---------------------------------------------------------------------------
-  left  = constrain(left,  OUTPUT_MIN, OUTPUT_MAX);
-  right = constrain(right, OUTPUT_MIN, OUTPUT_MAX);
+  left  = scalePower(left);
+  right = scalePower(right);
 
   // ---------------------------------------------------------------------------
   // 7. Asymmetric EMA Smoothing
