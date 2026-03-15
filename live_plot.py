@@ -17,8 +17,8 @@ Usage:
   python live_plot.py
   (or Ctrl+Shift+B in VS Code -> "Live Plot")
 
-Expects serial format:
-  D4=1500  D2=1500  D7=1000  A0=512  A1=512  L=1500  R=1500
+Expects serial format (115200 baud):
+  D2=1500  D4=1500  D7=1000  A0=512  A1=512  L=1500  R=1500
 """
 
 import re
@@ -32,7 +32,7 @@ import serial
 # Configuration
 # -----------------------------------------------------------------------------
 PORT   = "COM7"
-BAUD   = 9600
+BAUD   = 115200
 WINDOW = 200  # Number of data points visible on screen
 
 # Channel definitions: (key, label, color, y_range, center, unit)
@@ -50,12 +50,13 @@ CHANNELS = [
 SERVO_CHANNELS = [0, 1, 2, 5, 6]
 
 # Serial parse pattern (must match Arduino output format)
+# Arduino sends: D2=...  D4=...  D7=...  A0=...  A1=...  L=...  R=...
 PATTERN = re.compile(
-    r"D4=(\d+)\s+D2=(\d+)\s+D7=(\d+)\s+A0=(\d+)\s+A1=(\d+)\s+L=(\d+)\s+R=(\d+)"
+    r"D2=(\d+)\s+D4=(\d+)\s+D7=(\d+)\s+A0=(\d+)\s+A1=(\d+)\s+L=(\d+)\s+R=(\d+)"
 )
 
-# Regex group index -> buffer index mapping (D4 is sent first but displayed second)
-PARSE_ORDER = [1, 0, 2, 3, 4, 5, 6]  # group1->d4, group2->d2, etc.
+# Regex group -> buffer mapping: groups match channel order directly
+PARSE_ORDER = [0, 1, 2, 3, 4, 5, 6]
 
 # -----------------------------------------------------------------------------
 # Data Buffers
