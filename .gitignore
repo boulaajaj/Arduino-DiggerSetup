@@ -1,0 +1,21 @@
+# IDE
+.vscode/
+*.code-workspace
+
+# Build
+build/
+*.elf
+*.hex
+*.bin
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Arduino
+libraries/
