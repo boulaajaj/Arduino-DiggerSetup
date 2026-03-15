@@ -14,9 +14,9 @@ joystick enable/override switch.
 |----|-----------------|------------------|------|------------------------------------|
 | 1  | RC Receiver     | Servo PWM        | D2   | Throttle — forward / backward      |
 | 2  | RC Receiver     | Servo PWM        | D4   | Steering — left / right            |
-| 3  | RC Receiver     | Servo PWM        | D7   | Override switch (see logic below)  |
-| 4  | Boom Joystick   | Analog 0–5V      | A0   | Joystick throttle (Y axis)         |
-| 5  | Boom Joystick   | Analog 0–5V      | A1   | Joystick steering (X axis)         |
+| 5  | RC Receiver     | Servo PWM        | D7   | Override switch (3-pos, see below) |
+| —  | Boom Joystick   | Analog 0–5V      | A0   | Joystick throttle (Y axis)         |
+| —  | Boom Joystick   | Analog 0–5V      | A1   | Joystick steering (X axis)         |
 
 ## Outputs (2 channels)
 
@@ -27,15 +27,25 @@ joystick enable/override switch.
 
 ---
 
-## Override Switch Logic (CH3)
+## Override Switch Logic (Receiver CH5 → D7, 3-position switch)
 
-| CH3 State   | Joystick   | RC Receiver          |
-|-------------|------------|----------------------|
-| LOW (muted) | Disabled   | In full control      |
-| HIGH (on)   | Active     | Still overrides joystick at all times |
+| CH5 Position | PWM Value | Joystick           | RC Receiver                    |
+|-------------|-----------|--------------------|---------------------------------|
+| LOW (~1000) | Mode 1    | Disabled           | Full control                    |
+| MID (~1500) | Mode 2    | Active             | Fully overrides joystick        |
+| HIGH (~2000)| Mode 3    | Active             | 50% override (blended control)  |
 
-When CH3 is HIGH and RC gives a non-neutral signal, RC takes priority.
-When RC is at neutral, joystick controls the machine.
+**Mode 1 — Remote only:** Joystick input is completely ignored. RC
+transmitter has full authority over both tracks.
+
+**Mode 2 — Remote + Joystick (full override):** Joystick is active and
+controls the tracks when RC sticks are at neutral. When RC gives any
+non-neutral input, RC takes 100% priority and joystick is ignored.
+
+**Mode 3 — Remote + Joystick (blended):** Both inputs are active
+simultaneously. RC override is reduced to ~50%, so the joystick retains
+partial authority even when RC is giving input. Useful for fine-tuning
+position while someone assists via remote.
 
 ---
 
@@ -87,7 +97,7 @@ Forward straight: full throttle + zero steering
                     ┌───────────────────┐
     RC CH1 ────────>│ D2                │
     RC CH2 ────────>│ D4                │
-    RC CH3 ────────>│ D7           D9  ~│────────> Left Track ESC
+    RC CH5 ────────>│ D7           D9  ~│────────> Left Track ESC
                     │             D10  ~│────────> Right Track ESC
   Joy Y (Thr) ─────>│ A0                │
   Joy X (Str) ─────>│ A1                │
@@ -100,7 +110,7 @@ Forward straight: full throttle + zero steering
   ┌──────────┐                   ┌──────────┐
   │ CH1 ─────┼──> D2             │ Left ESC │<── D9
   │ CH2 ─────┼──> D4             └──────────┘
-  │ CH3 ─────┼──> D7             ┌──────────┐
+  │ CH5 ─────┼──> D7             ┌──────────┐
   │ VCC <────┼─── 5V             │Right ESC │<── D10
   │ GND <────┼─── GND            └──────────┘
   └──────────┘
@@ -120,7 +130,7 @@ Forward straight: full throttle + zero steering
 ```
 D2  ← RC Receiver CH1 (Throttle)       [PWM input, INT0]
 D4  ← RC Receiver CH2 (Steering)       [PWM input]
-D7  ← RC Receiver CH3 (Override sw)    [PWM input]
+D7  ← RC Receiver CH5 (Override sw)    [PWM input, 3-position]
 A0  ← Joystick Y axis (Throttle)       [Analog input, 0–5V]
 A1  ← Joystick X axis (Steering)       [Analog input, 0–5V]
 D9  → Left Track ESC                   [PWM output ~]
@@ -136,11 +146,12 @@ GND → All components (common ground)
 
 ### Current: Arduino Nano V3 Clone (testing/development)
 - **MCU:** ATmega328P (AVR, 16MHz, 2KB RAM, 32KB flash)
-- **USB:** CH340G — requires driver install, Old Bootloader setting
+- **USB:** CH340G — requires driver install
 - **Interrupts:** Only D2 (INT0) and D3 (INT1)
-- **Board package:** `arduino:avr` → Board: Arduino Nano → Processor: ATmega328P (Old Bootloader)
+- **Board package:** `arduino:avr` → Board: Arduino Nano → Processor: ATmega328P (NEW bootloader, 115200 baud)
+- **Upload via CLI:** `arduino-cli upload -p COM7 --fqbn arduino:avr:nano:cpu=atmega328`
 - **Port:** COM7
-- **Limitation:** `pulseIn()` blocking reads — ~15Hz update rate with 3 RC channels
+- **Limitation:** `pulseIn()` blocking reads — confirmed: reading order affects which channels get data. Only first-read channel is reliable. All 3 channels work individually.
 
 ### Target: Arduino Nano R4 [ABX00143] (arriving in mail)
 - **MCU:** Renesas RA4M1 (Arm Cortex-M4, 48MHz, 32KB RAM, 256KB flash)
@@ -172,6 +183,10 @@ GND → All components (common ground)
 
 ## Status
 - [x] Joystick voltage/signal confirmed (Genie 101174GT, 5V, analog)
+- [x] RC CH1 (D2) verified — throttle, center ~1500μs
+- [x] RC CH2 (D4) verified — steering, center ~1497μs
+- [x] RC CH5 (D7) verified — 3-pos override, LOW ~972μs, HIGH ~2060μs
+- [x] pulseIn() blocking confirmed — Nano R4 interrupt migration required
 - [ ] Wiring complete
 - [ ] Sketch written (V1 — pulseIn, Nano V3)
 - [ ] Tank mix tested on bench
