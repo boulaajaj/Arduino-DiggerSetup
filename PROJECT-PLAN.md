@@ -58,24 +58,24 @@ position while someone assists via remote.
 ## Signal Processing Pipeline
 
 ```
-RC (PCINT ISR) ─────────────────────────────────────┐
+RC (attachInterrupt ISR) ───────────────────────────┐
                                                      ├─ Mode Select ─┐
-Joystick (analogRead) ─ Deadband ─ Map ─ Tank Mix ──┘               │
+Joystick (analogRead 14-bit) ─ Deadband ─ Map ─ Mix ┘               │
                                                                      v
-                                            Proportional Power Scale (40%)
+                                          Exponential Power Scale (50%)
                                                                      │
                                                                      v
-                                               Asymmetric EMA Smoothing
-                                               (800ms up / 400ms down)
+                                            Deceleration-Only Smoothing
+                                                  (instant up / 300ms down)
                                                                      │
                                                                      v
                                                   Servo Output (D9, D10)
 ```
 
-### RC Reading — Pin Change Interrupts (PCINT)
-All 3 RC channels are decoded simultaneously in a hardware ISR
-(`PCINT2_vect` on Port D). This eliminates the blocking behavior of
-`pulseIn()` — the main loop runs at 1000+ Hz with no missed pulses.
+### RC Reading — Hardware Interrupts (attachInterrupt)
+All 3 RC channels use `attachInterrupt()` with CHANGE mode. The Nano R4
+supports hardware interrupts on all digital pins — no PCINT register
+manipulation needed. Main loop runs at 1000+ Hz with no missed pulses.
 
 ### Tank Mix (Joystick Only)
 The joystick outputs raw throttle (A0) and steering (A1). The Arduino
@@ -90,34 +90,34 @@ right = throttle - steerOffset
 RC signals are already tank-mixed by the transmitter and pass through
 without a second mix.
 
-### Power Scaling — 40% Proportional
-Output is scaled proportionally so the full stick travel maps to 40%
-of the ESC range. No wasted stick travel — every bit of movement
-produces a proportional change in output.
+### Exponential Power Scaling — 50% with Curve
+Output uses an exponential curve (exponent 2.5) so full stick travel
+maps to 50% of the ESC range with fine control at low inputs.
 
 ```
-output = 1500 + (input - 1500) × 40%
+normalized = (input - 1500) / 500        // -1.0 to +1.0
+curved     = sign × |normalized|^2.5     // exponential curve
+output     = 1500 + curved × 500 × 50%   // scaled to power limit
 ```
 
 | Stick | Input (μs) | Output (μs) | Power |
 |-------|-----------|-------------|-------|
 | Center | 1500 | 1500 | 0% |
-| 25% | 1625 | 1550 | 10% |
-| 50% | 1750 | 1600 | 20% |
-| 75% | 1875 | 1650 | 30% |
-| 100% | 2000 | 1700 | 40% |
+| 10% | 1550 | 1500.8 | ~0.3% |
+| 25% | 1625 | 1507.8 | ~3.1% |
+| 50% | 1750 | 1544.2 | ~17.7% |
+| 75% | 1875 | 1618.5 | ~37.0% |
+| 100% | 2000 | 1750 | 50% |
 
-ESC signal range: **1300μs** (full reverse) to **1700μs** (full forward).
+ESC signal range: **1250μs** (full reverse) to **1750μs** (full forward).
 
-### Asymmetric EMA Smoothing
-Exponential Moving Average with different time constants for acceleration
-vs. deceleration:
+### Deceleration-Only Smoothing
+- **Accelerating** (moving away from center): **INSTANT** — no delay
+- **Decelerating** (returning to center): **300ms EMA** — smooth, safe stop
 
-- **Accelerating** (moving away from center): **800ms** — gentle ramp up
-- **Decelerating** (returning to center): **400ms** — quick stop
-
-This prevents jerky starts while ensuring the machine stops quickly to
-avoid collisions.
+The exponential curve provides natural fine control at low inputs,
+replacing the need for acceleration ramping. Deceleration ramp prevents
+jerky stops and keeps operators safe.
 
 ### Deadbands
 - **RC:** ±50μs around 1500 — values in 1450–1550 snap to neutral
@@ -192,35 +192,31 @@ GND → All components (common ground)
 
 ## Hardware
 
-### Current: Arduino Nano V3 Clone
-- **MCU:** ATmega328P (AVR, 16MHz, 2KB RAM, 32KB flash)
-- **USB:** CH340G — requires driver install
-- **RC reading:** Pin Change Interrupts (PCINT2) on D2, D4, D7
-- **Board package:** `arduino:avr` → Board: Arduino Nano → ATmega328P (NEW bootloader, 115200 baud)
-- **Upload:** `arduino-cli upload -p COM7 --fqbn arduino:avr:nano:cpu=atmega328`
+### Current: Arduino Nano R4 [ABX00143]
+- **MCU:** Renesas RA4M1 (Arm Cortex-M4, 48MHz, 32KB RAM, 256KB flash)
+- **USB:** Native USB on COM8 — no driver needed
+- **RC reading:** `attachInterrupt()` on D2, D4, D7 (hardware interrupts)
+- **ADC:** 14-bit (0-16383) — 16x joystick resolution vs Nano V3
+- **Board package:** `arduino:renesas_uno` (v1.5.3)
+- **FQBN:** `arduino:renesas_uno:nanor4`
+- **Upload:** `arduino-cli upload -p COM8 --fqbn arduino:renesas_uno:nanor4 sketches/rc_test`
 - **Serial:** 115200 baud
 
-### Target: Arduino Nano R4 [ABX00143]
-- **MCU:** Renesas RA4M1 (Arm Cortex-M4, 48MHz, 32KB RAM, 256KB flash)
-- **USB:** Native USB — no driver needed
-- **RC reading:** `attachInterrupt()` on all digital pins
-- **Board package:** `arduino:renesas_uno`
-
-### Migration Plan (V3 → R4)
-1. Install `arduino:renesas_uno` board package
-2. Swap board — same form factor, same pin layout, no wiring changes
-3. Update sketch: replace PCINT ISR with `attachInterrupt()` for RC channels
-4. No CH340 driver needed — native USB
+### Previous: Arduino Nano V3 Clone (retired)
+- **MCU:** ATmega328P (AVR, 16MHz, 2KB RAM, 32KB flash)
+- **USB:** CH340G on COM7
+- **RC reading:** Pin Change Interrupts (PCINT2)
+- **ADC:** 10-bit (0-1023)
 
 ---
 
 ## Software
 
 ### Sketch: `sketches/rc_test/rc_test.ino`
-- **Version:** V1.2 (interrupt-based, proportional scaling)
-- **Flash:** 6.5 KB (21% of 30 KB)
-- **RAM:** 317 bytes (15% of 2 KB)
-- **Loop rate:** ~1000 Hz (interrupt-driven, no blocking reads)
+- **Version:** V2.0 (Nano R4, exponential curve, instant response)
+- **Flash:** 45.7 KB (17% of 256 KB)
+- **RAM:** 4.4 KB (13% of 32 KB)
+- **Loop rate:** ~1000+ Hz (interrupt-driven, no blocking reads)
 - **Serial output:** 20 Hz at 115200 baud
 
 ### Live Plot: `live_plot.py`
@@ -232,11 +228,12 @@ GND → All components (common ground)
 ### Tuning Constants (in sketch)
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `POWER_LIMIT_PCT` | 40 | Max output as % of full range |
-| `SMOOTH_TAU_UP` | 800 ms | Acceleration smoothing |
-| `SMOOTH_TAU_DOWN` | 400 ms | Deceleration smoothing |
+| `POWER_LIMIT_PCT` | 50 | Max output as % of full range |
+| `EXP_CURVE` | 2.5 | Exponential exponent (higher = finer low-end) |
+| `SMOOTH_TAU_DOWN` | 300 ms | Deceleration smoothing (accel is instant) |
 | `RC_DEADBAND` | ±50 μs | RC neutral zone |
-| `JOY_DEADBAND` | ±30 | Joystick neutral zone (ADC units) |
+| `JOY_DEADBAND` | ±480 | Joystick neutral zone (~3% of 14-bit range) |
+| `JOY_CENTER` | 8192 | 14-bit ADC midpoint |
 | `FAILSAFE_TIMEOUT` | 500 ms | Neutral if RC lost |
 
 ---
@@ -250,10 +247,13 @@ GND → All components (common ground)
 - [x] Tank mixer sketch written and tested (V1.2)
 - [x] RC pass-through verified (transmitter pre-mixes)
 - [x] Joystick tank mix verified
-- [x] 40% proportional power scaling implemented
-- [x] Asymmetric EMA smoothing (800ms up / 400ms down)
+- [x] 40% proportional power scaling implemented (V1.2)
+- [x] Asymmetric EMA smoothing — V1.2 (replaced by exponential in V2.0)
 - [x] 7-panel live plot with ESC output monitoring
+- [x] Migrate to Nano R4 (attachInterrupt, 14-bit ADC)
+- [x] Exponential control curve (exponent 2.5, instant response)
+- [x] 50% power cap with deceleration-only ramp (300ms)
+- [ ] CH4 emergency kill switch (safety — disable all ESC output)
 - [ ] Joystick harness wiring identified (reverse engineering in progress)
 - [ ] Full wiring on final board
-- [ ] Migrate to Nano R4 (interrupt-based reading)
 - [ ] Field test

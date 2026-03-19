@@ -18,7 +18,7 @@ Usage:
   (or Ctrl+Shift+B in VS Code -> "Live Plot")
 
 Expects serial format (115200 baud):
-  D2=1500  D4=1500  D7=1000  A0=512  A1=512  L=1500  R=1500
+  D2=1500  D4=1500  D7=1000  A0=8192  A1=8192  L=1500  R=1500
 """
 
 import re
@@ -31,7 +31,7 @@ import serial
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-PORT   = "COM7"
+PORT   = "COM8"
 BAUD   = 115200
 WINDOW = 200  # Number of data points visible on screen
 
@@ -40,10 +40,10 @@ CHANNELS = [
     ("d2",   "D2 — CH1 Throttle",    "blue",        (800, 2200), 1500, "us"),
     ("d4",   "D4 — CH2 Steering",    "red",         (800, 2200), 1500, "us"),
     ("d7",   "D7 — CH5 Override",    "green",       (800, 2200), 1500, "us"),
-    ("a0",   "A0 — Joystick Y",      "purple",      (0, 1023),   512,  "ADC"),
-    ("a1",   "A1 — Joystick X",      "darkcyan",    (0, 1023),   512,  "ADC"),
-    ("lesc", "L — Left ESC (40%)",  "darkorange",  (1200, 1800), 1500, "us"),
-    ("resc", "R — Right ESC (40%)", "saddlebrown", (1200, 1800), 1500, "us"),
+    ("a0",   "A0 — Joystick Y",      "purple",      (0, 16383),  8192, "ADC"),
+    ("a1",   "A1 — Joystick X",      "darkcyan",    (0, 16383),  8192, "ADC"),
+    ("lesc", "L — Left ESC (50%)",  "darkorange",  (1150, 1850), 1500, "us"),
+    ("resc", "R — Right ESC (50%)", "saddlebrown", (1150, 1850), 1500, "us"),
 ]
 
 # Indices of servo-range channels that get 1000/2000 reference lines
@@ -89,10 +89,10 @@ for i in SERVO_CHANNELS:
     axes[i].axhline(y=1000, color="gray", linestyle=":", alpha=0.3)
     axes[i].axhline(y=2000, color="gray", linestyle=":", alpha=0.3)
 
-# ESC output limit lines (40% power cap = 1300-1700us)
+# ESC output limit lines (50% power cap = 1250-1750us)
 for i in [5, 6]:
-    axes[i].axhline(y=1300, color="red", linestyle="--", alpha=0.4, label="40% limit")
-    axes[i].axhline(y=1700, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1250, color="red", linestyle="--", alpha=0.4, label="50% limit")
+    axes[i].axhline(y=1750, color="red", linestyle="--", alpha=0.4)
 
 axes[-1].set_xlabel("Samples")
 plt.tight_layout()

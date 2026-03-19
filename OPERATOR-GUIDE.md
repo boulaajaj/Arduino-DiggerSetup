@@ -67,28 +67,31 @@ The 3-position switch on Jason's remote controls who drives:
 
 ## Safety Features
 
-### 40% Power Limit
-The motors are very powerful. The system limits output to **40% of full
+### 50% Power Limit with Exponential Curve
+The motors are very powerful. The system limits output to **50% of full
 power** at all times. This applies to BOTH the remote and the joystick.
 
-Full stick travel is still usable — pushing the stick halfway gives 20%
-power, all the way gives 40%. No stick movement is wasted.
+The response follows an **exponential curve** — small stick movements
+give very fine control, while larger movements ramp up progressively.
+This feels like a real excavator: precise positioning at low speed,
+strong power when you push further.
 
-| Stick Position | Power Output |
-|---------------|-------------|
-| 25% | 10% |
-| 50% | 20% |
-| 75% | 30% |
-| 100% (full) | 40% (max) |
+| Stick Position | Power Output | Feel |
+|---------------|-------------|------|
+| 10% | ~0.3% | Barely creeping — fine positioning |
+| 25% | ~3% | Slow, controlled movement |
+| 50% | ~18% | Moderate working speed |
+| 75% | ~37% | Strong movement |
+| 100% (full) | 50% (max) | Full allowed power |
 
-### Smooth Acceleration
-The system prevents jerky starts by gradually ramping up motor speed:
-- **Speeding up:** Takes about **0.8 seconds** to reach full requested speed
-- **Slowing down:** Takes about **0.4 seconds** to stop
+### Instant Response, Smooth Stop
+- **Speeding up:** **INSTANT** — the machine responds immediately to
+  stick input. The exponential curve prevents jerky starts naturally.
+- **Slowing down:** Takes about **0.3 seconds** to coast to a stop.
+  This prevents sudden jolts when the stick is released.
 
-This means the machine won't lurch forward when the stick is pushed
-quickly, but it WILL stop quickly when the stick is released — important
-for avoiding obstacles.
+This means: push the stick and it moves right away (no lag), but
+release the stick and it comes to a smooth, safe stop.
 
 ### RC Signal Loss Protection
 If the Arduino loses the RC signal for more than half a second (remote
@@ -109,9 +112,9 @@ somewhere it shouldn't, Jason can intervene immediately.
 | Jason drives alone | Switch to Mode 1 (down) |
 | Both drive together | Switch to Mode 3 (up) |
 | Emergency stop | Jason: sticks to center in any mode |
-| Max speed | 40% of motor capacity (safety limit) |
-| Ramp up time | ~0.8 seconds |
-| Stop time | ~0.4 seconds |
+| Max speed | 50% of motor capacity (safety limit) |
+| Response | Instant (exponential curve) |
+| Stop time | ~0.3 seconds (smooth ramp) |
 
 ---
 
@@ -123,13 +126,13 @@ top of the file:
 
 | Setting | Current Value | What It Does |
 |---------|--------------|--------------|
-| `POWER_LIMIT_PCT` | 40 | Max power output (%) — raise or lower as needed |
-| `SMOOTH_TAU_UP` | 800 | Acceleration smoothing in ms (higher = slower start) |
-| `SMOOTH_TAU_DOWN` | 400 | Deceleration smoothing in ms (higher = slower stop) |
+| `POWER_LIMIT_PCT` | 50 | Max power output (%) — raise or lower as needed |
+| `EXP_CURVE` | 2.5 | Exponential feel (higher = more fine control at low stick) |
+| `SMOOTH_TAU_DOWN` | 300 | Deceleration smoothing in ms (higher = slower stop) |
 | `RC_DEADBAND` | 50 | How far RC sticks must move to register (μs) |
-| `JOY_DEADBAND` | 30 | How far joystick must move to register (ADC units) |
+| `JOY_DEADBAND` | 480 | How far joystick must move to register (14-bit ADC units) |
 
 After changing a value, re-upload the sketch to the Arduino using:
 ```
-arduino-cli upload -p COM7 --fqbn arduino:avr:nano:cpu=atmega328 sketches/rc_test/rc_test.ino
+arduino-cli upload -p COM8 --fqbn arduino:renesas_uno:nanor4 sketches/rc_test
 ```
