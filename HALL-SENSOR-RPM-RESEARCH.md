@@ -279,6 +279,114 @@ For each motor (left and right), you'll need:
 
 ---
 
+## 8. XC E10 ESC + E3665 Motor — Bluetooth Settings & Interference Analysis
+
+### Your Specific Hardware
+
+- **ESC:** XC E10 — 140A sensored brushless ESC, 2-4S LiPo, built-in Bluetooth
+- **Motor:** XC E3665 — sensored brushless, 4-pole, 2500KV, IP67, with hall sensors
+- **App:** XC-Link (built-in Bluetooth, no external programmer needed)
+
+### Will There Be Interference?
+
+**The chances of success are HIGH.** Here's the detailed analysis:
+
+#### Why Interference Risk Is LOW
+
+1. **Hall signals are digital (0V / 5V square waves)** — not analog. Digital
+   signals are inherently noise-resistant because you only care about HIGH vs LOW,
+   not an exact voltage level.
+2. **The ESC already reads these same signals successfully** — if the signals were
+   too noisy, the motor wouldn't run smoothly in sensored mode. The fact that it
+   works means the signals are clean enough.
+3. **The Arduino only passively reads** — it doesn't inject any current or voltage
+   into the signal lines, so it cannot create interference for the ESC.
+4. **Short cable runs** — the Y-splitter is only 7.9" (20cm). EMI problems
+   typically manifest over longer wire runs.
+
+#### Potential Interference Sources (and Why They're Manageable)
+
+| Source | Risk | Explanation |
+|--------|------|-------------|
+| ESC PWM switching noise | Low | The ESC switches motor phases at high frequency (8-20kHz). This could theoretically couple into the hall sensor wires, but since the ESC already deals with this successfully, the Arduino will too. |
+| Motor back-EMF | Very Low | The hall sensor wires are physically separate from the motor phase wires inside the connector. The Y-splitter maintains this separation. |
+| Ground loop | Low-Medium | If the Arduino is powered from a different source than the ESC (e.g., USB vs battery), there could be a ground potential difference. **Solution:** Power Arduino from the ESC's BEC output (6V/7.4V to VIN pin). |
+| Bluetooth radio | Negligible | 2.4GHz Bluetooth has zero effect on DC-level hall sensor signals. |
+
+#### If You DO Get Noise (Mitigation)
+
+Based on Arduino Forum community experience with ESC + hall sensor setups:
+
+1. **Add a 100nF ceramic capacitor** between each hall signal wire and GND, as
+   close to the Arduino pin as possible. This filters high-frequency switching noise.
+2. **Use shielded cable** for the Arduino-side breakout if unshielded wire picks
+   up noise. Connect shield to GND at the Arduino end only.
+3. **Add a ferrite clamp** on the breakout cable near the Arduino end.
+4. **Software debounce** — ignore pulses shorter than a minimum interval (e.g.,
+   discard any pulse interval < 100us, which would imply >600,000 RPM — impossible).
+
+### XC E10 Bluetooth Settings — What to Adjust
+
+Open the **XC-Link** app and connect to your E10 ESC. Here are the settings that
+matter for clean hall sensor signal passthrough and smooth motor control:
+
+#### Settings to CHANGE from Default
+
+| Setting | Recommended Value | Why |
+|---------|-------------------|-----|
+| **Turbo Timing** | **0°** (disabled) | Turbo timing advances commutation beyond sensor position, adding electrical noise. Set to 0° to keep commutation perfectly aligned with hall sensor readings. You can increase later once RPM reading is proven working. |
+| **Drag Brake** | **0%** (disabled) | Drag brake actively brakes the motor when throttle is neutral, which causes regenerative current flow and electrical noise. Disable it — your Arduino code already handles deceleration smoothing. |
+| **Acceleration Level** | **Level 1** (slowest) | The E10 has 12 acceleration levels. Start with the slowest to get the smoothest ramp-up, which generates the least electrical transient noise. Your Arduino code already does its own acceleration smoothing (800ms tau). |
+| **Running Mode** | **Forward/Brake/Reverse** | You need reverse for the digger tracks. |
+| **BEC Voltage** | **6.0V** | Use 6.0V for standard servos AND to power the Arduino via VIN pin. This keeps the Arduino and ESC on the same ground, eliminating ground loop risk. |
+
+#### Settings to LEAVE at Default
+
+| Setting | Default | Why Leave It |
+|---------|---------|-------------|
+| **Sensored Mode** | Enabled (auto-detected) | The E10 auto-detects if a sensored motor is connected. Leave this on — it gives the cleanest hall sensor signals. |
+| **LiPo Cell Count** | Auto-detect | Let it auto-detect your battery. |
+| **Low Voltage Cutoff** | Enabled | Important safety feature — leave on. |
+| **Smart Fan** | Auto (55°C threshold) | No reason to change this. |
+
+#### Settings That Do NOT Affect Hall Sensor Signals
+
+These ESC settings control the motor phase outputs (the big 3 power wires), NOT
+the hall sensor signal wires. They won't interfere with your Arduino reading:
+
+- Motor rotation direction (CW/CCW)
+- Current limiting
+- Over-temperature protection
+- Battery cell count
+
+### XC E3665 Motor — Hall Sensor Details
+
+- **Pole count:** 4 poles = **2 pole pairs**
+- **Hall sensors per revolution:** Each hall sensor triggers **2 times per
+  mechanical revolution** (once per pole pair)
+- **With 3 hall sensors:** You get **6 transitions per revolution**
+- **RPM formula:** `RPM = 60,000,000 / pulseInterval / 2` (for single hall sensor)
+  or `RPM = 60,000,000 / pulseInterval / 6 * 3` (using all 3 halls)
+- **6th wire (white):** On the XC E3665, this is likely a **temperature sensor**
+  (10kΩ NTC thermistor referenced to GND), NOT a speed sensor. The E10 ESC
+  monitors motor temperature through this wire. You can ignore it for RPM purposes.
+
+### Overall Confidence Assessment
+
+| Factor | Confidence |
+|--------|------------|
+| Y-splitter will pass signals correctly | **95%** — it's just parallel wiring |
+| Arduino can read hall signals | **95%** — 5V logic, well-documented |
+| No interference from ESC | **85%** — digital signals are robust; add 100nF caps as insurance |
+| RPM calculation will be accurate | **80%** — need to verify pole count in practice (spin motor by hand, count pulses) |
+| Overall approach | **HIGH** — this is a well-proven technique used in ebike and RC communities |
+
+The 15-20% uncertainty is not about whether it will work, but about calibration
+(exact pole count) and potential need for a simple capacitor filter. The
+fundamental approach is sound and widely used.
+
+---
+
 ## Sources
 
 - [Comprehensive Guide to Julet Connectors (electricvahicals.com)](https://electricvahicals.com/comprehensive-guide-to-julet-connectors-for-ebikes-6-pin-jolet-ebike-connector/)
@@ -293,3 +401,10 @@ For each motor (left and right), you'll need:
 - [Sensor Shield V5 Guide (PCBSync)](https://pcbsync.com/arduino-sensor-shield-v5/)
 - [DIYables Proto Screw Shield](https://diyables.io/products/proto-screw-shield-assembled-terminal-block-prototype-expansion-board-for-arduino-uno)
 - [Arduino Proto Shield Rev3 (Official)](https://store.arduino.cc/products/proto-shield-rev3-uno-size)
+- [XC E10 ESC Product Page (xc-esc.com)](https://www.xc-esc.com/product/e10-electric-speed-controller/)
+- [XC E3665 Motor Product Page (xc-esc.com)](https://www.xc-esc.com/product/e3665-sensored-brushless-motor-for-rc-cars/)
+- [XC-Link App (xc-esc.com)](https://www.xc-esc.com/xc-link/)
+- [XC-ESC E Series Guide (fatboysrc.co.uk)](https://fatboysrc.co.uk/index.php/2025/05/20/xc-esc-e-series-brushless-motor-and-esc/)
+- [XC E10 ESC Programming Guide (xc-esc.com)](https://www.xc-esc.com/programming-escs-for-race-guide/)
+- [Arduino Forum — Filtering Noise from Hall Sensor near ESC](https://forum.arduino.cc/t/how-to-filter-noise-out-of-hall-speed-sensor-esc-and-ignition-spark-closeby/264130)
+- [Arduino Forum — Hall Sensor Picking Up PWM Frequency](https://forum.arduino.cc/t/hall-effect-sensor-picking-up-input-pwm-frequency-to-the-motor/1082674)
