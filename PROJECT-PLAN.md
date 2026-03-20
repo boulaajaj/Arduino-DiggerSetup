@@ -26,6 +26,7 @@ The controller provides:
 | 5 | RC System | Radiolink RC6GS V3 + R7FG receiver | 6CH, gyro receiver |
 | 6 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect |
 | 7 | Current Sensor (x2) | CS7581 Hall-effect | Per-motor current monitoring |
+| 8 | RPM Feedback (x2) | Motor hall sensor tap | Parallel tap on motor→ESC sensor cable |
 
 ---
 
@@ -40,6 +41,8 @@ The controller provides:
 | — | Joystick | Analog 0-3.3V | A1 | Steering X axis (via 5V->3.3V divider) |
 | — | CS7581 | Analog | A2 | Current sensor — left motor |
 | — | CS7581 | Analog | A3 | Current sensor — right motor |
+| — | Motor Hall Tap | Digital 5V→3.3V | D5 | RPM feedback — left motor |
+| — | Motor Hall Tap | Digital 5V→3.3V | D6 | RPM feedback — right motor |
 
 > **3.3V WARNING:** The UNO Q uses 3.3V logic. The joystick outputs 0-5V
 > and MUST go through a voltage divider before connecting to A0/A1.
@@ -124,6 +127,8 @@ RC signals are already tank-mixed by the transmitter and pass through
 without a second mix.
 
 ### PID Load Compensation — "Cruise Control for Tracks"
+
+#### Current Implementation (V2.0) — Current-Based
 Closed-loop PID monitors per-motor current via CS7581 sensors. When a track
 encounters resistance (mud, cold/stiff rubber, obstacle, uphill), it draws
 more current than expected. The PID **boosts** the output to push through
@@ -144,6 +149,90 @@ ensures it approaches COMP_MAX_BOOST smoothly — never abruptly.
 **Hard safety cutoff:** If current exceeds CURRENT_HARD_LIMIT (100A), the
 motor is forced to neutral immediately. This is separate from the PID —
 it's a last-resort protection against motor stall, short, or jam.
+
+#### Planned Upgrade (V2.1) — RPM-Based PID via Motor Hall Sensor Tap
+
+**Decision (2026-03-20):** Upgrade PID feedback from current-based to
+RPM-based using a passive tap on the motor's existing hall sensor cable.
+
+**Why RPM instead of current:**
+- Current is a proxy for load, not speed. True closed-loop speed control
+  requires measuring actual motor RPM.
+- Handles all disturbances (mud, cold rubber, uphill, weight changes)
+  because it measures what actually matters: is the motor spinning at the
+  commanded speed?
+
+**Why tap at the motor (not at the sprocket):**
+- High resolution: many pulses per motor revolution (4 edges/rev with 2 hall lines)
+- Zero delay: measures motor shaft directly, no gearbox backlash lag
+- The signal already exists: motor's internal hall sensors are wired to the ESC
+
+**Why not Bluetooth telemetry from the ESC:**
+- 50-200ms latency — too slow for 20kHz PID loop
+- Proprietary Hobbywing protocol, poorly documented
+- Requires extra BT hardware on both sides
+- Far more code complexity for inferior results
+
+**Motor sensor cable pinout (6-pin JST-ZH, standard Hobbywing):**
+
+| Pin | Signal |
+|-----|--------|
+| 1 | 5V (from ESC) |
+| 2 | Hall A |
+| 3 | Hall B |
+| 4 | Hall C |
+| 5 | Temperature / NC |
+| 6 | GND |
+
+> **VERIFY THIS PINOUT** on the actual XC E3665 sensor cable before wiring.
+> Hobbywing generally follows this standard, but confirm with a multimeter.
+
+**Wiring — passive parallel tap (non-invasive):**
+```
+Motor Hall A ──────┬──── ESC Hall A
+                   │
+              [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
+                      └──> Arduino D5
+
+Motor Hall B ──────┬──── ESC Hall B
+                   │
+              [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
+                      └──> Arduino D6
+
+Motor GND ─────────┬──── ESC GND
+                   │
+              Arduino GND
+```
+
+> **3.3V LEVEL SHIFTING REQUIRED!** The UNO Q uses 3.3V logic. Hall sensor
+> outputs are 5V. Use the same 10k/6.8k voltage dividers as the joystick.
+> Connecting 5V directly to D5/D6 will damage the STM32U585.
+
+**Resolution (4-pole motor, 2 pole pairs):**
+- 2 electrical revolutions per mechanical revolution
+- Counting rising edges on 2 hall lines = 4 edges per motor revolution
+- At 5,000 RPM (loaded): ~333 edges/sec
+- At 100 RPM: ~7 edges/sec
+- Both are well within Arduino interrupt capability
+
+**RPM calculation (interval method — better at low RPM):**
+```
+edgesPerRev = 4  // 2 hall lines × 2 pole pairs
+RPM = 60,000,000 / (microsBetweenEdges × edgesPerRev)
+```
+
+**V2.1 PID loop:**
+```
+target RPM  = f(stick position)     // stick maps to desired speed
+actual RPM  = from hall sensor tap  // measured motor speed
+error       = target - actual
+PID output  = adjust ESC command to close the gap
+```
+
+Current sensors (CS7581) will remain active for:
+- Hard safety cutoff (100A — motor stall / short / jam protection)
+- Telemetry and diagnostics
+- Possible future dual-loop control (inner current, outer RPM)
 
 ### Soft Power Limits (Exponential Saturation)
 Instead of hard clamps at OUTPUT_MIN/OUTPUT_MAX, the output follows a
@@ -225,6 +314,8 @@ when the failsafe clears.
                     ┌───────────────────┐
     RC CH1 ────────>│ D2  (left motor)  │
     RC CH2 ────────>│ D4  (right motor) │
+  Hall tap L (3.3V)>│ D5  (RPM left)    │
+  Hall tap R (3.3V)>│ D6  (RPM right)   │
     RC CH5 ────────>│ D7  (override)    │
                     │              D9  ~│──> Left Track ESC
                     │             D10  ~│──> Right Track ESC
@@ -238,9 +329,9 @@ when the failsafe clears.
    Battery ────────>│ VIN               │
                     └───────────────────┘
 
-  Voltage Dividers (5V joystick -> 3.3V ADC):
-    Joy output ──[10kΩ]──┬──[6.8kΩ]── GND
-                         └──> A0 or A1 (3.3V max)
+  Voltage Dividers (5V -> 3.3V, used for joystick AND hall sensor taps):
+    5V signal ──[10kΩ]──┬──[6.8kΩ]── GND
+                        └──> A0/A1 or D5/D6 (3.3V max)
 ```
 
 ---
@@ -250,6 +341,8 @@ when the failsafe clears.
 ```
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
+D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM]
+D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM]
 D7  <- RC CH5 (Override switch, 3-pos)   [attachInterrupt, CHANGE]
 A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-3.3V via divider]
 A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-3.3V via divider]
@@ -335,11 +428,16 @@ GND -> All components (common ground)
 - [x] Joystick tank mix verified
 - [x] 7-panel live plot with ESC output monitoring
 - [x] V2.0 sketch written for UNO Q (PID, inertia, soft limits)
+- [x] Decided: RPM feedback via motor hall sensor tap (not BT, not sprocket)
+- [ ] **V2.1: Add RPM hall sensor interrupt code to sketch** (D5, D6)
+- [ ] **V2.1: Upgrade PID from current-based to RPM-based**
+- [ ] **Verify hall sensor cable pinout** on actual XC E3665 before wiring
+- [ ] **Build 5V→3.3V voltage dividers** for D5 and D6 (hall tap lines)
+- [ ] Add RPM fields to serial telemetry + update live_plot.py
 - [ ] Joystick harness wiring identified (reverse engineering in progress)
 - [ ] Voltage dividers for joystick (5V -> 3.3V)
 - [ ] CS7581 current sensor wiring and calibration
 - [ ] Verify ESC/motor/sensor frequency compatibility
-- [ ] Update live_plot.py for current + PID telemetry
 - [ ] Bench test on UNO Q with ESCs disconnected
 - [ ] Field test with ESCs at reduced power
 - [ ] Battery voltage monitoring (future phase)
