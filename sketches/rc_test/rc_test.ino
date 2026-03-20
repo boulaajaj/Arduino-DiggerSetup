@@ -7,21 +7,24 @@
 // Changes from V1.2:
 //   - Target: Arduino UNO Q [ABX00162] (STM32U585, Cortex-M33, 160MHz)
 //   - FQBN: arduino:zephyr:unoq
-//   - 3.3V logic — joystick needs voltage divider (5V → 3.3V)
+//   - 3.3V logic — joystick needs voltage divider (5V -> 3.3V)
 //   - 14-bit ADC (16384 steps) for joystick and current sensors
 //   - attachInterrupt() replaces AVR PCINT
 //   - 20,000+ loops/sec — zero blocking, micros()-based timing
 //   - Exponential response curve for fine low-stick control
 //   - Inertia simulation — makes it feel heavy (smooth ramp, gradual stop)
 //   - CS7581 hall-effect current sensors (A2, A3) — one per motor
-//   - Closed-loop PID load compensation with adaptive gains
-//   - Soft power limits — exponential saturation, no hard clamps
-//   - Anti-runaway failsafe — if PID compensation diverges, go neutral
+//   - Closed-loop PID load compensation: if a track hits resistance,
+//     BOOST power to push through and maintain consistent speed
+//   - Adaptive PID gains: scale with load for stable behavior
+//   - Soft power limits — tanh() saturation, no hard clamps
+//   - Anti-runaway failsafe — if compensation maxes out for too long,
+//     something is physically stuck; go neutral to prevent damage
 //   - Power limit raised to 50%
 //
 // Hardware:
 //   MCU:       STM32U585 (Arm Cortex-M33, 160MHz, 786KB RAM, 2MB flash)
-//   ADC:       14-bit (0–16383), 3.3V reference
+//   ADC:       14-bit (0-16383), 3.3V reference
 //   Logic:     3.3V — DO NOT connect 5V signals directly to any pin!
 //   ESCs:      XC E10 Sensored Brushless 140A (x2)
 //   Motors:    XC E3665 2500KV Sensored Brushless (x2)
@@ -92,21 +95,15 @@ const int MODE_HIGH_THRESH = 1750;
 // Power Limits — soft, not hard
 // =============================================================================
 const int   POWER_LIMIT_PCT = 50;
-const float SOFT_LIMIT_RANGE = 500.0f * POWER_LIMIT_PCT / 100.0f; // 250us from center
+const float SOFT_LIMIT_RANGE = 500.0f * POWER_LIMIT_PCT / 100.0f; // 250us
 
 // =============================================================================
 // Inertia Simulation
 //
-// Makes output feel heavy — like driving something with real mass.
-// Simple spring-damper model: stick pulls output, friction slows it.
-//
-//   VIRTUAL_MASS:    Higher = more sluggish to start/stop
-//   FRICTION_COEFF:  Higher = stops sooner, less coasting
-//   RESPONSE_FORCE:  Higher = tracks stick more aggressively
-//
-// The friction is velocity-dependent: at low speed, friction dominates
-// and the output stops cleanly. At high speed, it takes longer to stop
-// (momentum). This gives the natural "heavy machine" feel.
+// Makes output feel heavy. Spring-damper model.
+//   VIRTUAL_MASS:    Higher = more sluggish
+//   FRICTION_COEFF:  Higher = stops sooner
+//   RESPONSE_FORCE:  Higher = tracks stick faster
 // =============================================================================
 const float VIRTUAL_MASS   = 3.0f;
 const float FRICTION_COEFF = 8.0f;
@@ -115,50 +112,63 @@ const float RESPONSE_FORCE = 20.0f;
 // =============================================================================
 // CS7581 Current Sensor
 //
-// Adjust these to match your CS7581 variant and wiring:
-//   CUR_ZERO_V:    Sensor output voltage at 0A
-//   CUR_SENS_MV_A: Sensitivity in mV per Amp (from datasheet)
-//   CUR_DIVIDER:   Voltage divider ratio if sensor output exceeds 3.3V
-//                  (e.g. 0.66 for a 2:1 divider). 1.0 = no divider.
+// Adjust to match your CS7581 variant:
+//   CUR_ZERO_V:    Output voltage at 0A (typically Vcc/2)
+//   CUR_SENS_MV_A: Sensitivity in mV per Amp
+//   CUR_DIVIDER:   Voltage divider ratio (1.0 = no divider)
 // =============================================================================
-const float CUR_ZERO_V    = 1.65f;  // 0A output (typically Vcc/2)
-const float CUR_SENS_MV_A = 20.0f;  // mV per Amp
-const float CUR_DIVIDER   = 1.0f;   // Voltage divider ratio
+const float CUR_ZERO_V    = 1.65f;
+const float CUR_SENS_MV_A = 20.0f;
+const float CUR_DIVIDER   = 1.0f;
 
 // =============================================================================
-// PID Load Compensation — Adaptive Gains
+// PID Load Compensation — "Cruise Control for Tracks"
 //
-// The PID watches motor current and adjusts the output to compensate for
-// load variations. Heavier load (bigger rider, uphill) draws more current
-// — the PID scales output to keep behavior consistent.
+// The PID measures current to estimate load on each motor. When a track
+// encounters resistance (mud, cold rubber, obstacle, uphill), it draws
+// more current. The PID BOOSTS the output to push through and maintain
+// consistent track speed.
 //
-// Adaptive: gains scale based on measured load level (curAvg / CURRENT_NOMINAL).
-// Low load = higher gains (responsive). High load = lower gains (stable).
+// How it works:
+//   - We estimate "expected current" from the commanded output level.
+//     At 50% stick, we expect ~CURRENT_PER_UNIT * 50% = some baseline.
+//   - If measured current exceeds expected, the track is fighting resistance.
+//   - The PID computes a BOOST (extra us added to the ESC command).
+//   - The boost is bounded by COMP_MAX_BOOST — the PID can't add more
+//     than this, no matter what.
 //
-// CURRENT_NOMINAL: Expected current at normal operation. Used as the
-//                  reference point for adaptive gain scaling.
+// Adaptive gains: at higher output (faster speed), gains are reduced
+// to prevent oscillation. At low speed (precise work), gains are higher
+// for responsive compensation.
 //
-// Anti-runaway failsafe: if PID correction stays maxed out for too long,
-// the system can't compensate — something unexpected is happening.
-// Go to neutral rather than letting it diverge.
+// CURRENT_PER_UNIT: Expected amps per unit of output (us from center).
+//                   Calibrate this on your machine: measure current at
+//                   known output levels and compute the ratio.
+//
+// COMP_MAX_BOOST: Maximum extra us the PID can add. This is the ceiling
+//                 that prevents runaway compensation. Set conservatively.
 // =============================================================================
-const float CURRENT_NOMINAL    = 30.0f;  // Amps — baseline "normal" load
-const float CURRENT_SOFT_LIMIT = 60.0f;  // PID starts reducing above this
-const float CURRENT_HARD_LIMIT = 100.0f; // Safety cutoff
-const float PID_KP             = 0.015f;
-const float PID_KI             = 0.005f;
-const float PID_KD             = 0.002f;
-const float PID_I_MAX          = 0.5f;   // Anti-windup clamp
+const float CURRENT_PER_UNIT = 0.25f;  // Expected A per us of output from center
+const float COMP_MAX_BOOST   = 50.0f;  // Max us the PID can add (safety ceiling)
+const float COMP_KP          = 0.3f;   // Proportional: immediate correction
+const float COMP_KI          = 0.05f;  // Integral: persistent load needs persistent boost
+const float COMP_KD          = 0.01f;  // Derivative: dampen oscillation
+const float COMP_I_MAX       = 30.0f;  // Integral windup limit (in us)
 
-// Anti-runaway: if PID reduction stays above this for RUNAWAY_TIME, failsafe
-const float RUNAWAY_THRESHOLD  = 0.85f;  // 85% reduction = nearly stalled
+// Hard current safety cutoff — if current exceeds this, stop the motor
+// regardless of compensation. This is SEPARATE from the PID; it's a
+// last-resort safety net.
+const float CURRENT_HARD_LIMIT = 100.0f;  // Amps — force neutral
+
+// Anti-runaway: if compensation has been at COMP_MAX_BOOST for this long
+// continuously, the track is likely jammed/stalled. Go neutral.
 const unsigned long RUNAWAY_TIME_US = 2000000UL; // 2 seconds
 
 // =============================================================================
 // Timing
 // =============================================================================
-const unsigned long FAILSAFE_TIMEOUT_US = 500000UL; // 500ms in micros
-const unsigned long SERIAL_INTERVAL_US  = 50000UL;  // 50ms = 20 Hz telemetry
+const unsigned long FAILSAFE_TIMEOUT_US = 500000UL;
+const unsigned long SERIAL_INTERVAL_US  = 50000UL;
 
 // =============================================================================
 // Servo Objects
@@ -226,17 +236,19 @@ float velocityR = 0.0f;
 float positionL = 0.0f;
 float positionR = 0.0f;
 
-// PID state (per motor)
-float pidIntegralL  = 0.0f;
-float pidIntegralR  = 0.0f;
-float pidPrevErrorL = 0.0f;
-float pidPrevErrorR = 0.0f;
+// PID compensation state (per motor)
+float compIntegralL  = 0.0f;
+float compIntegralR  = 0.0f;
+float compPrevErrorL = 0.0f;
+float compPrevErrorR = 0.0f;
+float compBoostL     = 0.0f;  // Current boost being applied (us)
+float compBoostR     = 0.0f;
 
 // Anti-runaway tracking (per motor)
 unsigned long runawayStartL = 0;
 unsigned long runawayStartR = 0;
-bool runawayActiveL = false;
-bool runawayActiveR = false;
+bool runawayActiveL  = false;
+bool runawayActiveR  = false;
 bool runawayTrippedL = false;
 bool runawayTrippedR = false;
 
@@ -264,8 +276,7 @@ int deadbandJoy(int value) {
   return (abs(value - ADC_CENTER) <= JOY_DEADBAND) ? ADC_CENTER : value;
 }
 
-// 14-bit ADC -> servo range with exponential curve.
-// Fine control at low stick, full authority at max.
+// 14-bit ADC -> servo range with exponential curve
 int joyToServoExpo(int adcValue) {
   float norm = (float)(adcValue - ADC_CENTER) / (float)ADC_CENTER;
   norm = constrain(norm, -1.0f, 1.0f);
@@ -282,7 +293,6 @@ float readCurrent(uint8_t pin) {
   return (sensorV - CUR_ZERO_V) * 1000.0f / CUR_SENS_MV_A;
 }
 
-// Update current moving average (called every loop)
 void updateCurrentAvg() {
   curBufL[curBufIdx] = readCurrent(PIN_CUR_LEFT);
   curBufR[curBufIdx] = readCurrent(PIN_CUR_RIGHT);
@@ -298,65 +308,82 @@ void updateCurrentAvg() {
 }
 
 // ---------------------------------------------------------------------------
-// PID current limiter with adaptive gains
+// PID Load Compensation — BOOSTS power to push through resistance
 //
-// Returns reduction factor: 0.0 = no reduction, 1.0 = full stop.
+// Compares measured current against expected current for the commanded
+// output level. If measured > expected, the track is fighting resistance.
+// The PID adds a boost (extra us) to help it push through.
 //
-// Adaptive scaling: at low load, gains are higher (snappy response).
-// At high load, gains are lower (smoother, more stable).
-// The ratio curAvg/CURRENT_NOMINAL drives this — if you're pulling 2x
-// the nominal current, gains halve to keep behavior stable.
+// Returns boost in us (0 to COMP_MAX_BOOST). Always positive (or zero).
+// The sign of the boost matches the direction of travel (added to the
+// output delta from center, not subtracted).
+//
+// commandDelta: how far the output is from center (us). Used to compute
+//               expected current and to scale gains adaptively.
+// measuredAmps: actual current from CS7581 (absolute value used).
 // ---------------------------------------------------------------------------
-float pidCurrentLimit(float currentAmps, float &integral, float &prevError, float dtSec) {
-  if (fabsf(currentAmps) >= CURRENT_HARD_LIMIT) {
-    integral = PID_I_MAX;
-    return 1.0f;
+float pidCompensate(float commandDelta, float measuredAmps,
+                    float &integral, float &prevError, float dtSec) {
+  float absCommand = fabsf(commandDelta);
+  if (absCommand < 5.0f) {
+    // Near neutral — no compensation needed, decay integral
+    integral *= 0.9f;
+    prevError = 0.0f;
+    return 0.0f;
   }
 
-  float absCur = fabsf(currentAmps);
+  // Expected current for this output level
+  float expectedAmps = absCommand * CURRENT_PER_UNIT;
+  float absMeasured = fabsf(measuredAmps);
 
-  if (absCur <= CURRENT_SOFT_LIMIT) {
+  // Error = how much MORE current than expected (resistance detected)
+  float error = absMeasured - expectedAmps;
+  if (error < 0.0f) {
+    // Drawing less than expected — no resistance, decay integral
     integral *= 0.95f;
     prevError = 0.0f;
     return 0.0f;
   }
 
-  // Adaptive gain scaling: lower gains under heavy load for stability
-  float loadRatio = max(absCur, CURRENT_NOMINAL) / CURRENT_NOMINAL;
-  float adaptScale = 1.0f / loadRatio;  // e.g. 2x load = 0.5x gains
+  // Adaptive gain scaling: at higher speeds, reduce gains for stability
+  float speedFactor = absCommand / SOFT_LIMIT_RANGE;  // 0.0 to ~1.0
+  float adaptScale = 1.0f / (1.0f + speedFactor);     // 1.0 at stop, 0.5 at full
 
-  float error = absCur - CURRENT_SOFT_LIMIT;
+  // PID terms
+  float pTerm = COMP_KP * adaptScale * error;
 
-  float pTerm = PID_KP * adaptScale * error;
-
-  integral += PID_KI * adaptScale * error * dtSec;
-  integral = constrain(integral, 0.0f, PID_I_MAX);
+  integral += COMP_KI * adaptScale * error * dtSec;
+  integral = constrain(integral, 0.0f, COMP_I_MAX);
 
   float dTerm = 0.0f;
   if (dtSec > 0.0f) {
-    dTerm = PID_KD * adaptScale * (error - prevError) / dtSec;
+    dTerm = COMP_KD * adaptScale * (error - prevError) / dtSec;
   }
   prevError = error;
 
-  return constrain(pTerm + integral + dTerm, 0.0f, 1.0f);
+  float boost = pTerm + integral + dTerm;
+
+  // Soft ceiling on boost using tanh — approaches COMP_MAX_BOOST smoothly
+  boost = COMP_MAX_BOOST * tanhf(boost / COMP_MAX_BOOST);
+
+  return max(boost, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
 // Anti-runaway failsafe
 //
-// If the PID is pushing reduction near max (RUNAWAY_THRESHOLD) for longer
-// than RUNAWAY_TIME, it means the compensation can't handle the situation.
-// Rather than letting the PID keep fighting a losing battle (which could
-// cause unpredictable output), trip the failsafe and go neutral.
+// If boost has been at or near COMP_MAX_BOOST for RUNAWAY_TIME, the track
+// is physically stuck and the PID can't help. Go neutral to prevent motor
+// burnout or erratic behavior.
 //
-// The failsafe latches until the operator returns stick to neutral,
-// which resets it. This forces a deliberate restart.
+// Latches until stick returns to neutral (deliberate restart).
 // ---------------------------------------------------------------------------
-bool checkRunaway(float reduction, unsigned long nowUs,
+bool checkRunaway(float boost, unsigned long nowUs,
                   unsigned long &startTime, bool &active, bool &tripped) {
   if (tripped) return true;
 
-  if (reduction >= RUNAWAY_THRESHOLD) {
+  float threshold = COMP_MAX_BOOST * 0.85f;
+  if (boost >= threshold) {
     if (!active) {
       active = true;
       startTime = nowUs;
@@ -370,36 +397,21 @@ bool checkRunaway(float reduction, unsigned long nowUs,
   return false;
 }
 
-// Reset runaway latch when stick returns to neutral
-void resetRunawayIfNeutral(float target, bool &tripped, float &integral) {
+void resetRunawayIfNeutral(float target, bool &tripped,
+                           float &integral, float &boost) {
   if (fabsf(target) < 5.0f && tripped) {
     tripped = false;
     integral = 0.0f;
+    boost = 0.0f;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Soft power scaling with exponential saturation
-//
-// Instead of a hard clamp at OUTPUT_MIN/OUTPUT_MAX, the output follows
-// a soft curve that asymptotically approaches the limit. Small inputs
-// pass through nearly linearly; large inputs compress smoothly.
-//
-//   output = limit * tanh(input / limit)
-//
-// This means you never get an abrupt cutoff — the output just gets
-// progressively harder to push further. The PID reduction multiplies
-// the effective limit, making the soft ceiling lower under load.
+// Soft power scaling with tanh saturation (no hard clamps)
 // ---------------------------------------------------------------------------
-int scalePowerSoft(int value, float reductionFactor) {
-  float delta = (float)(value - SERVO_CENTER);
-  float effectiveLimit = SOFT_LIMIT_RANGE * (1.0f - reductionFactor);
-  if (effectiveLimit < 1.0f) return SERVO_CENTER;
-
-  // tanh soft saturation: linear near zero, asymptotic near limit
-  float normalized = delta / effectiveLimit;
-  float softened = effectiveLimit * tanhf(normalized);
-
+int scalePowerSoft(float delta) {
+  if (fabsf(delta) < 0.5f) return SERVO_CENTER;
+  float softened = SOFT_LIMIT_RANGE * tanhf(delta / SOFT_LIMIT_RANGE);
   return SERVO_CENTER + (int)(softened + 0.5f);
 }
 
@@ -495,42 +507,74 @@ void loop() {
     right = (rcRight + joyRight) / 2;
   }
 
-  // --- 7. PID load compensation (adaptive gains) ---
-  float reductionL = pidCurrentLimit(curAvgL, pidIntegralL, pidPrevErrorL, dtSec);
-  float reductionR = pidCurrentLimit(curAvgR, pidIntegralR, pidPrevErrorR, dtSec);
+  // --- 7. Base power scaling (proportional, through soft saturation) ---
+  float deltaL = (float)(left  - SERVO_CENTER);
+  float deltaR = (float)(right - SERVO_CENTER);
 
-  // --- 8. Anti-runaway failsafe ---
-  // If PID can't compensate (reduction stuck near max), go neutral.
-  // Latches until stick returns to neutral — forces deliberate restart.
-  bool failL = checkRunaway(reductionL, nowUs, runawayStartL, runawayActiveL, runawayTrippedL);
-  bool failR = checkRunaway(reductionR, nowUs, runawayStartR, runawayActiveR, runawayTrippedR);
+  // --- 8. PID load compensation — BOOST to push through resistance ---
+  //
+  // Measured current > expected current = resistance detected.
+  // PID adds extra us in the direction of travel to compensate.
+  //
+  // Hard safety cutoff: if current exceeds CURRENT_HARD_LIMIT on either
+  // motor, force it to neutral immediately (motor stall / short / jam).
+  bool hardCutoffL = fabsf(curAvgL) >= CURRENT_HARD_LIMIT;
+  bool hardCutoffR = fabsf(curAvgR) >= CURRENT_HARD_LIMIT;
 
-  // --- 9. Soft power scaling (exponential saturation, no hard clamps) ---
-  if (failL) left  = SERVO_CENTER;
-  if (failR) right = SERVO_CENTER;
-  left  = scalePowerSoft(left,  reductionL);
-  right = scalePowerSoft(right, reductionR);
+  if (hardCutoffL) {
+    deltaL = 0.0f;
+    compIntegralL = 0.0f;
+    compBoostL = 0.0f;
+  } else {
+    compBoostL = pidCompensate(deltaL, curAvgL,
+                               compIntegralL, compPrevErrorL, dtSec);
+    // Add boost in the direction of travel
+    float sign = (deltaL >= 0.0f) ? 1.0f : -1.0f;
+    deltaL += sign * compBoostL;
+  }
 
-  // --- 10. Inertia simulation (heavy machine feel) ---
-  float targetL = (float)(left  - SERVO_CENTER);
-  float targetR = (float)(right - SERVO_CENTER);
+  if (hardCutoffR) {
+    deltaR = 0.0f;
+    compIntegralR = 0.0f;
+    compBoostR = 0.0f;
+  } else {
+    compBoostR = pidCompensate(deltaR, curAvgR,
+                               compIntegralR, compPrevErrorR, dtSec);
+    float sign = (deltaR >= 0.0f) ? 1.0f : -1.0f;
+    deltaR += sign * compBoostR;
+  }
+
+  // --- 9. Anti-runaway failsafe ---
+  // Compensation stuck at max for too long = track jammed/stalled.
+  // Go neutral and latch until stick returns to center.
+  bool failL = checkRunaway(compBoostL, nowUs,
+                            runawayStartL, runawayActiveL, runawayTrippedL);
+  bool failR = checkRunaway(compBoostR, nowUs,
+                            runawayStartR, runawayActiveR, runawayTrippedR);
+
+  if (failL) deltaL = 0.0f;
+  if (failR) deltaR = 0.0f;
+
+  // --- 10. Soft power limit (tanh saturation, no hard clamps) ---
+  int scaledL = scalePowerSoft(deltaL);
+  int scaledR = scalePowerSoft(deltaR);
+
+  // --- 11. Inertia simulation (heavy machine feel) ---
+  float targetL = (float)(scaledL - SERVO_CENTER);
+  float targetR = (float)(scaledR - SERVO_CENTER);
 
   // Reset runaway latch if stick at neutral
-  resetRunawayIfNeutral(targetL, runawayTrippedL, pidIntegralL);
-  resetRunawayIfNeutral(targetR, runawayTrippedR, pidIntegralR);
+  resetRunawayIfNeutral(targetL, runawayTrippedL, compIntegralL, compBoostL);
+  resetRunawayIfNeutral(targetR, runawayTrippedR, compIntegralR, compBoostR);
 
-  // Spring force (pulls toward stick) + friction (opposes velocity)
+  // Spring force (pulls toward target) + friction (opposes velocity)
   float forceL = RESPONSE_FORCE * (targetL - positionL);
   float forceR = RESPONSE_FORCE * (targetR - positionR);
   float fricL  = -FRICTION_COEFF * velocityL;
   float fricR  = -FRICTION_COEFF * velocityR;
 
-  // F = ma
-  float accelL = (forceL + fricL) / VIRTUAL_MASS;
-  float accelR = (forceR + fricR) / VIRTUAL_MASS;
-
-  velocityL += accelL * dtSec;
-  velocityR += accelR * dtSec;
+  velocityL += (forceL + fricL) / VIRTUAL_MASS * dtSec;
+  velocityR += (forceR + fricR) / VIRTUAL_MASS * dtSec;
   positionL += velocityL * dtSec;
   positionR += velocityR * dtSec;
 
@@ -542,15 +586,14 @@ void loop() {
     positionR = 0.0f; velocityR = 0.0f;
   }
 
-  // Final output — no hard constrain, soft saturation already handled it
   int outLeft  = SERVO_CENTER + (int)(positionL + 0.5f);
   int outRight = SERVO_CENTER + (int)(positionR + 0.5f);
 
-  // --- 11. Write to ESCs ---
+  // --- 12. Write to ESCs ---
   escLeft.writeMicroseconds(outLeft);
   escRight.writeMicroseconds(outRight);
 
-  // --- 12. Serial telemetry (20 Hz, non-blocking) ---
+  // --- 13. Serial telemetry (20 Hz, non-blocking) ---
   if (nowUs - prevSerialUs >= SERIAL_INTERVAL_US) {
     prevSerialUs = nowUs;
     Serial.print("D2=");   Serial.print(rawRCLeft);
@@ -560,8 +603,8 @@ void loop() {
     Serial.print("  A1="); Serial.print(rawJoyX);
     Serial.print("  IL="); Serial.print(curAvgL, 1);
     Serial.print("  IR="); Serial.print(curAvgR, 1);
-    Serial.print("  RL="); Serial.print(reductionL, 2);
-    Serial.print("  RR="); Serial.print(reductionR, 2);
+    Serial.print("  BL="); Serial.print(compBoostL, 1);
+    Serial.print("  BR="); Serial.print(compBoostR, 1);
     Serial.print("  L=");  Serial.print(outLeft);
     Serial.print("  R=");  Serial.println(outRight);
   }
