@@ -6,6 +6,24 @@ Two brushless motors drive rubber tracks via ESCs. Dual input: RC transmitter
 (Jason) and joystick (Malaki/rider). 3-position override switch selects who
 has authority.
 
+## Board Migration History (DO NOT CONFUSE)
+| Branch | Board | Status |
+|--------|-------|--------|
+| `main` (8fb6c82) | **Arduino Nano V3 (ATmega328P)** | Current production code (V1.2) |
+| `agent/C-Builder/r4-migration-v2` (239832a) | Arduino Nano R4 | **CANCELLED** — PR to be closed |
+| `claude/excavator-uno-q-pid-upgrade-81xTM` | Arduino UNO Q (STM32U585) | Previous session's V2.0 migration (has PID, inertia) |
+| `claude/motor-sensor-research-BmBk8` | Arduino UNO Q (STM32U585) | **CURRENT** — research + new migration |
+
+**Key clarification:** The code on `main` runs on the **Nano V3** (ATmega328P,
+5V logic, 10-bit ADC, AVR PCINT interrupts). The Nano R4 migration PR is being
+**cancelled** — skipping R4 entirely in favor of the UNO Q. All future
+development targets the **UNO Q** (STM32U585 MCU side, Zephyr RTOS, 3.3V logic,
+14-bit ADC).
+
+**The UNO Q has two processors — we use the MCU (STM32U585), NOT the MPU
+(Qualcomm QRB2210).** The MCU runs Zephyr RTOS for deterministic, jitter-free
+interrupt handling. The Linux/Qualcomm side is not used for motor control.
+
 ## People
 - **Jason** — RC transmitter operator (safety supervisor)
 - **Malaki** — Rider/operator using the joystick
