@@ -133,20 +133,20 @@ Or interval-based (better at low RPM):
 RPM = 60,000,000 / (microsBetweenEdges * edgesPerRevolution)
 ```
 
-### PID Upgrade Path: Current-Based → RPM-Based
-The current V2.0 PID uses current feedback (CS7581 sensors). The next version
-will switch to RPM-based PID:
-```
-target RPM  = f(stick position)     // commanded speed
-actual RPM  = from hall sensor tap  // measured speed
-error       = target - actual
-PID output  = boost or reduce ESC command to match target
-```
+### Dual-Loop PID Architecture (DECIDED 2026-03-21)
+**Both current AND RPM feedback are used simultaneously.**
 
-Current sensors will remain for:
-- Hard safety cutoff (100A limit — motor stall/short protection)
-- Telemetry and diagnostics
-- Possible dual-loop control (inner current loop, outer RPM loop)
+- **Inner loop (feedforward):** CS7581 current sensors detect load spikes instantly.
+  Current spikes BEFORE RPM drops. Pre-compensates by boosting power before the
+  operator feels anything.
+- **Outer loop (feedback):** RPM measurement (X.BUS or hall sensor) confirms actual
+  motor speed. Fine-tunes to hold target RPM.
+- This is standard industrial motor control: inner current + outer speed loop.
+
+### RPM Source: X.BUS First, Hall Sensor Fallback
+- **Primary:** ESC X.BUS telemetry wire (Yellow=data, Brown=GND on D0/Serial1 RX)
+- **Fallback:** Direct motor hall sensor tap on D5/D6 (if X.BUS too slow)
+- Test with `sketches/xbus_probe/xbus_probe.ino` first
 
 ## Implementation Status
 - [x] V2.0 sketch: expo curve, tank mix, inertia, soft limits
@@ -154,34 +154,33 @@ Current sensors will remain for:
 - [x] Anti-runaway failsafe
 - [x] 7-panel live plot (live_plot.py)
 - [x] Operator guide for Jason and Malaki
-- [ ] **RPM hall sensor tap wiring and code** ← NEXT
+- [x] X.BUS probe sketch written
+- [ ] **X.BUS telemetry validation** ← NOW (wire, upload, test)
+- [ ] Dual-loop PID implementation (after X.BUS decision)
 - [ ] Joystick harness wiring identification
 - [ ] Voltage dividers for joystick (5V → 3.3V)
 - [ ] CS7581 current sensor wiring and calibration
 - [ ] Bench test on UNO Q
 - [ ] Field test at reduced power
-- [ ] Battery voltage monitoring (future)
 
-## Next Steps (for next session)
-1. **Add RPM hall sensor interrupt code** to `rc_test.ino`:
-   - ISRs on D5 and D6 (RISING edge) counting pulses
-   - RPM calculation using interval between edges (better resolution at low RPM)
-   - Expose `rpmLeft` and `rpmRight` as global state
-2. **Upgrade PID from current-based to RPM-based:**
-   - `pidCompensate()` takes target RPM and actual RPM instead of current
-   - Stick position maps to target RPM (calibration needed)
-   - Current sensors remain for hard safety cutoff only
-3. **Add RPM to serial telemetry** so live_plot.py can display it
-4. **Verify hall sensor pinout** on the actual XC E3665 sensor cable before wiring
-5. **Build 5V→3.3V voltage dividers** for D5 and D6 (same as joystick dividers)
+## Next Steps
+1. **Wire ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
+2. **Upload `sketches/xbus_probe/xbus_probe.ino`** to UNO Q
+3. **Open Serial Monitor** at 115200 baud and observe:
+   - Which baud rate locks (auto-detected)
+   - Raw hex dump for pattern analysis
+   - Decoded packet values (RPM, current, voltage, temp)
+   - Packet rate in Hz (need >20 Hz for outer loop)
+4. **Decision:** X.BUS works? → Integrate into main sketch. Too slow? → Hall sensor tap.
 
 ## File Map
 ```
-PROJECT-PLAN.md         — Full technical specification
-OPERATOR-GUIDE.md       — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino — Main Arduino sketch (V2.0)
-live_plot.py            — Real-time 7-panel matplotlib monitor
-monitor.py              — Simple serial monitor
+PROJECT-PLAN.md                    — Full technical specification
+OPERATOR-GUIDE.md                  — User guide for Jason (RC) and Malaki (joystick)
+sketches/rc_test/rc_test.ino       — Main Arduino sketch (V2.0)
+sketches/xbus_probe/xbus_probe.ino — X.BUS telemetry probe/test sketch
+live_plot.py                       — Real-time 7-panel matplotlib monitor
+monitor.py                         — Simple serial monitor
 ```
 
 ## Build & Upload
