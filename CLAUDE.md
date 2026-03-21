@@ -25,6 +25,7 @@ has authority.
 ## Pin Assignments (UNO Q)
 ```
 D2  <- RC CH1 (Left motor, pre-mixed)     [interrupt CHANGE]
+D3  <- RC CH4 (Control mode, 3-pos)       [interrupt CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)    [interrupt CHANGE]
 D5  <- Motor Hall Sensor LEFT              [interrupt RISING — RPM feedback]
 D6  <- Motor Hall Sensor RIGHT             [interrupt RISING — RPM feedback]
@@ -147,6 +148,16 @@ RPM = 60,000,000 / (microsBetweenEdges * edgesPerRevolution)
 - **Primary:** ESC X.BUS telemetry wire (Yellow=data, Brown=GND on D0/Serial1 RX)
 - **Fallback:** Direct motor hall sensor tap on D5/D6 (if X.BUS too slow)
 - Test with `sketches/xbus_probe/xbus_probe.ino` first
+
+### Control Mode Selector (RC CH4 on D3, 3-position switch)
+| CH4 | Mode | Layers Active |
+|-----|------|--------------|
+| LOW | RAW | Direct stick→ESC, no processing (baseline) |
+| MID | RPM_ONLY | Outer RPM PID only (speed regulation, no smoothing) |
+| HIGH | FULL_STACK | Current FF + RPM + expo + inertia + soft limits |
+
+Flip CH4 on the field to A/B/C compare control quality in real-time.
+Mode transitions reset all PID/inertia state to prevent jumps.
 
 ## Implementation Status
 - [x] V2.0 sketch: expo curve, tank mix, inertia, soft limits
