@@ -9,7 +9,7 @@ joystick enable/override switch.
 The controller provides:
 - **Exponential response curve** for fine low-speed control
 - **Inertia simulation** so the tracks feel heavy (smooth ramp, gradual stop)
-- **Closed-loop PID** with current sensors for load compensation
+- **Dual-loop PID** — inner current loop (feedforward) + outer RPM loop (feedback)
 - **Soft power limits** (exponential saturation, no hard clamps)
 - **Anti-runaway failsafe** to prevent compensation from diverging
 
@@ -26,11 +26,12 @@ The controller provides:
 | 5 | RC System | Radiolink RC6GS V3 + R7FG receiver | 6CH, gyro receiver |
 | 6 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect |
 | 7 | Current Sensor (x2) | CS7581 Hall-effect | Per-motor current monitoring |
-| 8 | RPM Feedback (x2) | Motor hall sensor tap | Parallel tap on motor→ESC sensor cable |
+| 8 | RPM/Telemetry | ESC X.BUS (primary) | Serial telemetry: RPM, current, voltage, temp |
+| 9 | RPM Feedback (x2) | Motor hall sensor tap (fallback) | Parallel tap on motor→ESC sensor cable |
 
 ---
 
-## Inputs (7 channels)
+## Inputs
 
 | Ch | Source | Signal Type | Pin | Description |
 |----|--------|-------------|-----|-------------|
@@ -41,8 +42,10 @@ The controller provides:
 | — | Joystick | Analog 0-3.3V | A1 | Steering X axis (via 5V->3.3V divider) |
 | — | CS7581 | Analog | A2 | Current sensor — left motor |
 | — | CS7581 | Analog | A3 | Current sensor — right motor |
-| — | Motor Hall Tap | Digital 5V→3.3V | D5 | RPM feedback — left motor |
-| — | Motor Hall Tap | Digital 5V→3.3V | D6 | RPM feedback — right motor |
+| — | ESC X.BUS (L) | Serial UART | D0 (RX1) | X.BUS telemetry — left ESC (RPM, current, voltage, temp) |
+| — | ESC X.BUS (R) | Serial UART | D3 (RX2) | X.BUS telemetry — right ESC (if 2nd hardware serial available) |
+| — | Motor Hall Tap (L) | Digital 5V→3.3V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
+| — | Motor Hall Tap (R) | Digital 5V→3.3V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
 
 > **3.3V WARNING:** The UNO Q uses 3.3V logic. The joystick outputs 0-5V
 > and MUST go through a voltage divider before connecting to A0/A1.
@@ -85,15 +88,23 @@ position while someone assists via remote.
 
 ---
 
-## Signal Processing Pipeline (V2.0)
+## Signal Processing Pipeline (V2.1 — Dual-Loop Architecture)
 
 ```
 RC (attachInterrupt ISR) ──────────────────────────────────────┐
                                                                 ├─ Mode Select ─┐
 Joystick (analogRead 14-bit) ─ Deadband ─ Expo Curve ─ Tank Mix┘               │
                                                                                 v
-                                                    PID Load Compensation ──────┤
-                                                    (CS7581 current feedback)   │
+                                              ┌─ Inner Loop (FEEDFORWARD) ─────┤
+                                              │  CS7581 current sensors         │
+                                              │  Detects load spike INSTANTLY   │
+                                              │  Pre-boosts before RPM drops    │
+                                              └────────────────────────────────┤
+                                              ┌─ Outer Loop (FEEDBACK) ────────┤
+                                              │  X.BUS RPM (or hall sensor)    │
+                                              │  Measures actual motor speed   │
+                                              │  Fine-tunes to hold target RPM │
+                                              └────────────────────────────────┤
                                                                                 v
                                                     Soft Power Scale (tanh)     │
                                                     (50%, no hard clamps)       │
@@ -105,6 +116,47 @@ Joystick (analogRead 14-bit) ─ Deadband ─ Expo Curve ─ Tank Mix┘        
                                                                                 v
                                                     Servo Output (D9, D10)
 ```
+
+### Dual-Loop Control Strategy (DECIDED 2026-03-21)
+
+**Both current AND RPM feedback are used simultaneously — NOT one or the other.**
+
+- **Inner loop (feedforward via current):** CS7581 current sensors detect load
+  disturbances instantly. When a track hits mud or an obstacle, current spikes
+  BEFORE RPM drops. The inner loop pre-compensates by boosting power before
+  the operator feels anything.
+
+- **Outer loop (feedback via RPM):** X.BUS telemetry (or hall sensor tap) measures
+  actual motor speed. This closes the loop on whether the compensation actually
+  worked. It fine-tunes the ESC command to hold the target RPM.
+
+- **Result:** Disturbances are absorbed before they become perceptible to a human.
+  Current predicts the impact; RPM confirms the recovery. This is a standard
+  industrial motor control pattern (inner current loop + outer speed loop).
+
+### RPM Source: X.BUS First, Hall Sensor Fallback
+
+**Primary — ESC X.BUS telemetry (testing required):**
+The XC E10 has a dedicated X.BUS wire (3-pin: Yellow=data, Brown=GND, Red=BEC+).
+The manual says it supports "real-time control of ESC and reading of operation
+data through Bus" for "robot control or other automated programming control."
+The X.BUS provides RPM + current + voltage + temperature in one packet.
+
+**If X.BUS update rate is sufficient (>20 Hz for outer loop):** Use X.BUS for
+the outer RPM loop. The inner loop still uses CS7581 current sensors directly
+(ADC speed, no serial latency). This is the cleanest wiring solution.
+
+**Fallback — Direct motor hall sensor tap:**
+If X.BUS is too slow or unreliable, tap the motor's existing hall sensor cable
+in parallel. This gives microsecond-resolution RPM at interrupt speed but
+requires Y-splitters, voltage dividers, and signal isolation to prevent
+ESC/Arduino interference.
+
+**Step 1 (NOW):** Run `sketches/xbus_probe/xbus_probe.ino` to determine:
+  - What baud rate X.BUS uses
+  - What data format the packets are in
+  - How fast packets arrive (Hz)
+  - Whether the data is clean and decodable
 
 ### RC Reading — Hardware Interrupts
 All 3 RC channels decoded via `attachInterrupt()` on CHANGE. The STM32U585
@@ -307,18 +359,19 @@ when the failsafe clears.
 
 ---
 
-## Wiring Diagram (V2.0 — UNO Q)
+## Wiring Diagram (V2.1 — UNO Q, Dual-Loop)
 
 ```
                         ARDUINO UNO Q
                     ┌───────────────────┐
+  X.BUS L (3.3V)──>│ D0  (Serial1 RX)  │  ← ESC Left X.BUS Yellow (via divider)
     RC CH1 ────────>│ D2  (left motor)  │
     RC CH2 ────────>│ D4  (right motor) │
-  Hall tap L (3.3V)>│ D5  (RPM left)    │
-  Hall tap R (3.3V)>│ D6  (RPM right)   │
+  [Hall tap L]─────>│ D5  (RPM left)    │  ← FALLBACK only (if X.BUS too slow)
+  [Hall tap R]─────>│ D6  (RPM right)   │  ← FALLBACK only (if X.BUS too slow)
     RC CH5 ────────>│ D7  (override)    │
-                    │              D9  ~│──> Left Track ESC
-                    │             D10  ~│──> Right Track ESC
+                    │              D9  ~│──> Left Track ESC (servo PWM)
+                    │             D10  ~│──> Right Track ESC (servo PWM)
                     │                   │
   Joy Y (5V->3.3V)>│ A0  (throttle)    │
   Joy X (5V->3.3V)>│ A1  (steering)    │
@@ -329,9 +382,19 @@ when the failsafe clears.
    Battery ────────>│ VIN               │
                     └───────────────────┘
 
-  Voltage Dividers (5V -> 3.3V, used for joystick AND hall sensor taps):
+  ESC X.BUS Wiring (per ESC):
+    Yellow (data) ──[10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
+                            └──> D0 (Serial1 RX)
+    Brown  (GND)  ──────────── Arduino GND
+    Red    (BEC+) ──────────── NOT CONNECTED
+
+  Voltage Dividers (5V -> 3.3V, used for joystick, hall taps, AND X.BUS):
     5V signal ──[10kΩ]──┬──[6.8kΩ]── GND
-                        └──> A0/A1 or D5/D6 (3.3V max)
+                        └──> target pin (3.3V max)
+
+  NOTE: For X.BUS probe testing, only LEFT ESC is connected to D0.
+  If X.BUS works, we may need a second hardware serial for the right ESC,
+  or multiplex both ESCs onto one serial line (if they can be addressed).
 ```
 
 ---
@@ -339,10 +402,11 @@ when the failsafe clears.
 ## Pin Summary (Quick Reference)
 
 ```
+D0  <- ESC X.BUS Left (Serial1 RX)       [UART serial, via 5V→3.3V divider]
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
-D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM]
-D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM]
+D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM FALLBACK]
+D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM FALLBACK]
 D7  <- RC CH5 (Override switch, 3-pos)   [attachInterrupt, CHANGE]
 A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-3.3V via divider]
 A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-3.3V via divider]
@@ -391,6 +455,18 @@ GND -> All components (common ground)
 - **Loop rate:** 20,000+ Hz (micros()-based timing, zero blocking)
 - **Serial output:** 20 Hz at 115200 baud (telemetry with current data)
 
+### Sketch: `sketches/xbus_probe/xbus_probe.ino`
+- **Purpose:** Test/probe X.BUS telemetry from XC E10 ESC
+- **What it does:**
+  1. Auto-scans baud rates (115200, 100000, 19200, 57600, 38400, 9600)
+  2. Dumps raw hex bytes for manual pattern analysis
+  3. Attempts Spektrum X-Bus ESC packet decoding (address 0x20)
+  4. Measures packet arrival rate (Hz) and inter-packet gap (ms)
+  5. Reports decoded RPM, current, voltage, temperature
+- **Wiring:** ESC X.BUS Yellow → D0 (Serial1 RX) via 5V→3.3V divider
+- **Decision gate:** If packets arrive >20 Hz with clean data → use X.BUS
+  for dual-loop PID. If too slow → fall back to hall sensor tap.
+
 ### Live Plot: `live_plot.py`
 - **7-panel real-time monitor** (matplotlib)
 - Displays all inputs (D2, D4, D7, A0, A1) and both ESC outputs (L, R)
@@ -419,6 +495,8 @@ GND -> All components (common ground)
 ---
 
 ## Status
+
+### Completed
 - [x] Joystick voltage/signal confirmed (Genie 101174GT, 5V, analog)
 - [x] RC CH1 (D2) verified — left motor, center ~1500us
 - [x] RC CH2 (D4) verified — right motor, center ~1497us
@@ -428,16 +506,37 @@ GND -> All components (common ground)
 - [x] Joystick tank mix verified
 - [x] 7-panel live plot with ESC output monitoring
 - [x] V2.0 sketch written for UNO Q (PID, inertia, soft limits)
-- [x] Decided: RPM feedback via motor hall sensor tap (not BT, not sprocket)
-- [ ] **V2.1: Add RPM hall sensor interrupt code to sketch** (D5, D6)
-- [ ] **V2.1: Upgrade PID from current-based to RPM-based**
-- [ ] **Verify hall sensor cable pinout** on actual XC E3665 before wiring
-- [ ] **Build 5V→3.3V voltage dividers** for D5 and D6 (hall tap lines)
+- [x] Decided: Dual-loop PID (inner current + outer RPM)
+- [x] Decided: X.BUS telemetry first, hall sensor tap as fallback
+- [x] X.BUS probe sketch written (`sketches/xbus_probe/xbus_probe.ino`)
+
+### Step 1: X.BUS Telemetry Validation (NOW)
+- [ ] **Wire ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
+- [ ] **Upload and run xbus_probe sketch**
+- [ ] **Determine baud rate** (auto-scan will find it)
+- [ ] **Measure packet rate** — need >20 Hz for outer RPM loop
+- [ ] **Verify data decode** — RPM, current, voltage, temp values make sense
+- [ ] **DECISION GATE:** X.BUS fast enough? → V2.1 with X.BUS. Too slow? → Hall sensor fallback.
+
+### Step 2a: If X.BUS Works (V2.1 with X.BUS)
+- [ ] Integrate X.BUS serial reading into main rc_test.ino sketch
+- [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (X.BUS)
+- [ ] Add X.BUS telemetry to serial output + update live_plot.py
+- [ ] Handle 2nd ESC (right motor) — 2nd serial port or multiplexing
+- [ ] Bench test dual-loop PID with ESC powered
+
+### Step 2b: If X.BUS Too Slow (V2.1 with Hall Sensor Tap)
+- [ ] Verify hall sensor cable pinout on actual XC E3665 before wiring
+- [ ] Build 5V→3.3V voltage dividers for D5 and D6 (hall tap lines)
+- [ ] Add RPM hall sensor interrupt code to sketch (D5, D6)
+- [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (hall)
+- [ ] Signal isolation to prevent ESC/Arduino interference/noise
 - [ ] Add RPM fields to serial telemetry + update live_plot.py
+
+### Remaining (Both Paths)
 - [ ] Joystick harness wiring identified (reverse engineering in progress)
-- [ ] Voltage dividers for joystick (5V -> 3.3V)
+- [ ] Voltage dividers for joystick (5V → 3.3V)
 - [ ] CS7581 current sensor wiring and calibration
-- [ ] Verify ESC/motor/sensor frequency compatibility
 - [ ] Bench test on UNO Q with ESCs disconnected
 - [ ] Field test with ESCs at reduced power
 - [ ] Battery voltage monitoring (future phase)
