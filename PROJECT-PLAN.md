@@ -37,13 +37,14 @@ The controller provides:
 |----|--------|-------------|-----|-------------|
 | 1 | RC Receiver | Servo PWM | D2 | Left motor (pre-mixed by transmitter) |
 | 2 | RC Receiver | Servo PWM | D4 | Right motor (pre-mixed by transmitter) |
+| 4 | RC Receiver | Servo PWM | D3 | Control mode selector (3-pos: RAW/RPM/FULL) |
 | 5 | RC Receiver | Servo PWM | D7 | Override switch (3-pos) |
 | — | Joystick | Analog 0-3.3V | A0 | Throttle Y axis (via 5V->3.3V divider) |
 | — | Joystick | Analog 0-3.3V | A1 | Steering X axis (via 5V->3.3V divider) |
 | — | CS7581 | Analog | A2 | Current sensor — left motor |
 | — | CS7581 | Analog | A3 | Current sensor — right motor |
 | — | ESC X.BUS (L) | Serial UART | D0 (RX1) | X.BUS telemetry — left ESC (RPM, current, voltage, temp) |
-| — | ESC X.BUS (R) | Serial UART | D3 (RX2) | X.BUS telemetry — right ESC (if 2nd hardware serial available) |
+| — | ESC X.BUS (R) | Serial UART | TBD | X.BUS telemetry — right ESC (needs 2nd serial or mux) |
 | — | Motor Hall Tap (L) | Digital 5V→3.3V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
 | — | Motor Hall Tap (R) | Digital 5V→3.3V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
 
@@ -62,6 +63,37 @@ The controller provides:
 |----|-------------|-------------|-----|-------------|
 | A | Left Track ESC | Servo PWM | D9 | Left motor speed + direction |
 | B | Right Track ESC | Servo PWM | D10 | Right motor speed + direction |
+
+---
+
+## Control Mode Switch (Receiver CH4 -> D3, 3-position switch)
+
+| CH4 Position | PWM Value | Mode | What Runs |
+|-------------|-----------|------|-----------|
+| LOW (~1000) | RAW | Direct stick-to-ESC, no processing layers |
+| MID (~1500) | RPM_ONLY | Outer RPM PID loop only (speed regulation) |
+| HIGH (~2000) | FULL_STACK | Inner current FF + outer RPM + expo + inertia |
+
+**RAW — Direct pass-through:** Stick → deadband → linear map → hard power
+clamp → ESC. No PID, no expo curve, no inertia. Feels like the old Nano V3
+setup. Instant response, no smoothing. Good for baseline comparison.
+
+**RPM_ONLY — Speed regulation only:** Stick → deadband → linear map → RPM
+PID trim → hard power clamp → ESC. The outer RPM loop maintains consistent
+track speed under varying load, but no anticipation of load spikes (no
+current feedforward) and no inertia smoothing. Good for testing whether
+RPM feedback alone is sufficient.
+
+**FULL_STACK — Premium control:** Stick → deadband → expo curve → tank mix →
+mode select → current feedforward → RPM trim → anti-runaway → soft power
+limit → inertia simulation → ESC. Disturbances are absorbed before the
+operator feels them. Tracks feel heavy and deliberate. The full experience.
+
+**Mode transitions:** When CH4 is flipped, all PID integrals, inertia
+velocity/position, and anti-runaway state are reset to zero. This prevents
+jumps or lurches when switching modes on the field.
+
+**Hard current safety cutoff (100A) is ALWAYS active in ALL modes.**
 
 ---
 
@@ -366,6 +398,7 @@ when the failsafe clears.
                     ┌───────────────────┐
   X.BUS L (3.3V)──>│ D0  (Serial1 RX)  │  ← ESC Left X.BUS Yellow (via divider)
     RC CH1 ────────>│ D2  (left motor)  │
+    RC CH4 ────────>│ D3  (ctrl mode)   │
     RC CH2 ────────>│ D4  (right motor) │
   [Hall tap L]─────>│ D5  (RPM left)    │  ← FALLBACK only (if X.BUS too slow)
   [Hall tap R]─────>│ D6  (RPM right)   │  ← FALLBACK only (if X.BUS too slow)
@@ -404,6 +437,7 @@ when the failsafe clears.
 ```
 D0  <- ESC X.BUS Left (Serial1 RX)       [UART serial, via 5V→3.3V divider]
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
+D3  <- RC CH4 (Control mode, 3-pos)      [attachInterrupt, CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
 D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM FALLBACK]
 D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM FALLBACK]
