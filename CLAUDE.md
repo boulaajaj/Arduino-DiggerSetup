@@ -168,6 +168,40 @@ PWM frequencies via hardware timers (bypass Servo library). If 50 Hz isn't
 smooth enough in testing, increase to 200-400 Hz — a ~10-line code change,
 no hardware change. But test at 50 Hz first.
 
+### XC E10 X.BUS Protocol (RESEARCHED 2026-03-21)
+The E10 supports **X.BUS** — a bi-directional digital bus protocol for robot
+control and automated systems. X.BUS provides:
+- **Bi-directional:** Read voltage, current, temperature, RPM from ESC
+- **Precision:** Digital commands, no analog PWM jitter
+- **Multi-device:** Bus topology, multiple ESCs on one line
+
+**This changes the plan.** If X.BUS update rate is ≥100 Hz, we may not need
+the hall sensor tap at all — the ESC can report RPM directly. X.BUS latency
+needs to be measured empirically before committing to a feedback approach.
+
+**Step 1:** Connect X.BUS to UNO Q, write a timing test sketch and plot to
+measure actual update frequency before any other development.
+
+### Rubber Track Cyclic Load (UNDERSTOOD 2026-03-21)
+**This is NOT about stiction (starting from 0 RPM).** The concern is:
+
+Stiff rubber tracks create a **periodic load variation** as each link
+engages and disengages the sprocket teeth:
+- **Link falls onto sprocket tooth** → rubber must deform to wrap → **more
+  friction** (motor fights harder to pull track off the sprocket)
+- **Link releases from sprocket** → rubber springs back → **less friction**
+  (momentary load drop)
+
+This is a **continuous cyclic disturbance** at every RPM:
+```
+disturbance_freq_Hz = RPM × sprocket_teeth / 60
+```
+
+The PID must be fast enough to smooth these per-tooth load pulses so the
+track maintains constant velocity. This is why the feedback update rate
+matters — if X.BUS can deliver RPM at 100-200Hz, the controller can
+counteract the per-tooth ripple in real time.
+
 ### PID Upgrade Path: Current-Based → RPM-Based
 The current V2.0 PID uses current feedback (CS7581 sensors). The next version
 will switch to RPM-based PID:
@@ -189,7 +223,12 @@ Current sensors will remain for:
 - [x] Anti-runaway failsafe
 - [x] 7-panel live plot (live_plot.py)
 - [x] Operator guide for Jason and Malaki
-- [ ] **RPM hall sensor tap wiring and code** ← NEXT
+- [x] ESC internals research (trapezoidal 6-step, 8-16kHz, 50Hz servo)
+- [x] Closed-loop speed governance analysis report
+- [ ] **X.BUS update rate test** ← NEXT (connect X.BUS, measure frequency)
+- [ ] X.BUS timing plot (visualize update rate)
+- [ ] Decide: X.BUS RPM vs. hall sensor tap (based on measured X.BUS rate)
+- [ ] RPM-based PID implementation
 - [ ] Joystick harness wiring identification
 - [ ] Voltage dividers for joystick (5V → 3.3V)
 - [ ] CS7581 current sensor wiring and calibration
@@ -197,18 +236,24 @@ Current sensors will remain for:
 - [ ] Field test at reduced power
 - [ ] Battery voltage monitoring (future)
 
-## Next Steps (for next session)
-1. **Add RPM hall sensor interrupt code** to `rc_test.ino`:
+## Next Steps (CURRENT — 2026-03-21)
+1. **X.BUS update rate test** — FIRST PRIORITY:
+   - Connect X.BUS from XC E10 to Arduino UNO Q
+   - Write a sketch that reads X.BUS and timestamps each update
+   - Write a plot script to visualize update frequency
+   - If ≥100-200 Hz: use X.BUS for RPM feedback (no hall tap needed)
+   - If <100 Hz: fall back to hall sensor tap approach
+2. **RPM hall sensor interrupt code** (if X.BUS too slow):
    - ISRs on D5 and D6 (RISING edge) counting pulses
-   - RPM calculation using interval between edges (better resolution at low RPM)
+   - RPM calculation using interval between edges
    - Expose `rpmLeft` and `rpmRight` as global state
-2. **Upgrade PID from current-based to RPM-based:**
+3. **Upgrade PID from current-based to RPM-based:**
    - `pidCompensate()` takes target RPM and actual RPM instead of current
    - Stick position maps to target RPM (calibration needed)
    - Current sensors remain for hard safety cutoff only
-3. **Add RPM to serial telemetry** so live_plot.py can display it
-4. **Verify hall sensor pinout** on the actual XC E3665 sensor cable before wiring
-5. **Build 5V→3.3V voltage dividers** for D5 and D6 (same as joystick dividers)
+4. **Add RPM to serial telemetry** so live_plot.py can display it
+5. **Verify hall sensor pinout** on the actual XC E3665 sensor cable before wiring
+6. **Build 5V→3.3V voltage dividers** for D5 and D6 (same as joystick dividers)
 
 ## File Map
 ```
@@ -217,6 +262,7 @@ OPERATOR-GUIDE.md       — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino — Main Arduino sketch (V2.0)
 live_plot.py            — Real-time 7-panel matplotlib monitor
 monitor.py              — Simple serial monitor
+docs/xc-e10-closed-loop-analysis.md — Closed-loop speed governance report
 ```
 
 ## Build & Upload
