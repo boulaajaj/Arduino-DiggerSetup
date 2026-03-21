@@ -1,24 +1,25 @@
 // =============================================================================
-// Tank Mixer V2.1 — Arduino UNO Q (STM32U585 MCU)
+// Tank Mixer V2.2 — Arduino UNO Q (STM32U585 MCU)
 // =============================================================================
 //
-// Dual-Loop PID Control — Inner Current (Feedforward) + Outer RPM (Feedback)
+// Dual-Loop PID with Runtime Control Mode Selector (RC CH4)
 //
-// Migrated from V2.0 (single-loop current-only PID).
+// V2.2 adds:
+//   - RC CH4 (D3) as a 3-position control mode selector:
+//       LOW  = RAW         — direct stick-to-ESC, no processing layers
+//       MID  = RPM_ONLY    — outer RPM PID loop only (speed regulation)
+//       HIGH = FULL_STACK  — inner current FF + outer RPM + expo + inertia
+//     This lets you A/B/C test on the field by flipping one switch.
 //
-// V2.1 adds:
+// V2.1 features (all retained):
 //   - X.BUS serial telemetry from ESC (RPM, current, voltage, temp)
-//   - Dual-loop PID: inner current loop detects load spikes instantly,
-//     outer RPM loop confirms actual speed and fine-tunes compensation
+//   - Dual-loop PID: inner current loop (feedforward) + outer RPM (feedback)
 //   - Hall sensor tap fallback for RPM if X.BUS is too slow
-//   - RPM source auto-detection (X.BUS vs hall sensor)
-//
-// Retained from V2.0:
 //   - Exponential response curve (pow 2.5) for fine low-stick control
 //   - Inertia simulation (spring-damper model — heavy machine feel)
 //   - Soft power limits (tanh saturation, no hard clamps)
 //   - Anti-runaway failsafe (2s at max boost → neutral, latch until centered)
-//   - 3-mode override switch (RC only / RC+joy / 50-50 blend)
+//   - 3-mode override switch CH5 (RC only / RC+joy / 50-50 blend)
 //
 // Hardware:
 //   MCU:       STM32U585 (Arm Cortex-M33, 160MHz, 786KB RAM, 2MB flash)
@@ -27,7 +28,7 @@
 //   ESCs:      XC E10 Sensored Brushless 140A (x2)
 //   Motors:    XC E3665 2500KV Sensored Brushless (x2)
 //   Battery:   OVONIC 3S LiPo 15000mAh 130C 11.1V
-//   RC:        Radiolink RC6GS V3 + R7FG gyro receiver
+//   RC:        Radiolink RC6GS V3 + R7FG gyro receiver (6CH)
 //   Joystick:  Genie 101174GT dual-axis (5V, needs divider to 3.3V)
 //   Current:   CS7581 Hall-effect current sensor (x2)
 //   X.BUS:     ESC telemetry wire (Yellow=data via 5V->3.3V divider)
@@ -35,6 +36,7 @@
 // Inputs:
 //   D0  <- ESC X.BUS Left     (Serial1 RX, via 5V->3.3V divider)
 //   D2  <- RC CH1 -> Left motor   (servo PWM 1000-2000us, already mixed)
+//   D3  <- RC CH4 Control mode    (servo PWM, 3-position switch)
 //   D4  <- RC CH2 -> Right motor  (servo PWM 1000-2000us, already mixed)
 //   D5  <- Motor Hall Tap LEFT    (RPM fallback, via 5V->3.3V divider)
 //   D6  <- Motor Hall Tap RIGHT   (RPM fallback, via 5V->3.3V divider)
@@ -48,7 +50,12 @@
 //   D9  -> Left track ESC    (servo PWM 1000-2000us)
 //   D10 -> Right track ESC   (servo PWM 1000-2000us)
 //
-// Override modes (CH5):
+// Control modes (CH4 — 3-position switch):
+//   LOW  (<1250us)      RAW:        Direct pass-through, no processing
+//   MID  (1250-1750us)  RPM_ONLY:   Outer RPM PID only (speed regulation)
+//   HIGH (>1750us)      FULL_STACK: Dual-loop PID + expo + inertia + soft limits
+//
+// Override modes (CH5 — 3-position switch):
 //   LOW  (<1250us)      Mode 1: RC only, joystick disabled
 //   MID  (1250-1750us)  Mode 2: Joystick active, RC overrides when non-neutral
 //   HIGH (>1750us)      Mode 3: 50/50 blend of RC + joystick
@@ -73,6 +80,7 @@
 // Pin Assignments
 // =============================================================================
 const uint8_t PIN_RC_LEFT     = 2;
+const uint8_t PIN_RC_CTRLMODE = 3;    // RC CH4 — control mode selector
 const uint8_t PIN_RC_RIGHT    = 4;
 const uint8_t PIN_RC_OVERRIDE = 7;
 const uint8_t PIN_JOY_Y       = A0;   // Via 5V->3.3V voltage divider
@@ -86,6 +94,15 @@ const uint8_t PIN_ESC_RIGHT   = 10;
 const uint8_t PIN_HALL_LEFT   = 5;    // Motor hall tap, via 5V->3.3V divider
 const uint8_t PIN_HALL_RIGHT  = 6;    // Motor hall tap, via 5V->3.3V divider
 #endif
+
+// =============================================================================
+// Control Mode — selected by RC CH4 at runtime
+// =============================================================================
+enum ControlMode {
+  MODE_RAW,         // Direct pass-through — no PID, no expo, no inertia
+  MODE_RPM_ONLY,    // Outer RPM PID loop only (speed regulation, no smoothing)
+  MODE_FULL_STACK   // Inner current FF + outer RPM + expo + inertia + soft limits
+};
 
 // =============================================================================
 // ADC (14-bit, 3.3V reference)
@@ -117,7 +134,7 @@ const int   POWER_LIMIT_PCT = 50;
 const float SOFT_LIMIT_RANGE = 500.0f * POWER_LIMIT_PCT / 100.0f; // 250us
 
 // =============================================================================
-// Inertia Simulation
+// Inertia Simulation (FULL_STACK mode only)
 //
 // Makes output feel heavy. Spring-damper model.
 //   VIRTUAL_MASS:    Higher = more sluggish
@@ -130,11 +147,6 @@ const float RESPONSE_FORCE = 20.0f;
 
 // =============================================================================
 // CS7581 Current Sensor
-//
-// Adjust to match your CS7581 variant:
-//   CUR_ZERO_V:    Output voltage at 0A (typically Vcc/2)
-//   CUR_SENS_MV_A: Sensitivity in mV per Amp
-//   CUR_DIVIDER:   Voltage divider ratio (1.0 = no divider)
 // =============================================================================
 const float CUR_ZERO_V    = 1.65f;
 const float CUR_SENS_MV_A = 20.0f;
@@ -143,53 +155,47 @@ const float CUR_DIVIDER   = 1.0f;
 // =============================================================================
 // Dual-Loop PID — Inner Current (Feedforward) + Outer RPM (Feedback)
 //
-// INNER LOOP — Current-Based Feedforward (runs every main loop iteration):
+// INNER LOOP — Current-Based Feedforward (FULL_STACK only):
 //   Current sensors detect load changes INSTANTLY. When a track hits mud or
-//   an obstacle, current spikes BEFORE RPM drops. The inner loop sees the
-//   spike and pre-boosts power to compensate before the operator feels it.
+//   an obstacle, current spikes BEFORE RPM drops. Pre-boosts power before
+//   the operator feels it.
 //
-// OUTER LOOP — RPM-Based Feedback (runs when new RPM data arrives):
-//   RPM measurement (X.BUS or hall sensor) tells us actual motor speed.
-//   This closes the loop: did the feedforward actually maintain speed?
-//   If not, the outer loop applies a trim correction.
+// OUTER LOOP — RPM-Based Feedback (RPM_ONLY and FULL_STACK):
+//   Measures actual motor speed, compares to target RPM from stick position.
+//   Applies trim correction to maintain consistent track speed.
 //
-// Together: current predicts the disturbance, RPM confirms the recovery.
-// The operator feels nothing — the system absorbed it before it was
-// perceptible to a human.
+// RAW mode: neither loop runs. Direct stick → ESC.
 // =============================================================================
 
-// --- Inner loop (current feedforward) ---
-const float CURRENT_PER_UNIT = 0.25f;  // Expected A per us of output from center
-const float FF_MAX_BOOST     = 50.0f;  // Max us the feedforward can add
-const float FF_KP            = 0.3f;   // Proportional: immediate correction
-const float FF_KI            = 0.05f;  // Integral: persistent load
-const float FF_KD            = 0.01f;  // Derivative: dampen oscillation
-const float FF_I_MAX         = 30.0f;  // Integral windup limit (us)
+// --- Inner loop (current feedforward) — FULL_STACK only ---
+const float CURRENT_PER_UNIT = 0.25f;
+const float FF_MAX_BOOST     = 50.0f;
+const float FF_KP            = 0.3f;
+const float FF_KI            = 0.05f;
+const float FF_KD            = 0.01f;
+const float FF_I_MAX         = 30.0f;
 
-// --- Outer loop (RPM feedback) ---
-const float RPM_MAX_TRIM     = 40.0f;  // Max us the RPM loop can add/subtract
-const float RPM_KP           = 0.15f;  // Proportional — gentler than inner loop
-const float RPM_KI           = 0.03f;  // Integral — slow drift correction
-const float RPM_KD           = 0.005f; // Derivative — smooth transitions
-const float RPM_I_MAX        = 25.0f;  // Integral windup limit (us)
+// --- Outer loop (RPM feedback) — RPM_ONLY and FULL_STACK ---
+const float RPM_MAX_TRIM     = 40.0f;
+const float RPM_KP           = 0.15f;
+const float RPM_KI           = 0.03f;
+const float RPM_KD           = 0.005f;
+const float RPM_I_MAX        = 25.0f;
 
 // Stick-to-RPM mapping (calibrate on your machine!)
-// At full stick (250us delta), target RPM = MAX_TARGET_RPM.
-// Linear mapping: targetRPM = (absCommandDelta / SOFT_LIMIT_RANGE) * MAX_TARGET_RPM
-const float MAX_TARGET_RPM   = 5000.0f;  // RPM at full stick (adjust after testing)
+const float MAX_TARGET_RPM   = 5000.0f;
 
-// Hard current safety cutoff — if current exceeds this, stop the motor
-// regardless of compensation. Last-resort safety net.
-const float CURRENT_HARD_LIMIT = 100.0f;  // Amps — force neutral
+// Hard current safety cutoff — always active in ALL modes
+const float CURRENT_HARD_LIMIT = 100.0f;
 
-// Anti-runaway: if total boost maxed out for this long, track is stuck.
-const unsigned long RUNAWAY_TIME_US = 2000000UL; // 2 seconds
+// Anti-runaway — active in RPM_ONLY and FULL_STACK
+const unsigned long RUNAWAY_TIME_US = 2000000UL;
 
 // =============================================================================
 // Timing
 // =============================================================================
 const unsigned long FAILSAFE_TIMEOUT_US = 500000UL;
-const unsigned long SERIAL_INTERVAL_US  = 50000UL;   // 20 Hz telemetry
+const unsigned long SERIAL_INTERVAL_US  = 50000UL;
 
 // =============================================================================
 // Servo Objects
@@ -198,15 +204,16 @@ Servo escLeft;
 Servo escRight;
 
 // =============================================================================
-// RC Interrupt State
+// RC Interrupt State — 4 channels now (added CH4 for control mode)
 // =============================================================================
-volatile unsigned long riseTime[3]   = {0, 0, 0};
-volatile int           pulseWidth[3] = {1500, 1500, 1000};
-volatile unsigned long pulseTime[3]  = {0, 0, 0};
+volatile unsigned long riseTime[4]   = {0, 0, 0, 0};
+volatile int           pulseWidth[4] = {1500, 1500, 1000, 1500};
+volatile unsigned long pulseTime[4]  = {0, 0, 0, 0};
 
 const uint8_t CH_LEFT  = 0;
 const uint8_t CH_RIGHT = 1;
 const uint8_t CH_OVR   = 2;
+const uint8_t CH_CTRL  = 3;
 
 void isrLeft() {
   unsigned long now = micros();
@@ -247,18 +254,25 @@ void isrOverride() {
   }
 }
 
+void isrCtrlMode() {
+  unsigned long now = micros();
+  if (digitalRead(PIN_RC_CTRLMODE) == HIGH) {
+    riseTime[CH_CTRL] = now;
+  } else {
+    unsigned long pw = now - riseTime[CH_CTRL];
+    if (pw >= 800 && pw <= 2200) {
+      pulseWidth[CH_CTRL] = pw;
+      pulseTime[CH_CTRL]  = now;
+    }
+  }
+}
+
 // =============================================================================
 // Hall Sensor RPM — Interrupt-Driven (FALLBACK)
-//
-// Counts rising edges on motor hall sensor taps. RPM calculated from
-// interval between edges (better resolution at low RPM).
-//
-// 4-pole motor, 2 pole pairs → 4 edges per mechanical revolution
-// (2 hall lines × 2 pole pairs, counting RISING on each).
 // =============================================================================
 #if RPM_SOURCE_HALL
 
-const int HALL_EDGES_PER_REV = 4;  // 2 hall lines × 2 pole pairs
+const int HALL_EDGES_PER_REV = 4;
 
 volatile unsigned long hallLastEdgeL = 0;
 volatile unsigned long hallIntervalL = 0;
@@ -268,7 +282,7 @@ volatile unsigned long hallIntervalR = 0;
 void isrHallLeft() {
   unsigned long now = micros();
   unsigned long interval = now - hallLastEdgeL;
-  if (interval > 50) {  // Debounce: ignore edges <50us apart (~300k eRPM)
+  if (interval > 50) {
     hallIntervalL = interval;
     hallLastEdgeL = now;
   }
@@ -291,10 +305,7 @@ float hallRpmFromInterval(volatile unsigned long &interval,
   unsigned long le = lastEdge;
   interrupts();
 
-  // If no edge for 500ms, motor is stopped
   if (iv == 0 || (nowUs - le) > 500000UL) return 0.0f;
-
-  // RPM = 60,000,000 / (interval_us * edges_per_rev)
   return 60000000.0f / ((float)iv * HALL_EDGES_PER_REV);
 }
 
@@ -302,17 +313,6 @@ float hallRpmFromInterval(volatile unsigned long &interval,
 
 // =============================================================================
 // X.BUS Telemetry — Serial (PRIMARY)
-//
-// Reads ESC telemetry from the X.BUS wire on Serial1 (D0 = RX).
-// Attempts to decode Spektrum X-Bus ESC packets (address 0x20, 16 bytes).
-// If the format is different, raw bytes are buffered for analysis.
-//
-// Data provided per packet:
-//   - RPM (10 RPM resolution)
-//   - Voltage (0.01V resolution)
-//   - Motor current (10mA resolution)
-//   - FET temperature (0.1°C resolution)
-//   - BEC current, BEC voltage, throttle %, power output %
 // =============================================================================
 #if RPM_SOURCE_XBUS
 
@@ -320,28 +320,21 @@ const int XBUS_BUF_SIZE = 64;
 uint8_t xbusBuf[XBUS_BUF_SIZE];
 int     xbusLen = 0;
 
-// Decoded telemetry (updated when a valid packet arrives)
-float xbusRpmL       = 0.0f;   // RPM from left ESC
-float xbusVoltageL   = 0.0f;   // Battery voltage (V)
-float xbusCurrentL   = 0.0f;   // Motor current (A)
-float xbusFetTempL   = 0.0f;   // FET temperature (°C)
-float xbusThrottleL  = 0.0f;   // Throttle command (%)
+float xbusRpmL       = 0.0f;
+float xbusVoltageL   = 0.0f;
+float xbusCurrentL   = 0.0f;
+float xbusFetTempL   = 0.0f;
+float xbusThrottleL  = 0.0f;
 unsigned long xbusLastPacketUs = 0;
 unsigned long xbusPacketCount  = 0;
-unsigned long xbusPacketGapUs  = 0;  // Time between last two packets
-
-// For diagnostics: track how fast packets arrive
+unsigned long xbusPacketGapUs  = 0;
 float xbusHz = 0.0f;
 
-// Try to decode a Spektrum X-Bus ESC packet at the given offset.
-// Returns number of bytes consumed (0 if no valid packet found).
 int xbusTryDecode(uint8_t *buf, int len, unsigned long nowUs) {
-  // Look for address byte 0x20 (Spektrum ESC sensor)
   for (int i = 0; i <= len - 16; i++) {
     if (buf[i] == 0x20) {
       uint8_t *p = &buf[i + 1];
 
-      // Decode big-endian fields
       uint16_t rawRpm     = ((uint16_t)p[0] << 8) | p[1];
       uint16_t rawVoltage = ((uint16_t)p[2] << 8) | p[3];
       uint16_t rawFetTemp = ((uint16_t)p[4] << 8) | p[5];
@@ -353,7 +346,6 @@ int xbusTryDecode(uint8_t *buf, int len, unsigned long nowUs) {
       float fetTemp = rawFetTemp * 0.1f;
       float throttle = p[12] * 0.5f;
 
-      // Sanity check
       bool plausible = (voltage >= 0.0f && voltage <= 60.0f)
                     && (current >= 0.0f && current <= 300.0f)
                     && (fetTemp >= -20.0f && fetTemp <= 200.0f);
@@ -373,25 +365,18 @@ int xbusTryDecode(uint8_t *buf, int len, unsigned long nowUs) {
         }
         xbusLastPacketUs = nowUs;
         xbusPacketCount++;
-
-        return i + 16;  // Bytes consumed
+        return i + 16;
       }
     }
   }
-
-  // No valid packet found. If buffer is getting full, discard old bytes
-  // but keep last 16 in case a packet straddles the boundary.
   if (len > 32) return len - 16;
-
   return 0;
 }
 
 void xbusRead(unsigned long nowUs) {
-  // Read all available bytes from Serial1 (non-blocking)
   while (Serial1.available() && xbusLen < XBUS_BUF_SIZE) {
     xbusBuf[xbusLen++] = Serial1.read();
   }
-
   if (xbusLen >= 16) {
     int consumed = xbusTryDecode(xbusBuf, xbusLen, nowUs);
     if (consumed > 0) {
@@ -402,7 +387,6 @@ void xbusRead(unsigned long nowUs) {
 }
 
 float xbusGetRpmLeft(unsigned long nowUs) {
-  // If no packet for 500ms, consider data stale
   if (xbusLastPacketUs == 0 || (nowUs - xbusLastPacketUs) > 500000UL) {
     return 0.0f;
   }
@@ -414,6 +398,10 @@ float xbusGetRpmLeft(unsigned long nowUs) {
 // =============================================================================
 // Runtime State
 // =============================================================================
+
+// Control mode (updated each loop from CH4)
+ControlMode ctrlMode = MODE_FULL_STACK;
+ControlMode prevCtrlMode = MODE_FULL_STACK;
 
 // Inertia simulation (per motor)
 float velocityL = 0.0f;
@@ -434,7 +422,7 @@ float rpmIntegralL  = 0.0f;
 float rpmIntegralR  = 0.0f;
 float rpmPrevErrorL = 0.0f;
 float rpmPrevErrorR = 0.0f;
-float rpmTrimL      = 0.0f;   // RPM loop correction (us)
+float rpmTrimL      = 0.0f;
 float rpmTrimR      = 0.0f;
 
 // Anti-runaway tracking (per motor)
@@ -457,7 +445,7 @@ float curAvgR = 0.0f;
 float measuredRpmL = 0.0f;
 float measuredRpmR = 0.0f;
 
-// Timing (all in micros for 20kHz+ resolution)
+// Timing
 unsigned long prevLoopUs   = 0;
 unsigned long prevSerialUs = 0;
 
@@ -473,7 +461,7 @@ int deadbandJoy(int value) {
   return (abs(value - ADC_CENTER) <= JOY_DEADBAND) ? ADC_CENTER : value;
 }
 
-// 14-bit ADC -> servo range with exponential curve
+// 14-bit ADC -> servo range with exponential curve (FULL_STACK only)
 int joyToServoExpo(int adcValue) {
   float norm = (float)(adcValue - ADC_CENTER) / (float)ADC_CENTER;
   norm = constrain(norm, -1.0f, 1.0f);
@@ -482,7 +470,13 @@ int joyToServoExpo(int adcValue) {
   return SERVO_CENTER + (int)(curved * 500.0f);
 }
 
-// Read CS7581 and convert to Amps
+// 14-bit ADC -> servo range LINEAR (RAW and RPM_ONLY modes)
+int joyToServoLinear(int adcValue) {
+  float norm = (float)(adcValue - ADC_CENTER) / (float)ADC_CENTER;
+  norm = constrain(norm, -1.0f, 1.0f);
+  return SERVO_CENTER + (int)(norm * 500.0f);
+}
+
 float readCurrent(uint8_t pin) {
   int raw = analogRead(pin);
   float voltage = (float)raw * ADC_VOLTS / (float)ADC_MAX;
@@ -504,14 +498,25 @@ void updateCurrentAvg() {
   curAvgR = sumR / CUR_AVG_N;
 }
 
+// Reset all PID and inertia state — called on mode transitions
+void resetAllState() {
+  ffIntegralL = 0.0f;  ffIntegralR = 0.0f;
+  ffPrevErrorL = 0.0f; ffPrevErrorR = 0.0f;
+  ffBoostL = 0.0f;     ffBoostR = 0.0f;
+
+  rpmIntegralL = 0.0f;  rpmIntegralR = 0.0f;
+  rpmPrevErrorL = 0.0f; rpmPrevErrorR = 0.0f;
+  rpmTrimL = 0.0f;      rpmTrimR = 0.0f;
+
+  velocityL = 0.0f; velocityR = 0.0f;
+  positionL = 0.0f; positionR = 0.0f;
+
+  runawayActiveL = false;  runawayActiveR = false;
+  runawayTrippedL = false; runawayTrippedR = false;
+}
+
 // ---------------------------------------------------------------------------
-// Inner Loop — Current-Based Feedforward
-//
-// Detects load spikes INSTANTLY via current sensors. When measured current
-// exceeds expected current for the commanded output level, resistance is
-// detected. The feedforward BOOSTS power to push through BEFORE RPM drops.
-//
-// This is the fast loop — runs every main loop iteration at 20kHz+.
+// Inner Loop — Current-Based Feedforward (FULL_STACK only)
 // ---------------------------------------------------------------------------
 float feedforwardCompensate(float commandDelta, float measuredAmps,
                             float &integral, float &prevError, float dtSec) {
@@ -524,20 +529,18 @@ float feedforwardCompensate(float commandDelta, float measuredAmps,
 
   float expectedAmps = absCommand * CURRENT_PER_UNIT;
   float absMeasured = fabsf(measuredAmps);
-
   float error = absMeasured - expectedAmps;
+
   if (error < 0.0f) {
     integral *= 0.95f;
     prevError = 0.0f;
     return 0.0f;
   }
 
-  // Adaptive gain: reduce at higher speeds for stability
   float speedFactor = absCommand / SOFT_LIMIT_RANGE;
   float adaptScale = 1.0f / (1.0f + speedFactor);
 
   float pTerm = FF_KP * adaptScale * error;
-
   integral += FF_KI * adaptScale * error * dtSec;
   integral = constrain(integral, 0.0f, FF_I_MAX);
 
@@ -548,26 +551,12 @@ float feedforwardCompensate(float commandDelta, float measuredAmps,
   prevError = error;
 
   float boost = pTerm + integral + dTerm;
-
-  // Soft ceiling using tanh
   boost = FF_MAX_BOOST * tanhf(boost / FF_MAX_BOOST);
-
   return max(boost, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
-// Outer Loop — RPM-Based Feedback
-//
-// Measures actual motor speed and compares to target RPM derived from
-// stick position. Applies a TRIM correction on top of the feedforward.
-//
-// This loop runs at whatever rate RPM data arrives:
-//   - X.BUS: ~22-45 Hz (one new value every 22-44ms)
-//   - Hall sensor: continuous (kHz+ edge rate)
-//
-// The trim is ADDED to the feedforward boost. It can be positive (need
-// more power to reach target speed) or negative (feedforward over-
-// compensated and actual speed exceeded target).
+// Outer Loop — RPM-Based Feedback (RPM_ONLY and FULL_STACK)
 // ---------------------------------------------------------------------------
 float rpmFeedbackTrim(float commandDelta, float targetRpm, float actualRpm,
                       float &integral, float &prevError, float dtSec) {
@@ -578,10 +567,7 @@ float rpmFeedbackTrim(float commandDelta, float targetRpm, float actualRpm,
     return 0.0f;
   }
 
-  // Error = target - actual (positive means we need MORE power)
   float error = targetRpm - actualRpm;
-
-  // Normalize error relative to target for consistent gain behavior
   float normError = error / max(targetRpm, 100.0f);
 
   float pTerm = RPM_KP * normError * RPM_MAX_TRIM;
@@ -591,25 +577,17 @@ float rpmFeedbackTrim(float commandDelta, float targetRpm, float actualRpm,
 
   float dTerm = 0.0f;
   if (dtSec > 0.0f) {
-    dTerm = RPM_KD * ((normError - prevError) / dtSec);
-    dTerm *= RPM_MAX_TRIM;
+    dTerm = RPM_KD * ((normError - prevError) / dtSec) * RPM_MAX_TRIM;
   }
   prevError = normError;
 
   float trim = pTerm + integral + dTerm;
-
-  // Soft ceiling
   trim = RPM_MAX_TRIM * tanhf(trim / RPM_MAX_TRIM);
-
   return trim;
 }
 
 // ---------------------------------------------------------------------------
-// Anti-runaway failsafe
-//
-// If total boost (feedforward + RPM trim) has been near max for RUNAWAY_TIME,
-// the track is physically stuck. Go neutral to prevent motor burnout.
-// Latches until stick returns to neutral (deliberate restart).
+// Anti-runaway failsafe (RPM_ONLY and FULL_STACK)
 // ---------------------------------------------------------------------------
 bool checkRunaway(float totalBoost, float maxBoost, unsigned long nowUs,
                   unsigned long &startTime, bool &active, bool &tripped) {
@@ -631,24 +609,34 @@ bool checkRunaway(float totalBoost, float maxBoost, unsigned long nowUs,
 }
 
 void resetRunawayIfNeutral(float target, bool &tripped,
-                           float &ffIntegral, float &ffBoost,
-                           float &rpmIntegral, float &rpmTrim) {
+                           float &ffInt, float &ffBst,
+                           float &rpmInt, float &rpmTrm) {
   if (fabsf(target) < 5.0f && tripped) {
     tripped = false;
-    ffIntegral = 0.0f;
-    ffBoost = 0.0f;
-    rpmIntegral = 0.0f;
-    rpmTrim = 0.0f;
+    ffInt = 0.0f;
+    ffBst = 0.0f;
+    rpmInt = 0.0f;
+    rpmTrm = 0.0f;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Soft power scaling with tanh saturation (no hard clamps)
+// Soft power scaling with tanh saturation (FULL_STACK only)
 // ---------------------------------------------------------------------------
 int scalePowerSoft(float delta) {
   if (fabsf(delta) < 0.5f) return SERVO_CENTER;
   float softened = SOFT_LIMIT_RANGE * tanhf(delta / SOFT_LIMIT_RANGE);
   return SERVO_CENTER + (int)(softened + 0.5f);
+}
+
+// ---------------------------------------------------------------------------
+// Hard power clamp (RAW and RPM_ONLY — simple clamp at POWER_LIMIT_PCT)
+// ---------------------------------------------------------------------------
+int clampPower(int value) {
+  int maxDelta = 500 * POWER_LIMIT_PCT / 100;
+  int delta = value - SERVO_CENTER;
+  delta = constrain(delta, -maxDelta, maxDelta);
+  return SERVO_CENTER + delta;
 }
 
 // =============================================================================
@@ -664,10 +652,12 @@ void setup() {
   analogReadResolution(14);
 
   pinMode(PIN_RC_LEFT, INPUT);
+  pinMode(PIN_RC_CTRLMODE, INPUT);
   pinMode(PIN_RC_RIGHT, INPUT);
   pinMode(PIN_RC_OVERRIDE, INPUT);
 
   attachInterrupt(digitalPinToInterrupt(PIN_RC_LEFT),     isrLeft,     CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_RC_CTRLMODE), isrCtrlMode, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_RC_RIGHT),    isrRight,    CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_RC_OVERRIDE), isrOverride, CHANGE);
 
@@ -690,38 +680,29 @@ void setup() {
 
   prevLoopUs = micros();
 
-  Serial.println("Tank Mixer V2.1 — Dual-Loop PID");
+  Serial.println("Tank Mixer V2.2 — Dual-Loop PID + Mode Selector");
+  Serial.println("CH4: LOW=RAW  MID=RPM_ONLY  HIGH=FULL_STACK");
 #if RPM_SOURCE_XBUS
-  Serial.print("RPM source: X.BUS on Serial1 @ ");
+  Serial.print("RPM source: X.BUS @ ");
   Serial.print(XBUS_BAUD);
   Serial.println(" baud");
 #elif RPM_SOURCE_HALL
-  Serial.println("RPM source: Hall sensor tap on D5/D6");
+  Serial.println("RPM source: Hall sensor tap D5/D6");
 #endif
 }
 
 // =============================================================================
 // Main Loop — targets 20,000+ iterations/sec
 //
-// No delay(), no blocking reads, no pulseIn(). RC is interrupt-driven.
-// X.BUS is polled non-blocking via Serial1.available().
-// All timing via micros() for sub-millisecond resolution.
+// Pipeline varies by control mode:
 //
-// Pipeline:
-//   1. RC snapshot (interrupt-driven, atomic)
-//   2. Joystick read (14-bit ADC, ~2-5us)
-//   3. Current sensors (CS7581, moving average)
-//   4. X.BUS / Hall RPM read (non-blocking)
-//   5. Failsafe check
-//   6. Expo curve + tank mix
-//   7. Override mode selection
-//   8. Inner loop: current feedforward (fast, every iteration)
-//   9. Outer loop: RPM feedback trim (uses latest RPM value)
-//  10. Anti-runaway failsafe
-//  11. Soft power limit (tanh saturation)
-//  12. Inertia simulation (spring-damper)
-//  13. Servo output
-//  14. Telemetry (20 Hz)
+// RAW:        Stick → deadband → linear map → hard clamp → ESC
+// RPM_ONLY:   Stick → deadband → linear map → RPM PID trim → hard clamp → ESC
+// FULL_STACK: Stick → deadband → expo → tank mix → mode select →
+//             current FF → RPM trim → anti-runaway → soft limit →
+//             inertia sim → ESC
+//
+// Hard current safety cutoff (100A) is ALWAYS active in all modes.
 // =============================================================================
 void loop() {
   unsigned long nowUs = micros();
@@ -735,44 +716,65 @@ void loop() {
   int rawRCLeft    = pulseWidth[CH_LEFT];
   int rawRCRight   = pulseWidth[CH_RIGHT];
   int rawOverride  = pulseWidth[CH_OVR];
+  int rawCtrlMode  = pulseWidth[CH_CTRL];
   unsigned long lastLeftTime  = pulseTime[CH_LEFT];
   unsigned long lastRightTime = pulseTime[CH_RIGHT];
   interrupts();
 
-  // --- 2. Joystick (14-bit ADC, non-blocking ~2-5us each) ---
+  // --- 2. Determine control mode from CH4 ---
+  if (rawCtrlMode < MODE_LOW_THRESH) {
+    ctrlMode = MODE_RAW;
+  } else if (rawCtrlMode <= MODE_HIGH_THRESH) {
+    ctrlMode = MODE_RPM_ONLY;
+  } else {
+    ctrlMode = MODE_FULL_STACK;
+  }
+
+  // Reset PID/inertia state on mode transitions to prevent jumps
+  if (ctrlMode != prevCtrlMode) {
+    resetAllState();
+    prevCtrlMode = ctrlMode;
+  }
+
+  // --- 3. Joystick (14-bit ADC, non-blocking ~2-5us each) ---
   int rawJoyY = analogRead(PIN_JOY_Y);
   int rawJoyX = analogRead(PIN_JOY_X);
 
-  // --- 3. Current sensors (moving average) ---
+  // --- 4. Current sensors (always read — needed for hard safety cutoff) ---
   updateCurrentAvg();
 
-  // --- 4. RPM source read ---
+  // --- 5. RPM source read (always read — RPM_ONLY and FULL_STACK use it) ---
 #if RPM_SOURCE_XBUS
   xbusRead(nowUs);
   measuredRpmL = xbusGetRpmLeft(nowUs);
-  // TODO: Right ESC X.BUS (needs 2nd serial or multiplexing)
-  // For now, mirror left RPM as estimate for right motor
-  measuredRpmR = measuredRpmL;
+  measuredRpmR = measuredRpmL;  // TODO: 2nd serial for right ESC
 #elif RPM_SOURCE_HALL
   measuredRpmL = hallRpmFromInterval(hallIntervalL, hallLastEdgeL, nowUs);
   measuredRpmR = hallRpmFromInterval(hallIntervalR, hallLastEdgeR, nowUs);
 #endif
 
-  // --- 5. Failsafe: RC signal lost ---
+  // --- 6. Failsafe: RC signal lost ---
   bool rcLost = (nowUs - lastLeftTime  > FAILSAFE_TIMEOUT_US)
              && (nowUs - lastRightTime > FAILSAFE_TIMEOUT_US);
 
   int rcLeft  = rcLost ? SERVO_CENTER : deadbandRC(rawRCLeft);
   int rcRight = rcLost ? SERVO_CENTER : deadbandRC(rawRCRight);
 
-  // --- 6. Joystick -> expo curve -> tank mix ---
-  int joyThrottle = joyToServoExpo(deadbandJoy(rawJoyY));
-  int joySteering = joyToServoExpo(deadbandJoy(rawJoyX));
+  // --- 7. Joystick processing (expo in FULL_STACK, linear otherwise) ---
+  int joyThrottle, joySteering;
+  if (ctrlMode == MODE_FULL_STACK) {
+    joyThrottle = joyToServoExpo(deadbandJoy(rawJoyY));
+    joySteering = joyToServoExpo(deadbandJoy(rawJoyX));
+  } else {
+    joyThrottle = joyToServoLinear(deadbandJoy(rawJoyY));
+    joySteering = joyToServoLinear(deadbandJoy(rawJoyX));
+  }
+
   int joySteerOff = joySteering - SERVO_CENTER;
   int joyLeft     = constrain(joyThrottle + joySteerOff, SERVO_MIN, SERVO_MAX);
   int joyRight    = constrain(joyThrottle - joySteerOff, SERVO_MIN, SERVO_MAX);
 
-  // --- 7. Override mode selection ---
+  // --- 8. Override mode selection (CH5 — same in all control modes) ---
   int left, right;
 
   if (rawOverride < MODE_LOW_THRESH) {
@@ -792,21 +794,145 @@ void loop() {
     right = (rcRight + joyRight) / 2;
   }
 
-  // --- 8. Base command delta (us from center) ---
-  float deltaL = (float)(left  - SERVO_CENTER);
-  float deltaR = (float)(right - SERVO_CENTER);
-
-  // --- 9. Hard current safety cutoff ---
+  // --- 9. Hard current safety cutoff (ALWAYS active, all modes) ---
   bool hardCutoffL = fabsf(curAvgL) >= CURRENT_HARD_LIMIT;
   bool hardCutoffR = fabsf(curAvgR) >= CURRENT_HARD_LIMIT;
 
-  // --- 10. Inner loop: current feedforward ---
+  if (hardCutoffL) left  = SERVO_CENTER;
+  if (hardCutoffR) right = SERVO_CENTER;
+
+  // =====================================================================
+  // MODE: RAW — Direct pass-through, no processing layers
+  //
+  // Stick → deadband → linear → hard clamp → ESC
+  // No PID, no expo, no inertia. Old-school direct control.
+  // =====================================================================
+  if (ctrlMode == MODE_RAW) {
+    int outLeft  = clampPower(left);
+    int outRight = clampPower(right);
+
+    escLeft.writeMicroseconds(outLeft);
+    escRight.writeMicroseconds(outRight);
+
+    // Telemetry
+    if (nowUs - prevSerialUs >= SERIAL_INTERVAL_US) {
+      prevSerialUs = nowUs;
+      Serial.print("MODE=RAW");
+      Serial.print("  D2=");   Serial.print(rawRCLeft);
+      Serial.print("  D4=");   Serial.print(rawRCRight);
+      Serial.print("  D7=");   Serial.print(rawOverride);
+      Serial.print("  A0=");   Serial.print(rawJoyY);
+      Serial.print("  A1=");   Serial.print(rawJoyX);
+      Serial.print("  IL=");   Serial.print(curAvgL, 1);
+      Serial.print("  IR=");   Serial.print(curAvgR, 1);
+      Serial.print("  RPMl="); Serial.print(measuredRpmL, 0);
+      Serial.print("  RPMr="); Serial.print(measuredRpmR, 0);
+      Serial.print("  L=");    Serial.print(outLeft);
+      Serial.print("  R=");    Serial.println(outRight);
+    }
+    return;
+  }
+
+  // =====================================================================
+  // MODE: RPM_ONLY — Outer RPM PID loop only
+  //
+  // Stick → deadband → linear → RPM PID trim → hard clamp → ESC
+  // Speed regulation without the smoothing layers.
+  // =====================================================================
+  if (ctrlMode == MODE_RPM_ONLY) {
+    float deltaL = (float)(left  - SERVO_CENTER);
+    float deltaR = (float)(right - SERVO_CENTER);
+
+    // RPM feedback trim (outer loop only, no current feedforward)
+    if (!hardCutoffL && measuredRpmL > 0.0f) {
+      float absDelta = fabsf((float)(left - SERVO_CENTER));
+      float targetRpmL = (absDelta / SOFT_LIMIT_RANGE) * MAX_TARGET_RPM;
+
+      rpmTrimL = rpmFeedbackTrim(deltaL, targetRpmL, measuredRpmL,
+                                 rpmIntegralL, rpmPrevErrorL, dtSec);
+      float sign = (deltaL >= 0.0f) ? 1.0f : -1.0f;
+      deltaL += sign * rpmTrimL;
+    }
+
+    if (!hardCutoffR && measuredRpmR > 0.0f) {
+      float absDelta = fabsf((float)(right - SERVO_CENTER));
+      float targetRpmR = (absDelta / SOFT_LIMIT_RANGE) * MAX_TARGET_RPM;
+
+      rpmTrimR = rpmFeedbackTrim(deltaR, targetRpmR, measuredRpmR,
+                                 rpmIntegralR, rpmPrevErrorR, dtSec);
+      float sign = (deltaR >= 0.0f) ? 1.0f : -1.0f;
+      deltaR += sign * rpmTrimR;
+    }
+
+    // Anti-runaway (RPM trim only, no feedforward boost)
+    bool failL = checkRunaway(fabsf(rpmTrimL), RPM_MAX_TRIM, nowUs,
+                              runawayStartL, runawayActiveL, runawayTrippedL);
+    bool failR = checkRunaway(fabsf(rpmTrimR), RPM_MAX_TRIM, nowUs,
+                              runawayStartR, runawayActiveR, runawayTrippedR);
+
+    if (failL) deltaL = 0.0f;
+    if (failR) deltaR = 0.0f;
+
+    // Reset runaway on neutral
+    if (fabsf(deltaL) < 5.0f && runawayTrippedL) {
+      runawayTrippedL = false;
+      rpmIntegralL = 0.0f; rpmTrimL = 0.0f;
+    }
+    if (fabsf(deltaR) < 5.0f && runawayTrippedR) {
+      runawayTrippedR = false;
+      rpmIntegralR = 0.0f; rpmTrimR = 0.0f;
+    }
+
+    int outLeft  = clampPower(SERVO_CENTER + (int)(deltaL + 0.5f));
+    int outRight = clampPower(SERVO_CENTER + (int)(deltaR + 0.5f));
+
+    escLeft.writeMicroseconds(outLeft);
+    escRight.writeMicroseconds(outRight);
+
+    // Telemetry
+    if (nowUs - prevSerialUs >= SERIAL_INTERVAL_US) {
+      prevSerialUs = nowUs;
+      Serial.print("MODE=RPM");
+      Serial.print("  D2=");    Serial.print(rawRCLeft);
+      Serial.print("  D4=");    Serial.print(rawRCRight);
+      Serial.print("  D7=");    Serial.print(rawOverride);
+      Serial.print("  A0=");    Serial.print(rawJoyY);
+      Serial.print("  A1=");    Serial.print(rawJoyX);
+      Serial.print("  IL=");    Serial.print(curAvgL, 1);
+      Serial.print("  IR=");    Serial.print(curAvgR, 1);
+      Serial.print("  RPMl=");  Serial.print(measuredRpmL, 0);
+      Serial.print("  RPMr=");  Serial.print(measuredRpmR, 0);
+      Serial.print("  TRl=");   Serial.print(rpmTrimL, 1);
+      Serial.print("  TRr=");   Serial.print(rpmTrimR, 1);
+      Serial.print("  L=");     Serial.print(outLeft);
+      Serial.print("  R=");     Serial.print(outRight);
+#if RPM_SOURCE_XBUS
+      Serial.print("  XHz=");   Serial.print(xbusHz, 1);
+#endif
+      Serial.println();
+    }
+    return;
+  }
+
+  // =====================================================================
+  // MODE: FULL_STACK — All layers active
+  //
+  // Stick → deadband → expo curve → tank mix → mode select →
+  // current feedforward → RPM trim → anti-runaway → soft power limit →
+  // inertia simulation → ESC
+  //
+  // This is the premium control experience: disturbances are absorbed
+  // before the operator feels them, tracks feel heavy and deliberate.
+  // =====================================================================
+
+  float deltaL = (float)(left  - SERVO_CENTER);
+  float deltaR = (float)(right - SERVO_CENTER);
+
+  // --- Inner loop: current feedforward ---
   if (hardCutoffL) {
+    ffIntegralL = 0.0f; ffBoostL = 0.0f;
+    rpmIntegralL = 0.0f; rpmTrimL = 0.0f;
     deltaL = 0.0f;
-    ffIntegralL = 0.0f;
-    ffBoostL = 0.0f;
-    rpmIntegralL = 0.0f;
-    rpmTrimL = 0.0f;
   } else {
     ffBoostL = feedforwardCompensate(deltaL, curAvgL,
                                      ffIntegralL, ffPrevErrorL, dtSec);
@@ -815,11 +941,9 @@ void loop() {
   }
 
   if (hardCutoffR) {
+    ffIntegralR = 0.0f; ffBoostR = 0.0f;
+    rpmIntegralR = 0.0f; rpmTrimR = 0.0f;
     deltaR = 0.0f;
-    ffIntegralR = 0.0f;
-    ffBoostR = 0.0f;
-    rpmIntegralR = 0.0f;
-    rpmTrimR = 0.0f;
   } else {
     ffBoostR = feedforwardCompensate(deltaR, curAvgR,
                                      ffIntegralR, ffPrevErrorR, dtSec);
@@ -827,14 +951,13 @@ void loop() {
     deltaR += sign * ffBoostR;
   }
 
-  // --- 11. Outer loop: RPM feedback trim ---
+  // --- Outer loop: RPM feedback trim ---
   if (!hardCutoffL && measuredRpmL > 0.0f) {
     float absDelta = fabsf((float)(left - SERVO_CENTER));
     float targetRpmL = (absDelta / SOFT_LIMIT_RANGE) * MAX_TARGET_RPM;
 
     rpmTrimL = rpmFeedbackTrim(deltaL, targetRpmL, measuredRpmL,
                                rpmIntegralL, rpmPrevErrorL, dtSec);
-
     float sign = (deltaL >= 0.0f) ? 1.0f : -1.0f;
     deltaL += sign * rpmTrimL;
   }
@@ -845,12 +968,11 @@ void loop() {
 
     rpmTrimR = rpmFeedbackTrim(deltaR, targetRpmR, measuredRpmR,
                                rpmIntegralR, rpmPrevErrorR, dtSec);
-
     float sign = (deltaR >= 0.0f) ? 1.0f : -1.0f;
     deltaR += sign * rpmTrimR;
   }
 
-  // --- 12. Anti-runaway failsafe ---
+  // --- Anti-runaway failsafe ---
   float totalBoostL = ffBoostL + fabsf(rpmTrimL);
   float totalBoostR = ffBoostR + fabsf(rpmTrimR);
   float maxTotalBoost = FF_MAX_BOOST + RPM_MAX_TRIM;
@@ -863,21 +985,19 @@ void loop() {
   if (failL) deltaL = 0.0f;
   if (failR) deltaR = 0.0f;
 
-  // --- 13. Soft power limit (tanh saturation, no hard clamps) ---
+  // --- Soft power limit (tanh saturation) ---
   int scaledL = scalePowerSoft(deltaL);
   int scaledR = scalePowerSoft(deltaR);
 
-  // --- 14. Inertia simulation (heavy machine feel) ---
+  // --- Inertia simulation (heavy machine feel) ---
   float targetL = (float)(scaledL - SERVO_CENTER);
   float targetR = (float)(scaledR - SERVO_CENTER);
 
-  // Reset runaway latch if stick at neutral
   resetRunawayIfNeutral(targetL, runawayTrippedL,
                         ffIntegralL, ffBoostL, rpmIntegralL, rpmTrimL);
   resetRunawayIfNeutral(targetR, runawayTrippedR,
                         ffIntegralR, ffBoostR, rpmIntegralR, rpmTrimR);
 
-  // Spring force (pulls toward target) + friction (opposes velocity)
   float forceL = RESPONSE_FORCE * (targetL - positionL);
   float forceR = RESPONSE_FORCE * (targetR - positionR);
   float fricL  = -FRICTION_COEFF * velocityL;
@@ -888,7 +1008,6 @@ void loop() {
   positionL += velocityL * dtSec;
   positionR += velocityR * dtSec;
 
-  // Snap to zero near neutral (prevents micro-drift)
   if (fabsf(targetL) < 1.0f && fabsf(positionL) < 2.0f && fabsf(velocityL) < 5.0f) {
     positionL = 0.0f; velocityL = 0.0f;
   }
@@ -899,32 +1018,33 @@ void loop() {
   int outLeft  = SERVO_CENTER + (int)(positionL + 0.5f);
   int outRight = SERVO_CENTER + (int)(positionR + 0.5f);
 
-  // --- 15. Write to ESCs ---
+  // --- Write to ESCs ---
   escLeft.writeMicroseconds(outLeft);
   escRight.writeMicroseconds(outRight);
 
-  // --- 16. Serial telemetry (20 Hz, non-blocking) ---
+  // --- Telemetry ---
   if (nowUs - prevSerialUs >= SERIAL_INTERVAL_US) {
     prevSerialUs = nowUs;
-    Serial.print("D2=");    Serial.print(rawRCLeft);
-    Serial.print("  D4=");  Serial.print(rawRCRight);
-    Serial.print("  D7=");  Serial.print(rawOverride);
-    Serial.print("  A0=");  Serial.print(rawJoyY);
-    Serial.print("  A1=");  Serial.print(rawJoyX);
-    Serial.print("  IL=");  Serial.print(curAvgL, 1);
-    Serial.print("  IR=");  Serial.print(curAvgR, 1);
-    Serial.print("  FFl="); Serial.print(ffBoostL, 1);
-    Serial.print("  FFr="); Serial.print(ffBoostR, 1);
-    Serial.print("  RPMl="); Serial.print(measuredRpmL, 0);
-    Serial.print("  RPMr="); Serial.print(measuredRpmR, 0);
-    Serial.print("  TRl="); Serial.print(rpmTrimL, 1);
-    Serial.print("  TRr="); Serial.print(rpmTrimR, 1);
-    Serial.print("  L=");   Serial.print(outLeft);
-    Serial.print("  R=");   Serial.print(outRight);
+    Serial.print("MODE=FULL");
+    Serial.print("  D2=");    Serial.print(rawRCLeft);
+    Serial.print("  D4=");    Serial.print(rawRCRight);
+    Serial.print("  D7=");    Serial.print(rawOverride);
+    Serial.print("  A0=");    Serial.print(rawJoyY);
+    Serial.print("  A1=");    Serial.print(rawJoyX);
+    Serial.print("  IL=");    Serial.print(curAvgL, 1);
+    Serial.print("  IR=");    Serial.print(curAvgR, 1);
+    Serial.print("  FFl=");   Serial.print(ffBoostL, 1);
+    Serial.print("  FFr=");   Serial.print(ffBoostR, 1);
+    Serial.print("  RPMl=");  Serial.print(measuredRpmL, 0);
+    Serial.print("  RPMr=");  Serial.print(measuredRpmR, 0);
+    Serial.print("  TRl=");   Serial.print(rpmTrimL, 1);
+    Serial.print("  TRr=");   Serial.print(rpmTrimR, 1);
+    Serial.print("  L=");     Serial.print(outLeft);
+    Serial.print("  R=");     Serial.print(outRight);
 #if RPM_SOURCE_XBUS
-    Serial.print("  XHz="); Serial.print(xbusHz, 1);
-    Serial.print("  XV=");  Serial.print(xbusVoltageL, 1);
-    Serial.print("  XT=");  Serial.print(xbusFetTempL, 1);
+    Serial.print("  XHz=");   Serial.print(xbusHz, 1);
+    Serial.print("  XV=");    Serial.print(xbusVoltageL, 1);
+    Serial.print("  XT=");    Serial.print(xbusFetTempL, 1);
 #endif
     Serial.println();
   }
