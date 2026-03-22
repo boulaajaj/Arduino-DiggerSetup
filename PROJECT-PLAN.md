@@ -43,8 +43,8 @@ The controller provides:
 | — | Joystick | Analog 0-3.3V | A1 | Steering X axis (via 5V->3.3V divider) |
 | — | CS7581 | Analog | A2 | Current sensor — left motor |
 | — | CS7581 | Analog | A3 | Current sensor — right motor |
-| — | ESC X.BUS (L) | Serial UART | D0 (RX1) | X.BUS telemetry — left ESC (RPM, current, voltage, temp) |
-| — | ESC X.BUS (R) | Serial UART | TBD | X.BUS telemetry — right ESC (needs 2nd serial or mux) |
+| — | ESC X.BUS (L) | Serial UART | D0 (USART1 RX) | X.BUS telemetry — left ESC (RPM, current, voltage, temp) |
+| — | ESC X.BUS (R) | Serial UART | PG8 (LPUART1 RX, JMISC solder) | X.BUS telemetry — right ESC |
 | — | Motor Hall Tap (L) | Digital 5V→3.3V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
 | — | Motor Hall Tap (R) | Digital 5V→3.3V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
 
@@ -391,18 +391,19 @@ when the failsafe clears.
 
 ---
 
-## Wiring Diagram (V2.1 — UNO Q, Dual-Loop)
+## Wiring Diagram (V2.2 — UNO Q, Dual X.BUS)
 
 ```
                         ARDUINO UNO Q
                     ┌───────────────────┐
-  X.BUS L (3.3V)──>│ D0  (Serial1 RX)  │  ← ESC Left X.BUS Yellow (via divider)
+  X.BUS L (3.3V)──>│ D0  (USART1 RX)   │  ← ESC Left X.BUS Yellow (via divider)
     RC CH1 ────────>│ D2  (left motor)  │
     RC CH4 ────────>│ D3  (ctrl mode)   │
     RC CH2 ────────>│ D4  (right motor) │
   [Hall tap L]─────>│ D5  (RPM left)    │  ← FALLBACK only (if X.BUS too slow)
   [Hall tap R]─────>│ D6  (RPM right)   │  ← FALLBACK only (if X.BUS too slow)
     RC CH5 ────────>│ D7  (override)    │
+  Debug TX ────────>│ D8  (SoftSerial)  │──> USB-to-serial adapter → PC
                     │              D9  ~│──> Left Track ESC (servo PWM)
                     │             D10  ~│──> Right Track ESC (servo PWM)
                     │                   │
@@ -411,23 +412,30 @@ when the failsafe clears.
   CS7581 Left ─────>│ A2  (current L)   │
   CS7581 Right ────>│ A3  (current R)   │
                     │                   │
+  X.BUS R (3.3V)──>│ PG8 (LPUART1 RX)  │  ← ESC Right X.BUS Yellow (JMISC solder)
+                    │                   │
          5V ───────>│ 5V         GND   │<── Common GND
    Battery ────────>│ VIN               │
                     └───────────────────┘
 
   ESC X.BUS Wiring (per ESC):
     Yellow (data) ──[10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
-                            └──> D0 (Serial1 RX)
+                            └──> D0 (Left ESC) or PG8 (Right ESC)
     Brown  (GND)  ──────────── Arduino GND
     Red    (BEC+) ──────────── NOT CONNECTED
+
+  Debug Output Wiring:
+    D8 (SoftwareSerial TX) ──> USB-to-serial adapter RX
+    Arduino GND ─────────────> USB-to-serial adapter GND
+    (USB-to-serial adapter connects to PC via USB for Serial Monitor)
 
   Voltage Dividers (5V -> 3.3V, used for joystick, hall taps, AND X.BUS):
     5V signal ──[10kΩ]──┬──[6.8kΩ]── GND
                         └──> target pin (3.3V max)
 
-  NOTE: For X.BUS probe testing, only LEFT ESC is connected to D0.
-  If X.BUS works, we may need a second hardware serial for the right ESC,
-  or multiplex both ESCs onto one serial line (if they can be addressed).
+  JMISC SOLDER NOTE: PG8 is on the JMISC expansion pads on the UNO Q PCB.
+  Solder one wire from the PG8 pad to a header pin or directly to the
+  voltage divider output for the Right ESC X.BUS signal.
 ```
 
 ---
@@ -435,19 +443,21 @@ when the failsafe clears.
 ## Pin Summary (Quick Reference)
 
 ```
-D0  <- ESC X.BUS Left (Serial1 RX)       [UART serial, via 5V→3.3V divider]
+D0  <- ESC X.BUS Left (USART1 RX)        [Hardware UART, via 5V→3.3V divider]
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
 D3  <- RC CH4 (Control mode, 3-pos)      [attachInterrupt, CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
 D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM FALLBACK]
 D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM FALLBACK]
 D7  <- RC CH5 (Override switch, 3-pos)   [attachInterrupt, CHANGE]
+D8  -> Debug serial output               [SoftwareSerial TX, to USB-serial adapter]
 A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-3.3V via divider]
 A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-3.3V via divider]
 A2  <- CS7581 Current Sensor (Left)      [14-bit ADC]
 A3  <- CS7581 Current Sensor (Right)     [14-bit ADC]
 D9  -> Left Track ESC                    [Servo PWM output]
 D10 -> Right Track ESC                   [Servo PWM output]
+PG8 <- ESC X.BUS Right (LPUART1 RX)     [Hardware UART, JMISC solder, via divider]
 5V  -> RC Receiver + Joystick VCC
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
@@ -497,7 +507,8 @@ GND -> All components (common ground)
   3. Attempts Spektrum X-Bus ESC packet decoding (address 0x20)
   4. Measures packet arrival rate (Hz) and inter-packet gap (ms)
   5. Reports decoded RPM, current, voltage, temperature
-- **Wiring:** ESC X.BUS Yellow → D0 (Serial1 RX) via 5V→3.3V divider
+- **Wiring:** ESC X.BUS Yellow → D0 (USART1 RX) via 5V→3.3V divider
+  - Debug output via SoftwareSerial on D8 → USB-to-serial adapter
 - **Decision gate:** If packets arrive >20 Hz with clean data → use X.BUS
   for dual-loop PID. If too slow → fall back to hall sensor tap.
 
@@ -545,18 +556,22 @@ GND -> All components (common ground)
 - [x] X.BUS probe sketch written (`sketches/xbus_probe/xbus_probe.ino`)
 
 ### Step 1: X.BUS Telemetry Validation (NOW)
-- [ ] **Wire ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
+- [ ] **Solder wire to JMISC PG8 pad** on UNO Q board
+- [ ] **Wire Left ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
+- [ ] **Wire Right ESC X.BUS Yellow to PG8** via 5V→3.3V voltage divider
+- [ ] **Connect USB-to-serial adapter** to D8 (debug TX) + GND
 - [ ] **Upload and run xbus_probe sketch**
+- [ ] **Test each ESC on D0** (unplug X.BUS, use Serial Monitor for initial validation)
 - [ ] **Determine baud rate** (auto-scan will find it)
 - [ ] **Measure packet rate** — need >20 Hz for outer RPM loop
 - [ ] **Verify data decode** — RPM, current, voltage, temp values make sense
-- [ ] **DECISION GATE:** X.BUS fast enough? → V2.1 with X.BUS. Too slow? → Hall sensor fallback.
+- [ ] **DECISION GATE:** X.BUS fast enough? → V2.2 with dual X.BUS. Too slow? → Hall sensor fallback.
 
 ### Step 2a: If X.BUS Works (V2.1 with X.BUS)
 - [ ] Integrate X.BUS serial reading into main rc_test.ino sketch
 - [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (X.BUS)
 - [ ] Add X.BUS telemetry to serial output + update live_plot.py
-- [ ] Handle 2nd ESC (right motor) — 2nd serial port or multiplexing
+- [ ] Integrate Right ESC X.BUS on Serial1 (LPUART1/PG8)
 - [ ] Bench test dual-loop PID with ESC powered
 
 ### Step 2b: If X.BUS Too Slow (V2.1 with Hall Sensor Tap)

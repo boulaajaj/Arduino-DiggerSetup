@@ -17,6 +17,13 @@ Usage:
   python live_plot.py
   (or Ctrl+Shift+B in VS Code -> "Live Plot")
 
+SERIAL NOTE (V2.2 UART architecture):
+  Debug output comes from SoftwareSerial TX on D8, NOT the Arduino's native
+  USB port. Connect a USB-to-serial adapter (FTDI/CP2102) from D8 to your PC.
+  Set PORT below to the adapter's COM port (not the Arduino's COM port).
+  When bench testing without X.BUS on D0, you can use the Arduino's native
+  COM port directly (set DEBUG_USE_SOFTSERIAL=false in the sketch).
+
 Expects serial format (115200 baud):
   D2=1500  D4=1500  D7=1000  A0=512  A1=512  L=1500  R=1500
 """

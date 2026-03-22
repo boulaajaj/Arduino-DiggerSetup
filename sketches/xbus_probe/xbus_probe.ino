@@ -6,33 +6,97 @@
 // telemetry for closed-loop PID control (dual-loop: inner current + outer RPM).
 //
 // This sketch:
-//   1. Listens on Serial1 (D0 = RX) for X.BUS data from the ESC
+//   1. Listens on Serial (USART1, D0 = RX) for X.BUS data from the ESC
 //   2. Auto-scans common baud rates to find the right one
-//   3. Dumps raw hex bytes to USB Serial for analysis
+//   3. Dumps raw hex bytes to debug serial for analysis
 //   4. Attempts to decode Spektrum X-Bus ESC telemetry packets
 //   5. Measures packet arrival rate (Hz) and inter-packet gap (ms)
 //   6. Reports RPM, current, voltage, temperature if decoding succeeds
 //
+// SERIAL ARCHITECTURE (UNO Q Zephyr LLEXT firmware):
+//   Serial  = USART1 on D0 (RX) / D1 (TX) — used for X.BUS input
+//   Serial1 = LPUART1 on PG8 (RX) / PG7 (TX) — available for 2nd ESC (JMISC)
+//   Debug   = SoftwareSerial TX on D8 — debug output to USB-serial adapter
+//
+//   NOTE: Serial (USART1/D0) is shared with the on-board debug probe that
+//   provides Serial Monitor via USB. When X.BUS is connected to D0, Serial
+//   Monitor is unavailable. For bench testing, unplug X.BUS from D0 to
+//   use Serial Monitor directly (change DEBUG_USE_SOFTSERIAL to false).
+//
 // WIRING:
-//   ESC X.BUS Yellow wire -> D0 (Serial1 RX) via 5V->3.3V voltage divider
+//   ESC X.BUS Yellow wire -> D0 (USART1 RX) via 5V->3.3V voltage divider
 //   ESC X.BUS Brown wire  -> GND (common ground)
 //   ESC X.BUS Red wire    -> NOT CONNECTED (BEC+, we don't need it)
+//   Debug output: D8 -> USB-to-serial adapter RX
+//   Debug GND:    GND -> USB-to-serial adapter GND
 //
 //   Voltage divider (5V -> 3.3V):
 //     Yellow ──[10kΩ]──┬──[6.8kΩ]── GND
-//                      └──> D0 (Serial1 RX)
+//                      └──> D0 (USART1 RX)
 //
 //   ⚠️  3.3V WARNING: The UNO Q uses 3.3V logic. If X.BUS outputs 5V,
 //   you MUST use a voltage divider. Connecting 5V directly to D0 will
 //   damage the STM32U585.
 //
-//   NOTE: If unsure whether X.BUS is 5V or 3.3V, measure with a multimeter
-//   first. If the ESC's BEC+ (red wire) is 5V, assume data is 5V too.
-//
 // BOARD: Arduino UNO Q [ABX00162]
 // FQBN:  arduino:zephyr:unoq
-// USB Serial: 115200 baud (monitoring output)
+// Debug Serial: 115200 baud (via SoftwareSerial on D8, or Serial Monitor on D0)
 // =============================================================================
+
+// -----------------------------------------------------------------------------
+// Debug output configuration
+// Set to true when X.BUS is connected to D0 (use bit-bang TX on D8)
+// Set to false for bench testing without X.BUS (use Serial Monitor on D0)
+// -----------------------------------------------------------------------------
+#define DEBUG_USE_SOFTSERIAL true
+
+#define DEBUG_TX_PIN 8  // D8 — bit-bang TX for debug output
+
+// -----------------------------------------------------------------------------
+// Minimal TX-only software serial (no library needed)
+// Bit-bangs UART TX at 115200 baud on a GPIO pin.
+// Only used for debug output — no RX, no interrupt blocking.
+// -----------------------------------------------------------------------------
+class SoftTX : public Print {
+public:
+  void begin(unsigned long baud) {
+    _bitTimeUs = 1000000UL / baud;
+    pinMode(DEBUG_TX_PIN, OUTPUT);
+    digitalWrite(DEBUG_TX_PIN, HIGH); // idle state
+    delayMicroseconds(100);
+  }
+
+  virtual size_t write(uint8_t b) {
+    noInterrupts();
+    // Start bit
+    digitalWrite(DEBUG_TX_PIN, LOW);
+    delayMicroseconds(_bitTimeUs);
+    // Data bits (LSB first)
+    for (int i = 0; i < 8; i++) {
+      digitalWrite(DEBUG_TX_PIN, (b >> i) & 1);
+      delayMicroseconds(_bitTimeUs);
+    }
+    // Stop bit
+    digitalWrite(DEBUG_TX_PIN, HIGH);
+    delayMicroseconds(_bitTimeUs);
+    interrupts();
+    return 1;
+  }
+
+private:
+  unsigned long _bitTimeUs;
+};
+
+static SoftTX softDebug;
+
+// Route debug output to bit-bang TX or Serial Monitor
+#if DEBUG_USE_SOFTSERIAL
+  #define DBG softDebug
+  #define XBUS_SERIAL Serial   // X.BUS reads from USART1 (D0)
+#else
+  #define DBG Serial           // Debug goes to Serial Monitor (D0)
+  #define XBUS_SERIAL Serial1  // X.BUS reads from LPUART1 (PG8) — for bench test
+#endif
 
 // -----------------------------------------------------------------------------
 // Baud rates to try (most likely first)
@@ -98,20 +162,28 @@ int detectedPacketLen = 0;
 // Setup
 // =============================================================================
 void setup() {
-  Serial.begin(115200);
-  while (!Serial && millis() < 3000) {} // Wait for USB serial (max 3s)
+  DBG.begin(115200);
+  delay(1000); // Give debug serial time to initialize
 
-  Serial.println();
-  Serial.println("==============================================");
-  Serial.println("  X.BUS Telemetry Probe — XC E10 ESC");
-  Serial.println("==============================================");
-  Serial.println();
-  Serial.println("Wiring: ESC X.BUS Yellow -> D0 (via 5V->3.3V divider)");
-  Serial.println("        ESC X.BUS Brown  -> GND");
-  Serial.println("        ESC X.BUS Red    -> NOT CONNECTED");
-  Serial.println();
-  Serial.println("Make sure ESC is powered on (battery connected).");
-  Serial.println();
+  DBG.println();
+  DBG.println("==============================================");
+  DBG.println("  X.BUS Telemetry Probe — XC E10 ESC");
+  DBG.println("==============================================");
+  DBG.println();
+#if DEBUG_USE_SOFTSERIAL
+  DBG.println("Mode: SoftwareSerial debug on D8");
+  DBG.println("X.BUS input: Serial (USART1) on D0");
+#else
+  DBG.println("Mode: Serial Monitor debug on D0");
+  DBG.println("X.BUS input: Serial1 (LPUART1) on PG8");
+#endif
+  DBG.println();
+  DBG.println("Wiring: ESC X.BUS Yellow -> D0 (via 5V->3.3V divider)");
+  DBG.println("        ESC X.BUS Brown  -> GND");
+  DBG.println("        ESC X.BUS Red    -> NOT CONNECTED");
+  DBG.println();
+  DBG.println("Make sure ESC is powered on (battery connected).");
+  DBG.println();
 
   startBaudScan();
 }
@@ -128,11 +200,11 @@ void startBaudScan() {
 
 void tryNextBaud() {
   if (currentBaudIdx >= NUM_BAUDS) {
-    Serial.println();
-    Serial.println("!! No data received at any baud rate.");
-    Serial.println("!! Check wiring: Yellow->D0, Brown->GND, ESC powered on.");
-    Serial.println("!! Restarting scan in 5 seconds...");
-    Serial.println();
+    DBG.println();
+    DBG.println("!! No data received at any baud rate.");
+    DBG.println("!! Check wiring: Yellow->D0, Brown->GND, ESC powered on.");
+    DBG.println("!! Restarting scan in 5 seconds...");
+    DBG.println();
     delay(5000);
     currentBaudIdx = 0;
     tryNextBaud();
@@ -140,14 +212,14 @@ void tryNextBaud() {
   }
 
   long baud = BAUD_RATES[currentBaudIdx];
-  Serial.print("Trying baud rate: ");
-  Serial.print(baud);
-  Serial.println(" ...");
+  DBG.print("Trying baud rate: ");
+  DBG.print(baud);
+  DBG.println(" ...");
 
-  Serial1.end();
-  Serial1.begin(baud);
+  XBUS_SERIAL.end();
+  XBUS_SERIAL.begin(baud);
   // Flush any garbage
-  while (Serial1.available()) Serial1.read();
+  while (XBUS_SERIAL.available()) XBUS_SERIAL.read();
 
   bytesReceived = 0;
   rxLen = 0;
@@ -162,8 +234,8 @@ void loop() {
   unsigned long nowMs = millis();
 
   // --- Read all available bytes from X.BUS ---
-  while (Serial1.available()) {
-    uint8_t b = Serial1.read();
+  while (XBUS_SERIAL.available()) {
+    uint8_t b = XBUS_SERIAL.read();
     bytesReceived++;
 
     if (rxLen < BUF_SIZE) {
@@ -181,12 +253,12 @@ void loop() {
     if (elapsed >= SCAN_DWELL_MS) {
       if (bytesReceived > 10) {
         // Got data at this baud rate!
-        Serial.print(">> Data detected at ");
-        Serial.print(BAUD_RATES[currentBaudIdx]);
-        Serial.print(" baud (");
-        Serial.print(bytesReceived);
-        Serial.println(" bytes received)");
-        Serial.println();
+        DBG.print(">> Data detected at ");
+        DBG.print(BAUD_RATES[currentBaudIdx]);
+        DBG.print(" baud (");
+        DBG.print(bytesReceived);
+        DBG.println(" bytes received)");
+        DBG.println();
 
         baudLocked = true;
         phase = PHASE_RAW_DUMP;
@@ -194,16 +266,16 @@ void loop() {
         packetCount = 0;
         rxLen = 0;
 
-        Serial.println("--- RAW HEX DUMP (5 seconds) ---");
-        Serial.println("Look for repeating patterns to identify packet structure.");
-        Serial.println();
+        DBG.println("--- RAW HEX DUMP (5 seconds) ---");
+        DBG.println("Look for repeating patterns to identify packet structure.");
+        DBG.println();
       } else {
         if (bytesReceived > 0) {
-          Serial.print("   (only ");
-          Serial.print(bytesReceived);
-          Serial.println(" bytes — likely noise, skipping)");
+          DBG.print("   (only ");
+          DBG.print(bytesReceived);
+          DBG.println(" bytes — likely noise, skipping)");
         } else {
-          Serial.println("   (no data)");
+          DBG.println("   (no data)");
         }
         currentBaudIdx++;
         tryNextBaud();
@@ -217,22 +289,22 @@ void loop() {
     // Print accumulated bytes as hex
     if (rxLen > 0) {
       for (int i = 0; i < rxLen; i++) {
-        if (rxBuf[i] < 0x10) Serial.print("0");
-        Serial.print(rxBuf[i], HEX);
-        Serial.print(" ");
-        if ((i + 1) % 16 == 0) Serial.println();
+        if (rxBuf[i] < 0x10) DBG.print("0");
+        DBG.print(rxBuf[i], HEX);
+        DBG.print(" ");
+        if ((i + 1) % 16 == 0) DBG.println();
       }
       rxLen = 0;
     }
 
     if (nowMs - rawDumpStartMs >= RAW_DUMP_DURATION_MS) {
-      Serial.println();
-      Serial.println();
-      Serial.println("--- END RAW DUMP ---");
-      Serial.println();
-      Serial.println("Switching to packet decode mode...");
-      Serial.println("Looking for Spektrum X-Bus ESC packets (0x20 address).");
-      Serial.println();
+      DBG.println();
+      DBG.println();
+      DBG.println("--- END RAW DUMP ---");
+      DBG.println();
+      DBG.println("Switching to packet decode mode...");
+      DBG.println("Looking for Spektrum X-Bus ESC packets (0x20 address).");
+      DBG.println();
       phase = PHASE_DECODE;
       rxLen = 0;
       packetCount = 0;
@@ -314,28 +386,28 @@ void tryDecodePackets(unsigned long nowUs) {
         }
         lastPacketUs = nowUs;
 
-        Serial.print("[PKT #");
-        Serial.print(packetCount);
-        Serial.print("] ");
-        Serial.print("RPM=");
-        Serial.print(rpmVal, 0);
-        Serial.print("  V=");
-        Serial.print(voltVal, 2);
-        Serial.print("V  I=");
-        Serial.print(curVal, 2);
-        Serial.print("A  FET=");
-        Serial.print(fetTempVal, 1);
-        Serial.print("C  Thr=");
-        Serial.print(pkt.throttle * 0.5f, 1);
-        Serial.print("%");
+        DBG.print("[PKT #");
+        DBG.print(packetCount);
+        DBG.print("] ");
+        DBG.print("RPM=");
+        DBG.print(rpmVal, 0);
+        DBG.print("  V=");
+        DBG.print(voltVal, 2);
+        DBG.print("V  I=");
+        DBG.print(curVal, 2);
+        DBG.print("A  FET=");
+        DBG.print(fetTempVal, 1);
+        DBG.print("C  Thr=");
+        DBG.print(pkt.throttle * 0.5f, 1);
+        DBG.print("%");
         if (gap > 0) {
-          Serial.print("  gap=");
-          Serial.print(gap / 1000.0f, 1);
-          Serial.print("ms (");
-          Serial.print(1000000.0f / gap, 1);
-          Serial.print("Hz)");
+          DBG.print("  gap=");
+          DBG.print(gap / 1000.0f, 1);
+          DBG.print("ms (");
+          DBG.print(1000000.0f / gap, 1);
+          DBG.print("Hz)");
         }
-        Serial.println();
+        DBG.println();
 
         // Remove consumed bytes
         int consumed = i + 16;
@@ -353,17 +425,17 @@ void tryDecodePackets(unsigned long nowUs) {
   if (rxLen >= 64) {
     // We've accumulated a lot without finding packets.
     // Dump as hex with gap markers for manual analysis.
-    Serial.print("[RAW ");
-    Serial.print(rxLen);
-    Serial.print("B] ");
+    DBG.print("[RAW ");
+    DBG.print(rxLen);
+    DBG.print("B] ");
     int printLen = min(rxLen, 64);
     for (int i = 0; i < printLen; i++) {
-      if (rxBuf[i] < 0x10) Serial.print("0");
-      Serial.print(rxBuf[i], HEX);
-      Serial.print(" ");
+      if (rxBuf[i] < 0x10) DBG.print("0");
+      DBG.print(rxBuf[i], HEX);
+      DBG.print(" ");
     }
-    if (rxLen > 64) Serial.print("...");
-    Serial.println();
+    if (rxLen > 64) DBG.print("...");
+    DBG.println();
 
     // Keep last 32 bytes in case packet straddles the boundary
     if (rxLen > 32) {
@@ -377,27 +449,27 @@ void tryDecodePackets(unsigned long nowUs) {
 // Periodic report
 // =============================================================================
 void printReport(unsigned long nowUs) {
-  Serial.println();
-  Serial.println("--- STATUS ---");
-  Serial.print("Baud: ");
-  Serial.print(BAUD_RATES[currentBaudIdx]);
-  Serial.print("  |  Packets decoded: ");
-  Serial.print(packetCount);
-  Serial.print("  |  Total bytes: ");
-  Serial.println(bytesReceived);
+  DBG.println();
+  DBG.println("--- STATUS ---");
+  DBG.print("Baud: ");
+  DBG.print(BAUD_RATES[currentBaudIdx]);
+  DBG.print("  |  Packets decoded: ");
+  DBG.print(packetCount);
+  DBG.print("  |  Total bytes: ");
+  DBG.println(bytesReceived);
 
   if (packetCount >= 2) {
-    Serial.println(">> X.BUS telemetry is WORKING.");
-    Serial.println(">> Check the gap/Hz values above to assess update rate.");
-    Serial.println(">> For dual-loop PID: need >20Hz for outer RPM loop.");
+    DBG.println(">> X.BUS telemetry is WORKING.");
+    DBG.println(">> Check the gap/Hz values above to assess update rate.");
+    DBG.println(">> For dual-loop PID: need >20Hz for outer RPM loop.");
   } else if (bytesReceived > 100) {
-    Serial.println(">> Receiving data but can't decode as Spektrum X-Bus.");
-    Serial.println(">> This may be a proprietary XC format.");
-    Serial.println(">> Check the RAW hex dump above for repeating patterns.");
-    Serial.println(">> Try different packet sizes or contact XC Technology.");
+    DBG.println(">> Receiving data but can't decode as Spektrum X-Bus.");
+    DBG.println(">> This may be a proprietary XC format.");
+    DBG.println(">> Check the RAW hex dump above for repeating patterns.");
+    DBG.println(">> Try different packet sizes or contact XC Technology.");
   } else {
-    Serial.println(">> Very little data. Check wiring and ESC power.");
+    DBG.println(">> Very little data. Check wiring and ESC power.");
   }
-  Serial.println("--------------");
-  Serial.println();
+  DBG.println("--------------");
+  DBG.println();
 }

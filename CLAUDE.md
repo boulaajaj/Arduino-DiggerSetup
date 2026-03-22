@@ -24,22 +24,42 @@ has authority.
 
 ## Pin Assignments (UNO Q)
 ```
+D0  <- ESC X.BUS Left (USART1 RX)         [Hardware UART, via 5V→3.3V divider]
 D2  <- RC CH1 (Left motor, pre-mixed)     [interrupt CHANGE]
 D3  <- RC CH4 (Control mode, 3-pos)       [interrupt CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)    [interrupt CHANGE]
 D5  <- Motor Hall Sensor LEFT              [interrupt RISING — RPM feedback]
 D6  <- Motor Hall Sensor RIGHT             [interrupt RISING — RPM feedback]
 D7  <- RC CH5 (Override switch, 3-pos)     [interrupt CHANGE]
+D8  -> Debug serial output                 [SoftwareSerial TX, 115200 baud]
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-3.3V via divider]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-3.3V via divider]
 A2  <- CS7581 Current Sensor (Left)        [14-bit ADC]
 A3  <- CS7581 Current Sensor (Right)       [14-bit ADC]
 D9  -> Left Track ESC                      [Servo PWM output]
 D10 -> Right Track ESC                     [Servo PWM output]
+PG8 <- ESC X.BUS Right (LPUART1 RX)       [Hardware UART, JMISC solder, via 5V→3.3V divider]
 5V  -> RC Receiver + Joystick VCC
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
 ```
+
+### UART Architecture (DECIDED 2026-03-22)
+The UNO Q Zephyr firmware uses LLEXT (pre-built binary). Only two hardware
+UARTs are enabled — USART2/3/UART4/5 cannot be added without rebuilding
+firmware from source. SoftwareSerial is rejected for telemetry (interrupt
+blocking corrupts RC pulse readings). Debug output uses SoftwareSerial TX
+on D8 (output-only, no interrupt impact).
+
+| Port | Hardware | Pin | Function |
+|------|----------|-----|----------|
+| Serial | USART1 | D0 (RX) | X.BUS Left ESC telemetry |
+| Serial1 | LPUART1 | PG8 (RX, JMISC solder) | X.BUS Right ESC telemetry |
+| SoftwareSerial | Bit-bang TX | D8 (TX only) | Debug output to USB-serial adapter |
+
+**D0 dual-use:** During bench testing, unplug X.BUS from D0 to use Serial
+Monitor for debugging. Plug X.BUS back for field operation. No code change
+needed — just a wire swap.
 
 ## Architecture Summary
 Sketch: `sketches/rc_test/rc_test.ino` (V2.0)
@@ -144,9 +164,11 @@ RPM = 60,000,000 / (microsBetweenEdges * edgesPerRevolution)
   motor speed. Fine-tunes to hold target RPM.
 - This is standard industrial motor control: inner current + outer speed loop.
 
-### RPM Source: X.BUS First, Hall Sensor Fallback
-- **Primary:** ESC X.BUS telemetry wire (Yellow=data, Brown=GND on D0/Serial1 RX)
+### RPM Source: X.BUS on Both ESCs + Hall Sensor Fallback
+- **Left ESC:** X.BUS Yellow → D0 (Serial/USART1 RX) via 5V→3.3V divider
+- **Right ESC:** X.BUS Yellow → PG8 (Serial1/LPUART1 RX, JMISC solder) via 5V→3.3V divider
 - **Fallback:** Direct motor hall sensor tap on D5/D6 (if X.BUS too slow)
+- **Debug:** SoftwareSerial TX on D8 → USB-to-serial adapter → PC
 - Test with `sketches/xbus_probe/xbus_probe.ino` first
 
 ### Control Mode Selector (RC CH4 on D3, 3-position switch)
@@ -175,14 +197,17 @@ Mode transitions reset all PID/inertia state to prevent jumps.
 - [ ] Field test at reduced power
 
 ## Next Steps
-1. **Wire ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
-2. **Upload `sketches/xbus_probe/xbus_probe.ino`** to UNO Q
-3. **Open Serial Monitor** at 115200 baud and observe:
+1. **Solder wire to JMISC PG8 pad** on UNO Q board (for Right ESC X.BUS)
+2. **Wire Left ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
+3. **Wire Right ESC X.BUS Yellow to PG8** via 5V→3.3V voltage divider
+4. **Connect USB-to-serial adapter** to D8 (debug TX) for monitoring
+5. **Upload `sketches/xbus_probe/xbus_probe.ino`** to UNO Q
+6. **Test each ESC individually on D0** (unplug X.BUS, use Serial Monitor):
    - Which baud rate locks (auto-detected)
    - Raw hex dump for pattern analysis
    - Decoded packet values (RPM, current, voltage, temp)
    - Packet rate in Hz (need >20 Hz for outer loop)
-4. **Decision:** X.BUS works? → Integrate into main sketch. Too slow? → Hall sensor tap.
+7. **Decision:** X.BUS works? → Integrate into main sketch. Too slow? → Hall sensor tap.
 
 ## File Map
 ```
