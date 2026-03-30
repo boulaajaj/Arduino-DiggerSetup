@@ -24,12 +24,13 @@ has authority.
 
 ## Pin Assignments (UNO Q)
 ```
-D0  <- ESC X.BUS Left (USART1 RX)         [Hardware UART, via 5V→3.3V divider]
-D2  <- RC CH1 (Left motor, pre-mixed)     [interrupt CHANGE]
-D3  <- RC CH4 (Control mode, 3-pos)       [interrupt CHANGE]
-D4  <- RC CH2 (Right motor, pre-mixed)    [interrupt CHANGE]
-D5  <- Motor Hall Sensor LEFT              [interrupt RISING — RPM feedback]
-D6  <- Motor Hall Sensor RIGHT             [interrupt RISING — RPM feedback]
+D0  <- X.BUS shared bus (USART1 RX)        [Both ESCs on one bus, via 5V→3.3V divider]
+D1  -> X.BUS TX (USART1 TX)               [For half-duplex commands, if needed]
+D2  <- RC CH1 (Left motor, pre-mixed)      [interrupt CHANGE]
+D3  <- RC CH4 (Control mode, 3-pos)        [interrupt CHANGE]
+D4  <- RC CH2 (Right motor, pre-mixed)     [interrupt CHANGE]
+D5     (available)                          [reserved for future use]
+D6     (available)                          [reserved for future use]
 D7  <- RC CH5 (Override switch, 3-pos)     [interrupt CHANGE]
 D8  -> Debug serial output                 [SoftwareSerial TX, 115200 baud]
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-3.3V via divider]
@@ -38,23 +39,28 @@ A2  <- CS7581 Current Sensor (Left)        [14-bit ADC]
 A3  <- CS7581 Current Sensor (Right)       [14-bit ADC]
 D9  -> Left Track ESC                      [Servo PWM output]
 D10 -> Right Track ESC                     [Servo PWM output]
-PG8 <- ESC X.BUS Right (LPUART1 RX)       [Hardware UART, JMISC solder, via 5V→3.3V divider]
+PG8    RESERVED by Arduino Router bridge    [Do NOT use — Serial1/LPUART1]
 5V  -> RC Receiver + Joystick VCC
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
 ```
 
-### UART Architecture (DECIDED 2026-03-22)
+### UART Architecture (REVISED 2026-03-29)
 The UNO Q Zephyr firmware uses LLEXT (pre-built binary). Only two hardware
 UARTs are enabled — USART2/3/UART4/5 cannot be added without rebuilding
-firmware from source. SoftwareSerial is rejected for telemetry (interrupt
-blocking corrupts RC pulse readings). Debug output uses SoftwareSerial TX
-on D8 (output-only, no interrupt impact).
+firmware from source.
+
+**CRITICAL:** Serial1/LPUART1 (PG8) is RESERVED by the Arduino Router bridge
+(MPU-MCU communication). Do NOT use. Do NOT solder PG8.
+
+**X.BUS Protocol:** XC E10 "X.BUS" is NOT Spektrum X-Bus (I2C). It is XC
+Technology's proprietary protocol, almost certainly half-duplex UART. Single
+data wire = cannot be I2C. Both ESCs share one bus (addressable 0-15).
 
 | Port | Hardware | Pin | Function |
 |------|----------|-----|----------|
-| Serial | USART1 | D0 (RX) | X.BUS Left ESC telemetry |
-| Serial1 | LPUART1 | PG8 (RX, JMISC solder) | X.BUS Right ESC telemetry |
+| Serial | USART1 | D0 (RX) / D1 (TX) | X.BUS shared bus (both ESCs) |
+| Serial1 | LPUART1 | PG8 | **RESERVED — Router bridge** |
 | SoftwareSerial | Bit-bang TX | D8 (TX only) | Debug output to USB-serial adapter |
 
 **D0 dual-use:** During bench testing, unplug X.BUS from D0 to use Serial
@@ -197,17 +203,19 @@ Mode transitions reset all PID/inertia state to prevent jumps.
 - [ ] Field test at reduced power
 
 ## Next Steps
-1. **Solder wire to JMISC PG8 pad** on UNO Q board (for Right ESC X.BUS)
-2. **Wire Left ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
-3. **Wire Right ESC X.BUS Yellow to PG8** via 5V→3.3V voltage divider
+1. **Wire both ESC X.BUS Yellow wires together** to shared bus
+2. **Add 10kΩ pull-up to 3.3V** on the shared bus (holds line HIGH when idle)
+3. **Connect shared bus to D0** via 5V→3.3V voltage divider (10kΩ/6.8kΩ)
 4. **Connect USB-to-serial adapter** to D8 (debug TX) for monitoring
 5. **Upload `sketches/xbus_probe/xbus_probe.ino`** to UNO Q
-6. **Test each ESC individually on D0** (unplug X.BUS, use Serial Monitor):
-   - Which baud rate locks (auto-detected)
+6. **Test with one ESC first** (determine baud rate and protocol behavior):
+   - Which baud rate locks (auto-detected, prioritize 250000)
    - Raw hex dump for pattern analysis
-   - Decoded packet values (RPM, current, voltage, temp)
+   - Whether ESC auto-sends or requires polling
    - Packet rate in Hz (need >20 Hz for outer loop)
-7. **Decision:** X.BUS works? → Integrate into main sketch. Too slow? → Hall sensor tap.
+7. **Test with both ESCs** if single ESC works — verify addressed bus behavior
+8. **Contact XC Technology** (sales7@xc-bldc.com) for "XC.BUS Control Protocol" doc
+9. **Goal:** All telemetry AND throttle control via X.BUS — no hall sensors or current sensors
 
 ## File Map
 ```

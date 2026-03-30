@@ -391,17 +391,24 @@ when the failsafe clears.
 
 ---
 
-## Wiring Diagram (V2.2 — UNO Q, Dual X.BUS)
+## Wiring Diagram (V2.3 — UNO Q, Shared X.BUS)
+
+**IMPORTANT CORRECTIONS (2026-03-29):**
+- XC E10 "X.BUS" is NOT Spektrum X-Bus (I2C). It has ONE data wire → cannot be I2C.
+- It is a proprietary XC Technology protocol, almost certainly **half-duplex UART**.
+- Industry survey: 8-10 of 12 major ESC brands use UART serial for telemetry.
+- **Serial1/LPUART1 (PG8) is RESERVED** by the Arduino Router bridge — do NOT use.
+- Both ESCs share one bus on D0 — the X.BUS is designed for up to 16 addressed ESCs.
 
 ```
                         ARDUINO UNO Q
                     ┌───────────────────┐
-  X.BUS L (3.3V)──>│ D0  (USART1 RX)   │  ← ESC Left X.BUS Yellow (via divider)
+  X.BUS (shared)──>│ D0  (USART1 RX)   │  ← Both ESCs on one bus (via divider)
     RC CH1 ────────>│ D2  (left motor)  │
     RC CH4 ────────>│ D3  (ctrl mode)   │
     RC CH2 ────────>│ D4  (right motor) │
-  [Hall tap L]─────>│ D5  (RPM left)    │  ← FALLBACK only (if X.BUS too slow)
-  [Hall tap R]─────>│ D6  (RPM right)   │  ← FALLBACK only (if X.BUS too slow)
+    [reserved]─────>│ D5                │  ← Available for future use
+    [reserved]─────>│ D6                │  ← Available for future use
     RC CH5 ────────>│ D7  (override)    │
   Debug TX ────────>│ D8  (SoftSerial)  │──> USB-to-serial adapter → PC
                     │              D9  ~│──> Left Track ESC (servo PWM)
@@ -412,30 +419,31 @@ when the failsafe clears.
   CS7581 Left ─────>│ A2  (current L)   │
   CS7581 Right ────>│ A3  (current R)   │
                     │                   │
-  X.BUS R (3.3V)──>│ PG8 (LPUART1 RX)  │  ← ESC Right X.BUS Yellow (JMISC solder)
-                    │                   │
          5V ───────>│ 5V         GND   │<── Common GND
    Battery ────────>│ VIN               │
                     └───────────────────┘
 
-  ESC X.BUS Wiring (per ESC):
-    Yellow (data) ──[10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
-                            └──> D0 (Left ESC) or PG8 (Right ESC)
-    Brown  (GND)  ──────────── Arduino GND
-    Red    (BEC+) ──────────── NOT CONNECTED
+  ESC X.BUS Wiring (SHARED BUS — both ESCs on one wire):
+    ESC Left  (addr 0) Yellow ──┬── ESC Right (addr 1) Yellow
+                                │
+                           [10kΩ pull-up to 3.3V]
+                                │
+                      [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
+                              └──> D0 (USART1 RX)
+    Both ESC Brown (GND) ─────── Arduino GND
+    Both ESC Red   (BEC+) ─────── NOT CONNECTED
 
   Debug Output Wiring:
     D8 (SoftwareSerial TX) ──> USB-to-serial adapter RX
     Arduino GND ─────────────> USB-to-serial adapter GND
     (USB-to-serial adapter connects to PC via USB for Serial Monitor)
 
-  Voltage Dividers (5V -> 3.3V, used for joystick, hall taps, AND X.BUS):
+  Voltage Dividers (5V -> 3.3V, used for joystick AND X.BUS):
     5V signal ──[10kΩ]──┬──[6.8kΩ]── GND
                         └──> target pin (3.3V max)
 
-  JMISC SOLDER NOTE: PG8 is on the JMISC expansion pads on the UNO Q PCB.
-  Solder one wire from the PG8 pad to a header pin or directly to the
-  voltage divider output for the Right ESC X.BUS signal.
+  NOTE: PG8/Serial1 is RESERVED by the Arduino Router bridge.
+  Do NOT solder PG8. Do NOT use Serial1 in user code.
 ```
 
 ---
@@ -443,12 +451,13 @@ when the failsafe clears.
 ## Pin Summary (Quick Reference)
 
 ```
-D0  <- ESC X.BUS Left (USART1 RX)        [Hardware UART, via 5V→3.3V divider]
+D0  <- X.BUS shared bus (USART1 RX)     [Hardware UART, both ESCs on one bus, via divider]
+D1  -> X.BUS TX (USART1 TX)             [For half-duplex commands, if needed]
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
 D3  <- RC CH4 (Control mode, 3-pos)      [attachInterrupt, CHANGE]
 D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
-D5  <- Motor Hall Tap LEFT               [attachInterrupt, RISING — RPM FALLBACK]
-D6  <- Motor Hall Tap RIGHT              [attachInterrupt, RISING — RPM FALLBACK]
+D5     (available)                        [reserved for future use]
+D6     (available)                        [reserved for future use]
 D7  <- RC CH5 (Override switch, 3-pos)   [attachInterrupt, CHANGE]
 D8  -> Debug serial output               [SoftwareSerial TX, to USB-serial adapter]
 A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-3.3V via divider]
@@ -457,7 +466,7 @@ A2  <- CS7581 Current Sensor (Left)      [14-bit ADC]
 A3  <- CS7581 Current Sensor (Right)     [14-bit ADC]
 D9  -> Left Track ESC                    [Servo PWM output]
 D10 -> Right Track ESC                   [Servo PWM output]
-PG8 <- ESC X.BUS Right (LPUART1 RX)     [Hardware UART, JMISC solder, via divider]
+PG8    RESERVED by Arduino Router bridge  [Do NOT use — Serial1/LPUART1]
 5V  -> RC Receiver + Joystick VCC
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
