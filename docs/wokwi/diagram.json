@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "author": "Amine Boulaajaj / Arduino DiggerSetup",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 200,
+      "left": 200,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-breadboard-half",
+      "id": "bb1",
+      "top": -100,
+      "left": 20,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_title",
+      "top": -150,
+      "left": 50,
+      "attrs": { "text": "Excavator Track Controller — X.BUS Telemetry" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_note",
+      "top": -130,
+      "left": 50,
+      "attrs": { "text": "UNO = stand-in for Arduino UNO Q (3.3V logic)" }
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "esc_left",
+      "top": 400,
+      "left": -100,
+      "attrs": { "horn": "cross" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_esc_l",
+      "top": 385,
+      "left": -100,
+      "attrs": { "text": "ESC Left (XC E10, addr 0)" }
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "esc_right",
+      "top": 400,
+      "left": 550,
+      "attrs": { "horn": "cross" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_esc_r",
+      "top": 385,
+      "left": 550,
+      "attrs": { "text": "ESC Right (XC E10, addr 1)" }
+    },
+    {
+      "type": "wokwi-analog-joystick",
+      "id": "joystick",
+      "top": -50,
+      "left": 500,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_joy",
+      "top": -65,
+      "left": 500,
+      "attrs": { "text": "Genie 101174GT Joystick (5V)" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_joy_y_top",
+      "top": 30,
+      "left": 440,
+      "rotate": 90,
+      "attrs": { "value": "10000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_joy_y_bot",
+      "top": 90,
+      "left": 440,
+      "rotate": 90,
+      "attrs": { "value": "6800" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_joy_x_top",
+      "top": 30,
+      "left": 480,
+      "rotate": 90,
+      "attrs": { "value": "10000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_joy_x_bot",
+      "top": 90,
+      "left": 480,
+      "rotate": 90,
+      "attrs": { "value": "6800" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_dividers",
+      "top": 130,
+      "left": 420,
+      "attrs": { "text": "Voltage dividers (5V→3.3V)" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_xbus_pullup",
+      "top": -30,
+      "left": -60,
+      "rotate": 90,
+      "attrs": { "value": "4700" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_pullup",
+      "top": -50,
+      "left": -100,
+      "attrs": { "text": "4.7k pull-up (X.BUS)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_diodes",
+      "top": 50,
+      "left": -130,
+      "attrs": { "text": "Diode-OR (1N5819 Schottky x2)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_txs",
+      "top": -100,
+      "left": -200,
+      "attrs": { "text": "TXS0108E Level Shifter (RC signals 5V→3.3V)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_rc",
+      "top": -60,
+      "left": -250,
+      "attrs": { "text": "RC Receiver (Radiolink R7FG)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_rc_ch1",
+      "top": -45,
+      "left": -250,
+      "attrs": { "text": "CH1→TXS B1→A1→D2 (left motor)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_rc_ch2",
+      "top": -30,
+      "left": -250,
+      "attrs": { "text": "CH2→TXS B3→A3→D4 (right motor)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_rc_ch4",
+      "top": -15,
+      "left": -250,
+      "attrs": { "text": "CH4→TXS B2→A2→D3 (ctrl mode)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_rc_ch5",
+      "top": 0,
+      "left": -250,
+      "attrs": { "text": "CH5→TXS B4→A4→D7 (override)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_debug",
+      "top": 300,
+      "left": 450,
+      "attrs": { "text": "D8 → USB-serial adapter (debug TX)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_power",
+      "top": 480,
+      "left": 150,
+      "attrs": { "text": "POWER: ESC Left BEC (6V) → VIN. ESC Right BEC RED wire CUT." }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "label_shield",
+      "top": 500,
+      "left": 150,
+      "attrs": { "text": "Sensor Shield V5.0: SEL jumper INSTALLED. 5V rail powers all headers." }
+    }
+  ],
+  "connections": [
+    ["uno:GND.1", "esc_left:GND", "black", []],
+    ["uno:9", "esc_left:PWM", "orange", []],
+    ["uno:GND.2", "esc_right:GND", "black", []],
+    ["uno:10", "esc_right:PWM", "blue", []],
+    ["joystick:VCC", "uno:5V", "red", []],
+    ["joystick:GND", "uno:GND.3", "black", []],
+    ["joystick:VERT", "r_joy_y_top:1", "yellow", []],
+    ["r_joy_y_top:2", "r_joy_y_bot:1", "yellow", []],
+    ["r_joy_y_top:2", "uno:A0", "yellow", []],
+    ["r_joy_y_bot:2", "uno:GND.1", "black", []],
+    ["joystick:HORZ", "r_joy_x_top:1", "green", []],
+    ["r_joy_x_top:2", "r_joy_x_bot:1", "green", []],
+    ["r_joy_x_top:2", "uno:A1", "green", []],
+    ["r_joy_x_bot:2", "uno:GND.1", "black", []],
+    ["r_xbus_pullup:1", "uno:3.3V", "red", []],
+    ["r_xbus_pullup:2", "uno:0", "purple", []]
+  ],
+  "serialMonitor": {
+    "display": "auto"
+  }
+}
