@@ -1,101 +1,60 @@
 // =============================================================================
-// X.BUS Telemetry Probe — Arduino UNO Q (STM32U585 MCU)
+// X.BUS Telemetry Probe — Arduino Nano R4 (Renesas RA4M1)
 // =============================================================================
 //
 // PURPOSE: Determine if the XC E10 ESC's X.BUS wire provides fast enough
 // telemetry for closed-loop PID control (dual-loop: inner current + outer RPM).
 //
 // This sketch:
-//   1. Listens on Serial (USART1, D0 = RX) for X.BUS data from the ESC
+//   1. Listens on Serial (D0 = RX) for X.BUS data from the ESC
 //   2. Auto-scans common baud rates to find the right one
 //   3. Dumps raw hex bytes to debug serial for analysis
 //   4. Attempts to decode Spektrum X-Bus ESC telemetry packets
 //   5. Measures packet arrival rate (Hz) and inter-packet gap (ms)
 //   6. Reports RPM, current, voltage, temperature if decoding succeeds
 //
-// SERIAL ARCHITECTURE (UNO Q Zephyr LLEXT firmware):
-//   Serial  = USART1 on D0 (RX) / D1 (TX) — used for X.BUS input
-//   Serial1 = LPUART1 on PG8 (RX) / PG7 (TX) — available for 2nd ESC (JMISC)
-//   Debug   = SoftwareSerial TX on D8 — debug output to USB-serial adapter
+// SERIAL ARCHITECTURE (Nano R4):
+//   Serial = UART on D0 (RX) / D1 (TX) — shared with USB Serial
+//   When X.BUS is connected to D0, USB Serial Monitor is unavailable.
+//   Disconnect X.BUS from D0 to use Serial Monitor for debugging.
 //
-//   NOTE: Serial (USART1/D0) is shared with the on-board debug probe that
-//   provides Serial Monitor via USB. When X.BUS is connected to D0, Serial
-//   Monitor is unavailable. For bench testing, unplug X.BUS from D0 to
-//   use Serial Monitor directly (change DEBUG_USE_SOFTSERIAL to false).
+// TWO OPERATING MODES:
+//   DEBUG_USE_XBUS = true  → X.BUS on Serial (D0), debug via Serial1 (if available)
+//                            or store results and print after disconnecting X.BUS
+//   DEBUG_USE_XBUS = false → No X.BUS, Serial used for debug output (bench test)
 //
 // WIRING:
-//   ESC X.BUS Yellow wire -> D0 (USART1 RX) via 5V->3.3V voltage divider
+//   ESC X.BUS Yellow wire -> D0 (Serial RX) direct (Nano R4 is 5V tolerant)
 //   ESC X.BUS Brown wire  -> GND (common ground)
 //   ESC X.BUS Red wire    -> NOT CONNECTED (BEC+, we don't need it)
-//   Debug output: D8 -> USB-to-serial adapter RX
-//   Debug GND:    GND -> USB-to-serial adapter GND
 //
-//   Voltage divider (5V -> 3.3V):
-//     Yellow ──[10kΩ]──┬──[6.8kΩ]── GND
-//                      └──> D0 (USART1 RX)
+//   No voltage divider needed — Nano R4 GPIO is 5V tolerant.
 //
-//   ⚠️  3.3V WARNING: The UNO Q uses 3.3V logic. If X.BUS outputs 5V,
-//   you MUST use a voltage divider. Connecting 5V directly to D0 will
-//   damage the STM32U585.
-//
-// BOARD: Arduino UNO Q [ABX00162]
-// FQBN:  arduino:zephyr:unoq
-// Debug Serial: 115200 baud (via SoftwareSerial on D8, or Serial Monitor on D0)
+// BOARD: Arduino Nano R4
+// FQBN:  arduino:renesas_uno:nanor4
+// PORT:  COM8
 // =============================================================================
 
 // -----------------------------------------------------------------------------
 // Debug output configuration
-// Set to true when X.BUS is connected to D0 (use bit-bang TX on D8)
-// Set to false for bench testing without X.BUS (use Serial Monitor on D0)
+// Set to true when X.BUS is connected to D0 (Serial unavailable for debug)
+// Set to false for bench testing without X.BUS (use Serial Monitor on USB)
 // -----------------------------------------------------------------------------
-#define DEBUG_USE_SOFTSERIAL true
+#define DEBUG_USE_XBUS true
 
-#define DEBUG_TX_PIN 8  // D8 — bit-bang TX for debug output
-
-// -----------------------------------------------------------------------------
-// Minimal TX-only software serial (no library needed)
-// Bit-bangs UART TX at 115200 baud on a GPIO pin.
-// Only used for debug output — no RX, no interrupt blocking.
-// -----------------------------------------------------------------------------
-class SoftTX : public Print {
-public:
-  void begin(unsigned long baud) {
-    _bitTimeUs = 1000000UL / baud;
-    pinMode(DEBUG_TX_PIN, OUTPUT);
-    digitalWrite(DEBUG_TX_PIN, HIGH); // idle state
-    delayMicroseconds(100);
-  }
-
-  virtual size_t write(uint8_t b) {
-    noInterrupts();
-    // Start bit
-    digitalWrite(DEBUG_TX_PIN, LOW);
-    delayMicroseconds(_bitTimeUs);
-    // Data bits (LSB first)
-    for (int i = 0; i < 8; i++) {
-      digitalWrite(DEBUG_TX_PIN, (b >> i) & 1);
-      delayMicroseconds(_bitTimeUs);
-    }
-    // Stop bit
-    digitalWrite(DEBUG_TX_PIN, HIGH);
-    delayMicroseconds(_bitTimeUs);
-    interrupts();
-    return 1;
-  }
-
-private:
-  unsigned long _bitTimeUs;
-};
-
-static SoftTX softDebug;
-
-// Route debug output to bit-bang TX or Serial Monitor
-#if DEBUG_USE_SOFTSERIAL
-  #define DBG softDebug
-  #define XBUS_SERIAL Serial   // X.BUS reads from USART1 (D0)
+#if DEBUG_USE_XBUS
+  // When X.BUS occupies Serial (D0), we use Serial over USB for debug.
+  // NOTE: On Nano R4, Serial is both USB and D0/D1. When X.BUS is on D0,
+  // USB Serial output may be corrupted. For clean debug, disconnect X.BUS
+  // and set DEBUG_USE_XBUS to false.
+  //
+  // Alternative: Use Serial1 if available on your Nano R4 variant, or
+  // buffer results and print after disconnecting X.BUS.
+  #define DBG Serial           // Best-effort debug over USB
+  #define XBUS_SERIAL Serial   // X.BUS reads from Serial (D0)
 #else
-  #define DBG Serial           // Debug goes to Serial Monitor (D0)
-  #define XBUS_SERIAL Serial1  // X.BUS reads from LPUART1 (PG8) — for bench test
+  #define DBG Serial           // Debug goes to Serial Monitor (USB)
+  #define XBUS_SERIAL Serial   // For bench test — no X.BUS connected
 #endif
 
 // -----------------------------------------------------------------------------
@@ -163,22 +122,24 @@ int detectedPacketLen = 0;
 // =============================================================================
 void setup() {
   DBG.begin(115200);
-  delay(1000); // Give debug serial time to initialize
+  delay(1000); // Give serial time to initialize
 
   DBG.println();
   DBG.println("==============================================");
   DBG.println("  X.BUS Telemetry Probe — XC E10 ESC");
   DBG.println("==============================================");
   DBG.println();
-#if DEBUG_USE_SOFTSERIAL
-  DBG.println("Mode: SoftwareSerial debug on D8");
-  DBG.println("X.BUS input: Serial (USART1) on D0");
+  DBG.println("Board: Arduino Nano R4 (Renesas RA4M1)");
+  DBG.println("X.BUS input: Serial (D0) — direct, no voltage divider needed");
+  DBG.println();
+#if DEBUG_USE_XBUS
+  DBG.println("Mode: X.BUS on D0 (debug output may be corrupted on USB)");
+  DBG.println("For clean debug: disconnect X.BUS, set DEBUG_USE_XBUS=false");
 #else
-  DBG.println("Mode: Serial Monitor debug on D0");
-  DBG.println("X.BUS input: Serial1 (LPUART1) on PG8");
+  DBG.println("Mode: Bench test — no X.BUS, Serial Monitor on USB");
 #endif
   DBG.println();
-  DBG.println("Wiring: ESC X.BUS Yellow -> D0 (via 5V->3.3V divider)");
+  DBG.println("Wiring: ESC X.BUS Yellow -> D0 (direct, 5V tolerant)");
   DBG.println("        ESC X.BUS Brown  -> GND");
   DBG.println("        ESC X.BUS Red    -> NOT CONNECTED");
   DBG.println();
