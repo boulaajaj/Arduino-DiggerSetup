@@ -1,100 +1,62 @@
 // ============================================================
-// Hardware Diagnostic Sketch — Arduino UNO Q
-// Version: 1.1 (2026-03-29)
+// Hardware Diagnostic Sketch — Arduino Nano R4
+// Version: 2.1 (2026-03-31)
 //
-// Tests ALL connected hardware and reports via USB Serial Monitor.
+// Uses pulseIn() for RC channels (not interrupts — D4 and D7
+// don't support attachInterrupt on Nano R4 Renesas core).
 //
-// IMPORTANT: On UNO Q, Serial goes to D0/D1 (hardware UART).
-// To output to USB Serial Monitor, we use Monitor (Router bridge).
+// CSV format (~10 Hz):
+//   RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,XbusB
 //
-// Current setup:
-//   - One ESC X.BUS on D0 (can stay connected — we use Monitor, not Serial)
-//   - RC receiver on D2, D3, D4, D7 (via TXS0108E level shifter)
-//   - Joystick on A0, A1 (via voltage dividers)
-//   - ESC servo outputs on D9, D10
-//   - Debug output: Monitor (USB via Router bridge to Qualcomm MPU)
-//
-// HOW TO USE:
-//   1. Upload this sketch
-//   2. Open Serial Monitor at 115200 baud (Arduino IDE or CLI)
-//   3. Observe test results for each subsystem
-//   4. Move joystick and RC sticks to verify all inputs
+// Pin assignments:
+//   D2  <- RC CH1 (Left motor)       [pulseIn]
+//   D4  <- RC CH2 (Right motor)      [pulseIn]
+//   D3  <- RC CH4 (Control mode)     [pulseIn]
+//   D7  <- RC CH5 (Override switch)  [pulseIn]
+//   A0  <- Joystick Y (Throttle)
+//   A1  <- Joystick X (Steering)
+//   D9  -> Left ESC  (Servo PWM, held neutral)
+//   D10 -> Right ESC (Servo PWM, held neutral)
 // ============================================================
 
 #include <Servo.h>
-#include <Arduino_RouterBridge.h>
-
-// Use Monitor for USB output (not Serial — that goes to D0/D1)
-#define OUT Monitor
 
 // ---- Pin Definitions ----
-const int PIN_RC_CH1  = 2;   // Left motor (pre-mixed by TX)
-const int PIN_RC_CH4  = 3;   // Control mode selector
-const int PIN_RC_CH2  = 4;   // Right motor (pre-mixed by TX)
-const int PIN_RC_CH5  = 7;   // Override switch
-const int PIN_JOY_Y   = A0;  // Joystick throttle (via divider)
-const int PIN_JOY_X   = A1;  // Joystick steering (via divider)
-const int PIN_ESC_L   = 9;   // Left ESC servo output
-const int PIN_ESC_R   = 10;  // Right ESC servo output
-
-// ---- RC Pulse Reading (interrupt-based) ----
-volatile unsigned long rc1_rise = 0, rc1_pw = 0;
-volatile unsigned long rc2_rise = 0, rc2_pw = 0;
-volatile unsigned long rc4_rise = 0, rc4_pw = 0;
-volatile unsigned long rc5_rise = 0, rc5_pw = 0;
-volatile bool rc1_new = false, rc2_new = false;
-volatile bool rc4_new = false, rc5_new = false;
-
-void isr_rc1() {
-  if (digitalRead(PIN_RC_CH1) == HIGH) rc1_rise = micros();
-  else { rc1_pw = micros() - rc1_rise; rc1_new = true; }
-}
-void isr_rc2() {
-  if (digitalRead(PIN_RC_CH2) == HIGH) rc2_rise = micros();
-  else { rc2_pw = micros() - rc2_rise; rc2_new = true; }
-}
-void isr_rc4() {
-  if (digitalRead(PIN_RC_CH4) == HIGH) rc4_rise = micros();
-  else { rc4_pw = micros() - rc4_rise; rc4_new = true; }
-}
-void isr_rc5() {
-  if (digitalRead(PIN_RC_CH5) == HIGH) rc5_rise = micros();
-  else { rc5_pw = micros() - rc5_rise; rc5_new = true; }
-}
+const int PIN_RC_CH1 = 2;   // Left motor (pre-mixed by TX)
+const int PIN_RC_CH4 = 3;   // Control mode selector
+const int PIN_RC_CH2 = 4;   // Right motor (pre-mixed by TX)
+const int PIN_RC_CH5 = 7;   // Override switch
+const int PIN_JOY_Y  = A0;  // Joystick throttle
+const int PIN_JOY_X  = A1;  // Joystick steering
+const int PIN_ESC_L  = 9;   // Left ESC servo output
+const int PIN_ESC_R  = 10;  // Right ESC servo output
 
 // ---- ESC Outputs ----
 Servo escLeft, escRight;
 
 // ---- Timing ----
-unsigned long lastPrint = 0;
-const unsigned long PRINT_INTERVAL = 500;  // ms
-unsigned long testStart = 0;
-int summaryCount = 0;
+unsigned long lastSummary = 0;
+const unsigned long SUMMARY_INTERVAL = 10000;
+unsigned long startTime = 0;
 
-// ---- ADC Voltage Tracking ----
+// ---- Voltage Tracking ----
 int joyYMin = 16383, joyYMax = 0;
 int joyXMin = 16383, joyXMax = 0;
 
-// ---- X.BUS data detection ----
-int xbusBytes = 0;
+// ---- RC pulse timeout (25ms = slightly more than one 50Hz frame) ----
+const unsigned long PULSE_TIMEOUT = 25000;  // microseconds
 
 void setup() {
-  // Start the Router bridge (connects MCU to MPU for USB output)
-  Bridge.begin();
-  Monitor.begin();
-  delay(2000);  // Give bridge time to initialize
-
-  // Also open Serial (USART1 on D0) to listen for X.BUS data
   Serial.begin(115200);
+  while (!Serial && millis() < 3000);
+  delay(500);
 
-  OUT.println("");
-  OUT.println("========================================");
-  OUT.println("  HARDWARE DIAGNOSTIC — Arduino UNO Q");
-  OUT.println("  Excavator Track Controller V2.3");
-  OUT.println("========================================");
-  OUT.println("");
+  Serial.println("# ==========================================");
+  Serial.println("# HARDWARE DIAGNOSTIC v2.1 — Arduino Nano R4");
+  Serial.println("# RC read via pulseIn (no interrupts)");
+  Serial.println("# ==========================================");
 
-  // Configure ADC for 14-bit resolution
+  // 14-bit ADC
   analogReadResolution(14);
 
   // RC inputs
@@ -102,200 +64,98 @@ void setup() {
   pinMode(PIN_RC_CH2, INPUT);
   pinMode(PIN_RC_CH4, INPUT);
   pinMode(PIN_RC_CH5, INPUT);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH1), isr_rc1, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH2), isr_rc2, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH4), isr_rc4, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH5), isr_rc5, CHANGE);
 
   // ESC outputs — hold neutral
   escLeft.attach(PIN_ESC_L);
   escRight.attach(PIN_ESC_R);
   escLeft.writeMicroseconds(1500);
   escRight.writeMicroseconds(1500);
-  OUT.println("ESCs: D9 and D10 set to NEUTRAL (1500us)");
-  OUT.println("");
 
-  // ---- Phase 1: Voltage Safety Check ----
-  OUT.println("=== PHASE 1: VOLTAGE SAFETY CHECK ===");
-  OUT.println("Reading joystick analog pins (100 samples)...");
-  OUT.println("");
+  Serial.println("# Format: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,XbusB");
+  Serial.println("# RC CH1[D2], CH2[D4], CH4[D3], CH5[D7]");
+  Serial.println("# Joy Y[A0], Joy X[A1], ESC L[D9], ESC R[D10]");
+  Serial.println("# ");
 
-  int maxY = 0, maxX = 0;
-  for (int i = 0; i < 100; i++) {
-    int y = analogRead(PIN_JOY_Y);
-    int x = analogRead(PIN_JOY_X);
-    if (y > maxY) maxY = y;
-    if (x > maxX) maxX = x;
-    delay(5);
-  }
-
-  float voltY = (maxY / 16383.0) * 3.3;
-  float voltX = (maxX / 16383.0) * 3.3;
-
-  OUT.print("  A0 (Joy Y): raw=");
-  OUT.print(maxY);
-  OUT.print("/16383  voltage=");
-  OUT.print(voltY, 3);
-  OUT.println("V");
-
-  OUT.print("  A1 (Joy X): raw=");
-  OUT.print(maxX);
-  OUT.print("/16383  voltage=");
-  OUT.print(voltX, 3);
-  OUT.println("V");
-
-  if (voltY > 3.2 || voltX > 3.2) {
-    OUT.println("");
-    OUT.println("  *** WARNING: VOLTAGE NEAR 3.3V LIMIT! ***");
-    OUT.println("  Check your resistor divider values.");
-    if (voltY > 3.3 || voltX > 3.3) {
-      OUT.println("  !!! DANGER: EXCEEDS 3.3V — DISCONNECT IMMEDIATELY !!!");
-    }
-  } else if (maxY < 100 && maxX < 100) {
-    OUT.println("");
-    OUT.println("  NOTE: Both readings near zero.");
-    OUT.println("  Joystick may not be connected or powered.");
-  } else {
-    OUT.println("  Voltage levels: OK (within 3.3V ADC range)");
-  }
-
-  OUT.println("");
-  OUT.println("=== PHASE 2: CONTINUOUS MONITORING ===");
-  OUT.println("Reporting every 500ms. Move sticks to test.");
-  OUT.println("");
-  OUT.println("  RC1=left  RC2=right  RC4=mode  RC5=override");
-  OUT.println("  JoyY=throttle  JoyX=steering");
-  OUT.println("  Valid RC pulse: 900-2100us. Center ~1500us.");
-  OUT.println("  '--' = no signal detected on that channel.");
-  OUT.println("");
-
-  testStart = millis();
+  startTime = millis();
 }
 
 void loop() {
-  unsigned long now = millis();
+  // ---- Read RC channels via pulseIn ----
+  unsigned long pw1 = pulseIn(PIN_RC_CH1, HIGH, PULSE_TIMEOUT);
+  unsigned long pw2 = pulseIn(PIN_RC_CH2, HIGH, PULSE_TIMEOUT);
+  unsigned long pw4 = pulseIn(PIN_RC_CH4, HIGH, PULSE_TIMEOUT);
+  unsigned long pw5 = pulseIn(PIN_RC_CH5, HIGH, PULSE_TIMEOUT);
 
-  // Track joystick min/max
+  // ---- Read joystick (double-read to avoid ADC channel crosstalk) ----
+  // First read after channel switch picks up residual charge from previous channel.
+  // Discard it and read again for a clean sample.
+  analogRead(PIN_JOY_Y); delayMicroseconds(100);
   int jy = analogRead(PIN_JOY_Y);
+  analogRead(PIN_JOY_X); delayMicroseconds(100);
   int jx = analogRead(PIN_JOY_X);
+
+  // Track min/max
   if (jy < joyYMin) joyYMin = jy;
   if (jy > joyYMax) joyYMax = jy;
   if (jx < joyXMin) joyXMin = jx;
   if (jx > joyXMax) joyXMax = jx;
 
-  // Check for X.BUS data on Serial (D0)
-  while (Serial.available()) {
-    Serial.read();
-    xbusBytes++;
-  }
+  // ---- CSV output ----
+  Serial.print(pw1); Serial.print(",");
+  Serial.print(pw2); Serial.print(",");
+  Serial.print(pw4); Serial.print(",");
+  Serial.print(pw5); Serial.print(",");
+  Serial.print(jy);  Serial.print(",");
+  Serial.print(jx);  Serial.print(",");
+  Serial.print(1500); Serial.print(",");
+  Serial.print(1500); Serial.print(",");
+  Serial.println(0);
 
-  // Print report
-  if (now - lastPrint >= PRINT_INTERVAL) {
-    lastPrint = now;
-    float elapsed = (now - testStart) / 1000.0;
+  // ---- Summary every 10s ----
+  unsigned long now = millis();
+  if (now - lastSummary >= SUMMARY_INTERVAL) {
+    lastSummary = now;
+    float elapsed = (now - startTime) / 1000.0;
 
-    // ---- One-line status ----
-    OUT.print("[");
-    OUT.print(elapsed, 1);
-    OUT.print("s] ");
+    Serial.print("# --- SUMMARY at ");
+    Serial.print(elapsed, 0);
+    Serial.println("s ---");
 
-    // RC channels
-    printRcInline("RC1:", rc1_pw);
-    printRcInline("RC2:", rc2_pw);
-    printRcInline("RC4:", rc4_pw);
-    printRcInline("RC5:", rc5_pw);
+    printRcSummary("RC CH1 [D2] left ", pw1);
+    printRcSummary("RC CH2 [D4] right", pw2);
+    printRcSummary("RC CH4 [D3] mode ", pw4);
+    printRcSummary("RC CH5 [D7] ovrd ", pw5);
 
-    // Joystick
-    float vy = (jy / 16383.0) * 3.3;
-    float vx = (jx / 16383.0) * 3.3;
-    OUT.print("| JY:");
-    OUT.print(vy, 2);
-    OUT.print("V JX:");
-    OUT.print(vx, 2);
-    OUT.print("V ");
+    float minVY = (joyYMin / 16383.0) * 5.0;
+    float maxVY = (joyYMax / 16383.0) * 5.0;
+    float minVX = (joyXMin / 16383.0) * 5.0;
+    float maxVX = (joyXMax / 16383.0) * 5.0;
 
-    // Voltage max tracker
-    float maxVY = (joyYMax / 16383.0) * 3.3;
-    float maxVX = (joyXMax / 16383.0) * 3.3;
-    OUT.print("| MAX Y:");
-    OUT.print(maxVY, 2);
-    OUT.print(" X:");
-    OUT.print(maxVX, 2);
+    Serial.print("#   Joy Y [A0] range: ");
+    Serial.print(minVY, 3); Serial.print("V - ");
+    Serial.print(maxVY, 3); Serial.println("V");
 
-    if (maxVY > 3.2 || maxVX > 3.2) OUT.print(" ***HIGH***");
+    Serial.print("#   Joy X [A1] range: ");
+    Serial.print(minVX, 3); Serial.print("V - ");
+    Serial.print(maxVX, 3); Serial.println("V");
 
-    // X.BUS data indicator
-    OUT.print(" | XBUS:");
-    if (xbusBytes > 0) {
-      OUT.print(xbusBytes);
-      OUT.print("B");
-    } else {
-      OUT.print("--");
-    }
-
-    OUT.println();
-
-    // Reset X.BUS byte counter each print
-    xbusBytes = 0;
-
-    // Summary every 10 seconds
-    summaryCount++;
-    if (summaryCount >= 20) {
-      summaryCount = 0;
-      printSummary();
-    }
+    Serial.println("# ---");
   }
 }
 
-void printRcInline(const char* label, unsigned long pw) {
-  OUT.print(label);
+void printRcSummary(const char* label, unsigned long pw) {
+  Serial.print("#   ");
+  Serial.print(label);
+  Serial.print(": ");
   if (pw == 0) {
-    OUT.print("-- ");
-  } else {
-    OUT.print(pw);
-    OUT.print(" ");
-  }
-}
-
-void printSummary() {
-  OUT.println("");
-  OUT.println("--- 10s SUMMARY ---");
-
-  OUT.print("  RC CH1 (D2, left):  "); printRcStatus(rc1_pw);
-  OUT.print("  RC CH2 (D4, right): "); printRcStatus(rc2_pw);
-  OUT.print("  RC CH4 (D3, mode):  "); printRcStatus(rc4_pw);
-  OUT.print("  RC CH5 (D7, ovrd):  "); printRcStatus(rc5_pw);
-
-  float minVY = (joyYMin / 16383.0) * 3.3;
-  float maxVY = (joyYMax / 16383.0) * 3.3;
-  float minVX = (joyXMin / 16383.0) * 3.3;
-  float maxVX = (joyXMax / 16383.0) * 3.3;
-
-  OUT.print("  Joy Y range: ");
-  OUT.print(minVY, 3); OUT.print("V - "); OUT.print(maxVY, 3); OUT.println("V");
-  OUT.print("  Joy X range: ");
-  OUT.print(minVX, 3); OUT.print("V - "); OUT.print(maxVX, 3); OUT.println("V");
-
-  if (maxVY > 3.2 || maxVX > 3.2) {
-    OUT.println("  *** WARNING: Joystick max voltage near 3.3V limit! ***");
-  }
-
-  OUT.println("  ESC L (D9): NEUTRAL 1500us");
-  OUT.println("  ESC R (D10): NEUTRAL 1500us");
-  OUT.println("---");
-  OUT.println("");
-}
-
-void printRcStatus(unsigned long pw) {
-  if (pw == 0) {
-    OUT.println("NO SIGNAL");
+    Serial.println("NO SIGNAL");
   } else if (pw < 900 || pw > 2200) {
-    OUT.print(pw); OUT.println("us - OUT OF RANGE");
+    Serial.print(pw); Serial.println("us — OUT OF RANGE");
   } else {
-    OUT.print(pw); OUT.print("us - OK");
-    if (pw > 1450 && pw < 1550) OUT.println(" (centered)");
-    else if (pw < 1100) OUT.println(" (LOW)");
-    else if (pw > 1900) OUT.println(" (HIGH)");
-    else OUT.println();
+    Serial.print(pw); Serial.print("us — OK");
+    if (pw > 1450 && pw < 1550) Serial.println(" (centered)");
+    else if (pw < 1100) Serial.println(" (LOW)");
+    else if (pw > 1900) Serial.println(" (HIGH)");
+    else Serial.println();
   }
 }
