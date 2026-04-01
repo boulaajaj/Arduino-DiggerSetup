@@ -2,19 +2,18 @@
 // This is a simplified version for Wokwi visualization.
 // The real sketch is in sketches/rc_test/rc_test.ino
 //
-// Board: Arduino UNO (stand-in for UNO Q in Wokwi)
+// Board: Arduino UNO (stand-in for Nano R4 in Wokwi)
 //
 // Pin Map:
 //   D0  <- X.BUS shared bus (both ESCs via diode-OR)
-//   D2  <- RC CH1 (left motor) via TXS0108E
-//   D3  <- RC CH4 (ctrl mode) via TXS0108E
-//   D4  <- RC CH2 (right motor) via TXS0108E
-//   D7  <- RC CH5 (override) via TXS0108E
-//   D8  -> Debug serial TX (SoftwareSerial)
+//   D2  <- RC CH1 (left motor) direct
+//   D3  <- RC CH4 (ctrl mode) direct
+//   D4  <- RC CH2 (right motor) direct
+//   D7  <- RC CH5 (override) direct
 //   D9  -> Left ESC servo PWM
 //   D10 -> Right ESC servo PWM
-//   A0  <- Joystick Y (throttle) via voltage divider
-//   A1  <- Joystick X (steering) via voltage divider
+//   A0  <- Joystick Y (throttle) direct (5V tolerant)
+//   A1  <- Joystick X (steering) direct (5V tolerant)
 
 #include <Servo.h>
 
