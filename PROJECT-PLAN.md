@@ -1,7 +1,7 @@
 # Excavator Track Controller — Project Plan
 
 ## What This Does
-An Arduino UNO Q sits between an RC receiver and two ESCs, implementing a
+An Arduino Nano R4 sits between an RC receiver and two ESCs, implementing a
 **tank-style mixer** with a secondary joystick input (for the rider/operator).
 The RC transmitter always takes priority. A third RC channel acts as a
 joystick enable/override switch.
@@ -19,7 +19,7 @@ The controller provides:
 
 | # | Component | Model / Part | Key Specs |
 |---|-----------|-------------|-----------|
-| 1 | Controller | Arduino UNO Q [ABX00162] | STM32U585, 160MHz, 14-bit ADC, 3.3V logic |
+| 1 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 14-bit ADC, 5V tolerant GPIO |
 | 2 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
 | 3 | ESC (x2) | XC E10 Sensored Brushless 140A | XT60 power, servo PWM input |
 | 4 | Motor (x2) | XC E3665 2500KV Sensored Brushless | 8mm shaft |
@@ -39,18 +39,20 @@ The controller provides:
 | 2 | RC Receiver | Servo PWM | D4 | Right motor (pre-mixed by transmitter) |
 | 4 | RC Receiver | Servo PWM | D3 | Control mode selector (3-pos: RAW/RPM/FULL) |
 | 5 | RC Receiver | Servo PWM | D7 | Override switch (3-pos) |
-| — | Joystick | Analog 0-3.3V | A0 | Throttle Y axis (via 5V->3.3V divider) |
-| — | Joystick | Analog 0-3.3V | A1 | Steering X axis (via 5V->3.3V divider) |
+| — | Joystick | Analog 0-5V | A0 | Throttle Y axis (direct — 5V tolerant) |
+| — | Joystick | Analog 0-5V | A1 | Steering X axis (direct — 5V tolerant) |
 | — | CS7581 | Analog | A2 | Current sensor — left motor |
 | — | CS7581 | Analog | A3 | Current sensor — right motor |
-| — | ESC X.BUS (L) | Serial UART | D0 (USART1 RX) | X.BUS telemetry — left ESC (RPM, current, voltage, temp) |
-| — | ESC X.BUS (R) | Serial UART | PG8 (LPUART1 RX, JMISC solder) | X.BUS telemetry — right ESC |
-| — | Motor Hall Tap (L) | Digital 5V→3.3V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
-| — | Motor Hall Tap (R) | Digital 5V→3.3V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
+| — | ESC X.BUS | Serial UART | D0 (Serial RX) | X.BUS telemetry — shared bus, both ESCs (RPM, current, voltage, temp) |
+| — | Motor Hall Tap (L) | Digital 5V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
+| — | Motor Hall Tap (R) | Digital 5V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
 
-> **3.3V WARNING:** The UNO Q uses 3.3V logic. The joystick outputs 0-5V
-> and MUST go through a voltage divider before connecting to A0/A1.
-> Connecting 5V directly to any analog pin will damage the STM32U585 ADC.
+> **5V tolerant:** The Nano R4 has 5V tolerant GPIO. The joystick (0-5V)
+> and RC receiver (5V servo pulses) connect directly — no voltage dividers
+> or level shifters needed.
+>
+> **Interrupt limitation:** `attachInterrupt()` only works on D2 and D3.
+> D4 and D7 use `pulseIn()` instead.
 
 > **Note:** The RC transmitter has its own internal tank mixing. CH1 and CH2
 > arrive as left/right motor signals, NOT as throttle/steering. The Arduino
@@ -181,8 +183,8 @@ the outer RPM loop. The inner loop still uses CS7581 current sensors directly
 **Fallback — Direct motor hall sensor tap:**
 If X.BUS is too slow or unreliable, tap the motor's existing hall sensor cable
 in parallel. This gives microsecond-resolution RPM at interrupt speed but
-requires Y-splitters, voltage dividers, and signal isolation to prevent
-ESC/Arduino interference.
+requires Y-splitters and signal isolation to prevent ESC/Arduino
+interference. (No voltage dividers needed — Nano R4 is 5V tolerant.)
 
 **Step 1 (NOW):** Run `sketches/xbus_probe/xbus_probe.ino` to determine:
   - What baud rate X.BUS uses
@@ -190,10 +192,11 @@ ESC/Arduino interference.
   - How fast packets arrive (Hz)
   - Whether the data is clean and decodable
 
-### RC Reading — Hardware Interrupts
-All 3 RC channels decoded via `attachInterrupt()` on CHANGE. The STM32U585
-supports interrupts on all digital pins — no PCINT register manipulation
-needed. Main loop runs at 20,000+ Hz with zero blocking.
+### RC Reading — Interrupts + pulseIn
+RC CH1 (D2) and CH4 (D3) are decoded via `attachInterrupt()` on CHANGE.
+RC CH2 (D4) and CH5 (D7) use `pulseIn()` — the Nano R4 only supports
+hardware interrupts on D2 and D3. `pulseIn()` is blocking but RC signals
+update at ~50Hz, which is acceptable for the control loop.
 
 ### Exponential Response Curve
 Joystick input is mapped through `pow(normalized, 2.5)`. This gives fine
@@ -275,22 +278,19 @@ RPM-based using a passive tap on the motor's existing hall sensor cable.
 ```
 Motor Hall A ──────┬──── ESC Hall A
                    │
-              [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
-                      └──> Arduino D5
+              Arduino D5 (direct — 5V tolerant)
 
 Motor Hall B ──────┬──── ESC Hall B
                    │
-              [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
-                      └──> Arduino D6
+              Arduino D6 (direct — 5V tolerant)
 
 Motor GND ─────────┬──── ESC GND
                    │
               Arduino GND
 ```
 
-> **3.3V LEVEL SHIFTING REQUIRED!** The UNO Q uses 3.3V logic. Hall sensor
-> outputs are 5V. Use the same 10k/6.8k voltage dividers as the joystick.
-> Connecting 5V directly to D5/D6 will damage the STM32U585.
+> **No level shifting needed!** The Nano R4 has 5V tolerant GPIO. Hall sensor
+> outputs are 5V and connect directly to D5/D6.
 
 **Resolution (4-pole motor, 2 pole pairs):**
 - 2 electrical revolutions per mechanical revolution
@@ -369,14 +369,14 @@ when the failsafe clears.
 |------|--------|-------|
 | 5V | RC Receiver VCC | From Arduino 5V pin |
 | 5V | Joystick VCC | Genie 101174GT, ~5mA draw |
-| 3.3V | Current sensors | If CS7581 variant is 3.3V-powered |
+| 3.3V | Current sensors | If CS7581 variant is 3.3V-powered (Nano R4 has 3.3V pin) |
 | GND | All components | Common ground is mandatory |
 | VIN | Arduino itself | 7-24V from battery/BEC |
 
 > **Joystick confirmed:** Genie 101174GT dual-axis joystick.
 > Runs on 5V, outputs 0-5V analog per axis, center ~2.5V. Negligible
 > current draw. Arduino 5V pin can power both the receiver and joystick.
-> **REQUIRES voltage divider to 3.3V for UNO Q analog inputs.**
+> Connects directly to A0/A1 — Nano R4 is 5V tolerant.
 
 ---
 
@@ -391,31 +391,29 @@ when the failsafe clears.
 
 ---
 
-## Wiring Diagram (V2.3 — UNO Q, Shared X.BUS)
+## Wiring Diagram (V2.4 — Nano R4, Shared X.BUS)
 
 **IMPORTANT CORRECTIONS (2026-03-29):**
 - XC E10 "X.BUS" is NOT Spektrum X-Bus (I2C). It has ONE data wire → cannot be I2C.
 - It is a proprietary XC Technology protocol, almost certainly **half-duplex UART**.
 - Industry survey: 8-10 of 12 major ESC brands use UART serial for telemetry.
-- **Serial1/LPUART1 (PG8) is RESERVED** by the Arduino Router bridge — do NOT use.
 - Both ESCs share one bus on D0 — the X.BUS is designed for up to 16 addressed ESCs.
 
 ```
-                        ARDUINO UNO Q
+                       ARDUINO NANO R4
                     ┌───────────────────┐
-  X.BUS (shared)──>│ D0  (USART1 RX)   │  ← Both ESCs on one bus (via divider)
-    RC CH1 ────────>│ D2  (left motor)  │
-    RC CH4 ────────>│ D3  (ctrl mode)   │
-    RC CH2 ────────>│ D4  (right motor) │
+  X.BUS (shared)──>│ D0  (Serial RX)   │  ← Both ESCs on one bus (direct — 5V tolerant)
+    RC CH1 ────────>│ D2  (left motor)  │  [attachInterrupt]
+    RC CH4 ────────>│ D3  (ctrl mode)   │  [attachInterrupt]
+    RC CH2 ────────>│ D4  (right motor) │  [pulseIn]
     [reserved]─────>│ D5                │  ← Available for future use
     [reserved]─────>│ D6                │  ← Available for future use
-    RC CH5 ────────>│ D7  (override)    │
-  Debug TX ────────>│ D8  (SoftSerial)  │──> USB-to-serial adapter → PC
+    RC CH5 ────────>│ D7  (override)    │  [pulseIn]
                     │              D9  ~│──> Left Track ESC (servo PWM)
                     │             D10  ~│──> Right Track ESC (servo PWM)
                     │                   │
-  Joy Y (5V->3.3V)>│ A0  (throttle)    │
-  Joy X (5V->3.3V)>│ A1  (steering)    │
+  Joy Y (direct)──>│ A0  (throttle)    │  ← 5V tolerant, no divider needed
+  Joy X (direct)──>│ A1  (steering)    │  ← 5V tolerant, no divider needed
   CS7581 Left ─────>│ A2  (current L)   │
   CS7581 Right ────>│ A3  (current R)   │
                     │                   │
@@ -426,24 +424,15 @@ when the failsafe clears.
   ESC X.BUS Wiring (SHARED BUS — both ESCs on one wire):
     ESC Left  (addr 0) Yellow ──┬── ESC Right (addr 1) Yellow
                                 │
-                           [10kΩ pull-up to 3.3V]
+                           [10kΩ pull-up to 5V]
                                 │
-                      [10kΩ]──┬──[6.8kΩ]── GND     (5V→3.3V divider)
-                              └──> D0 (USART1 RX)
+                              D0 (Serial RX) ← direct, no divider needed
     Both ESC Brown (GND) ─────── Arduino GND
     Both ESC Red   (BEC+) ─────── NOT CONNECTED
 
-  Debug Output Wiring:
-    D8 (SoftwareSerial TX) ──> USB-to-serial adapter RX
-    Arduino GND ─────────────> USB-to-serial adapter GND
-    (USB-to-serial adapter connects to PC via USB for Serial Monitor)
-
-  Voltage Dividers (5V -> 3.3V, used for joystick AND X.BUS):
-    5V signal ──[10kΩ]──┬──[6.8kΩ]── GND
-                        └──> target pin (3.3V max)
-
-  NOTE: PG8/Serial1 is RESERVED by the Arduino Router bridge.
-  Do NOT solder PG8. Do NOT use Serial1 in user code.
+  Debug Output:
+    Serial over USB (USB-C cable to PC, 115200 baud)
+    NOTE: X.BUS on D0 conflicts with USB Serial — disconnect X.BUS for debugging
 ```
 
 ---
@@ -451,22 +440,20 @@ when the failsafe clears.
 ## Pin Summary (Quick Reference)
 
 ```
-D0  <- X.BUS shared bus (USART1 RX)     [Hardware UART, both ESCs on one bus, via divider]
-D1  -> X.BUS TX (USART1 TX)             [For half-duplex commands, if needed]
+D0  <- X.BUS shared bus (Serial RX)      [Hardware UART, both ESCs on one bus, direct]
+D1  -> X.BUS TX (Serial TX)              [For half-duplex commands, if needed]
 D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
 D3  <- RC CH4 (Control mode, 3-pos)      [attachInterrupt, CHANGE]
-D4  <- RC CH2 (Right motor, pre-mixed)   [attachInterrupt, CHANGE]
+D4  <- RC CH2 (Right motor, pre-mixed)   [pulseIn — no interrupt on D4]
 D5     (available)                        [reserved for future use]
 D6     (available)                        [reserved for future use]
-D7  <- RC CH5 (Override switch, 3-pos)   [attachInterrupt, CHANGE]
-D8  -> Debug serial output               [SoftwareSerial TX, to USB-serial adapter]
-A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-3.3V via divider]
-A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-3.3V via divider]
+D7  <- RC CH5 (Override switch, 3-pos)   [pulseIn — no interrupt on D7]
+A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-5V direct (5V tolerant)]
+A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-5V direct (5V tolerant)]
 A2  <- CS7581 Current Sensor (Left)      [14-bit ADC]
 A3  <- CS7581 Current Sensor (Right)     [14-bit ADC]
 D9  -> Left Track ESC                    [Servo PWM output]
 D10 -> Right Track ESC                   [Servo PWM output]
-PG8    RESERVED by Arduino Router bridge  [Do NOT use — Serial1/LPUART1]
 5V  -> RC Receiver + Joystick VCC
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
@@ -485,17 +472,17 @@ GND -> All components (common ground)
 - **Logic:** 5V
 - **Status:** Retired — insufficient for PID + current sensing at 20kHz
 
-### Current: Arduino UNO Q [ABX00162]
-- **MCU:** STM32U585 (Arm Cortex-M33, 160MHz, 786KB RAM, 2MB flash)
-- **MPU:** Qualcomm Dragonwing QRB2210 (Linux side, not used for control)
+### Current: Arduino Nano R4
+- **MCU:** Renesas RA4M1 (Arm Cortex-M4, 48MHz, 32KB RAM, 256KB flash)
 - **USB:** Native USB-C — no driver needed
-- **RC reading:** `attachInterrupt()` on all digital pins
-- **Board package:** `arduino:zephyr`
-- **FQBN:** `arduino:zephyr:unoq`
-- **ADC:** 14-bit (16384 steps), 3.3V reference
-- **Logic:** 3.3V — requires voltage dividers for 5V peripherals
+- **RC reading:** `attachInterrupt()` on D2/D3 only; `pulseIn()` for D4/D7
+- **Board package:** `arduino:renesas_uno`
+- **FQBN:** `arduino:renesas_uno:nanor4`
+- **Port:** COM8
+- **ADC:** 14-bit (16384 steps), 5V reference
+- **Logic:** 5V tolerant — no voltage dividers or level shifters needed
 - **Loop rate:** 20,000+ Hz target
-- **Why upgrade:** 10x clock speed + FPU for float math. The PID + expo
+- **Why upgrade from Nano V3:** 3x clock speed + FPU for float math. The PID + expo
   curve + inertia simulation + 4x ADC reads need ~30-50us per loop.
   ATmega328P at 16MHz without FPU cannot achieve this.
 
@@ -504,7 +491,7 @@ GND -> All components (common ground)
 ## Software
 
 ### Sketch: `sketches/rc_test/rc_test.ino`
-- **Version:** V2.0 (UNO Q, PID, inertia, soft limits)
+- **Version:** V2.0 (Nano R4, PID, inertia, soft limits)
 - **Loop rate:** 20,000+ Hz (micros()-based timing, zero blocking)
 - **Serial output:** 20 Hz at 115200 baud (telemetry with current data)
 
@@ -516,8 +503,8 @@ GND -> All components (common ground)
   3. Attempts Spektrum X-Bus ESC packet decoding (address 0x20)
   4. Measures packet arrival rate (Hz) and inter-packet gap (ms)
   5. Reports decoded RPM, current, voltage, temperature
-- **Wiring:** ESC X.BUS Yellow → D0 (USART1 RX) via 5V→3.3V divider
-  - Debug output via SoftwareSerial on D8 → USB-to-serial adapter
+- **Wiring:** ESC X.BUS Yellow → D0 (Serial RX) direct (5V tolerant)
+  - Debug output via Serial over USB (disconnect X.BUS from D0 first)
 - **Decision gate:** If packets arrive >20 Hz with clean data → use X.BUS
   for dual-loop PID. If too slow → fall back to hall sensor tap.
 
@@ -559,33 +546,30 @@ GND -> All components (common ground)
 - [x] RC pass-through verified (transmitter pre-mixes)
 - [x] Joystick tank mix verified
 - [x] 7-panel live plot with ESC output monitoring
-- [x] V2.0 sketch written for UNO Q (PID, inertia, soft limits)
+- [x] V2.0 sketch written for Nano R4 (PID, inertia, soft limits)
 - [x] Decided: Dual-loop PID (inner current + outer RPM)
 - [x] Decided: X.BUS telemetry first, hall sensor tap as fallback
 - [x] X.BUS probe sketch written (`sketches/xbus_probe/xbus_probe.ino`)
 
 ### Step 1: X.BUS Telemetry Validation (NOW)
-- [ ] **Solder wire to JMISC PG8 pad** on UNO Q board
-- [ ] **Wire Left ESC X.BUS Yellow to D0** via 5V→3.3V voltage divider
-- [ ] **Wire Right ESC X.BUS Yellow to PG8** via 5V→3.3V voltage divider
-- [ ] **Connect USB-to-serial adapter** to D8 (debug TX) + GND
-- [ ] **Upload and run xbus_probe sketch**
-- [ ] **Test each ESC on D0** (unplug X.BUS, use Serial Monitor for initial validation)
+- [ ] **Wire both ESC X.BUS Yellow wires to shared bus** → D0 (Serial RX, direct — 5V tolerant)
+- [ ] **Upload and run xbus_probe sketch** to Nano R4 (COM8)
+- [ ] **Test with one ESC first** (disconnect X.BUS from D0 to use Serial Monitor for debug)
 - [ ] **Determine baud rate** (auto-scan will find it)
 - [ ] **Measure packet rate** — need >20 Hz for outer RPM loop
 - [ ] **Verify data decode** — RPM, current, voltage, temp values make sense
-- [ ] **DECISION GATE:** X.BUS fast enough? → V2.2 with dual X.BUS. Too slow? → Hall sensor fallback.
+- [ ] **DECISION GATE:** X.BUS fast enough? → V2.2 with X.BUS. Too slow? → Hall sensor fallback.
 
 ### Step 2a: If X.BUS Works (V2.1 with X.BUS)
 - [ ] Integrate X.BUS serial reading into main rc_test.ino sketch
 - [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (X.BUS)
 - [ ] Add X.BUS telemetry to serial output + update live_plot.py
-- [ ] Integrate Right ESC X.BUS on Serial1 (LPUART1/PG8)
+- [ ] Verify both ESCs respond on shared X.BUS (addressed bus)
 - [ ] Bench test dual-loop PID with ESC powered
 
 ### Step 2b: If X.BUS Too Slow (V2.1 with Hall Sensor Tap)
 - [ ] Verify hall sensor cable pinout on actual XC E3665 before wiring
-- [ ] Build 5V→3.3V voltage dividers for D5 and D6 (hall tap lines)
+- [ ] Connect hall tap lines directly to D5 and D6 (5V tolerant, no dividers)
 - [ ] Add RPM hall sensor interrupt code to sketch (D5, D6)
 - [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (hall)
 - [ ] Signal isolation to prevent ESC/Arduino interference/noise
@@ -593,9 +577,8 @@ GND -> All components (common ground)
 
 ### Remaining (Both Paths)
 - [ ] Joystick harness wiring identified (reverse engineering in progress)
-- [ ] Voltage dividers for joystick (5V → 3.3V)
 - [ ] CS7581 current sensor wiring and calibration
-- [ ] Bench test on UNO Q with ESCs disconnected
+- [ ] Bench test on Nano R4 with ESCs disconnected
 - [ ] Field test with ESCs at reduced power
 - [ ] Battery voltage monitoring (future phase)
 - [ ] Beeper/buzzer warnings (future phase)
