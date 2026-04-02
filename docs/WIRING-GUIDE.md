@@ -11,9 +11,11 @@
 
 ## Overview
 
-All telemetry (RPM, voltage, current, temperature) comes from the X.BUS.
-No separate current sensors or hall sensors are used.
-Both ESCs share one UART bus on D0 (X.BUS supports up to 16 addressed ESCs).
+Primary telemetry (RPM, voltage, current, temperature) is intended to come
+from the ESC X.BUS, but this is unconfirmed (proprietary protocol, zero data
+received during probing). Hall sensor taps and CS7581 current sensors are
+supported as fallback. Both ESCs share one UART bus on D0 (X.BUS supports
+up to 16 addressed ESCs).
 
 ---
 
@@ -84,8 +86,8 @@ D0    X.BUS shared bus        ESC→Arduino Diode-OR, direct (5V tolerant)
 D1    X.BUS TX (future)       Arduino→ESC None needed
 D2    RC CH1 (left motor)     RX→Arduino  Direct (5V tolerant) [attachInterrupt]
 D3    RC CH4 (control mode)   RX→Arduino  Direct (5V tolerant) [attachInterrupt]
-D4    RC CH2 (right motor)    RX→Arduino  Direct (5V tolerant) [pulseIn]
-D7    RC CH5 (override)       RX→Arduino  Direct (5V tolerant) [pulseIn]
+D4    RC CH2 (right motor)    RX→Arduino  Direct (5V tolerant) [non-blocking poll]
+D7    RC CH5 (override)       RX→Arduino  Direct (5V tolerant) [non-blocking poll]
 D9    Left ESC servo PWM      Arduino→ESC None needed
 D10   Right ESC servo PWM     Arduino→ESC None needed
 A0    Joystick Y (throttle)   Joy→Arduino Direct (5V tolerant)
@@ -104,7 +106,7 @@ A5    (available — I2C SCL)
 ```
 
 **Interrupt limitation:** `attachInterrupt()` only works on D2 and D3 on the
-Nano R4. D4 and D7 use `pulseIn()` for RC signal reading.
+Nano R4. D4 and D7 use non-blocking `PulseReader` polling for RC signal reading.
 
 ---
 
@@ -151,8 +153,8 @@ The Nano R4 is 5V tolerant. RC receiver servo pulses connect directly.
 ```
 RC Receiver CH1 signal ──→ Arduino D2  (left motor)   [attachInterrupt]
 RC Receiver CH4 signal ──→ Arduino D3  (control mode)  [attachInterrupt]
-RC Receiver CH2 signal ──→ Arduino D4  (right motor)   [pulseIn]
-RC Receiver CH5 signal ──→ Arduino D7  (override)      [pulseIn]
+RC Receiver CH2 signal ──→ Arduino D4  (right motor)   [non-blocking poll]
+RC Receiver CH5 signal ──→ Arduino D7  (override)      [non-blocking poll]
 ```
 
 **RC Receiver power:** Connect receiver VCC to Arduino 5V, GND to Arduino GND.
@@ -210,10 +212,10 @@ DIGITAL SIDE:
   D1    (reserved for X.BUS TX)
   D2  ← RC CH1 (left motor, direct)     [attachInterrupt]
   D3  ← RC CH4 (control mode, direct)   [attachInterrupt]
-  D4  ← RC CH2 (right motor, direct)    [pulseIn]
+  D4  ← RC CH2 (right motor, direct)    [non-blocking poll]
   D5    (available)
   D6    (available)
-  D7  ← RC CH5 (override, direct)       [pulseIn]
+  D7  ← RC CH5 (override, direct)       [non-blocking poll]
   D8    (available)
   D9  → Left ESC servo signal + GND (RED wire NOT connected)
   D10 → Right ESC servo signal + GND (RED wire NOT connected)

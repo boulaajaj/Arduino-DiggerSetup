@@ -160,7 +160,7 @@
       "id": "label_rc_ch2",
       "top": -30,
       "left": -250,
-      "attrs": { "text": "CH2→D4 (right motor) [pulseIn]" }
+      "attrs": { "text": "CH2→D4 (right motor) [poll]" }
     },
     {
       "type": "wokwi-text",
@@ -174,7 +174,7 @@
       "id": "label_rc_ch5",
       "top": 0,
       "left": -250,
-      "attrs": { "text": "CH5→D7 (override) [pulseIn]" }
+      "attrs": { "text": "CH5→D7 (override) [poll]" }
     },
     {
       "type": "wokwi-text",
