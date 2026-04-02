@@ -65,19 +65,22 @@ testing, unplug X.BUS from D0 to use Serial Monitor for debugging. Plug
 X.BUS back for field operation. No code change needed — just a wire swap.
 
 ## Architecture Summary
-Sketch: `sketches/rc_test/rc_test.ino` (V2.0)
+Sketch: `sketches/rc_test/rc_test.ino` (V3.4) + `types.h`
 
 Signal pipeline:
-1. RC inputs: D2/D3 via attachInterrupt, D4/D7 via pulseIn
-2. Joystick via 14-bit ADC (A0, A1) → deadband → expo curve (2.5) → tank mix
+1. RC inputs: D2/D3 via attachInterrupt (ISR), D4/D7 via non-blocking PulseReader (poll)
+2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve → tank mix
 3. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-4. PID load compensation (current sensors on A2/A3) — boosts power under resistance
-5. Soft power scaling (tanh saturation, 50% max)
-6. Inertia simulation (spring-damper model — heavy machine feel)
-7. Anti-runaway failsafe (2s stuck at max boost → neutral, latches until stick centered)
+4. Spin turn limiter (graduated, 35% at full pivot)
+5. Reverse speed limiter (35% of forward max)
+6. Soft power scaling (tanh saturation)
+7. Inertia simulation (asymmetric exponential: 0.3s accel, 0.5s decel)
 8. Servo output to ESCs (D9, D10)
 
-Loop rate: 20,000+ Hz, zero blocking, micros()-based timing.
+Code organized in searchable [MODULE] sections: [CONFIG], [RC], [JOYSTICK],
+[MIXER], [DYNAMICS], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
+
+Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
 ## Key Design Decisions
 
@@ -214,11 +217,33 @@ Mode transitions reset all PID/inertia state to prevent jumps.
 ```
 PROJECT-PLAN.md                    — Full technical specification
 OPERATOR-GUIDE.md                  — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino       — Main Arduino sketch (V2.0)
+sketches/rc_test/rc_test.ino       — Main Arduino sketch (V3.4)
+sketches/rc_test/types.h           — Shared structs (RCChannel, PulseReader, etc.)
 sketches/xbus_probe/xbus_probe.ino — X.BUS telemetry probe/test sketch
-live_plot.py                       — Real-time 7-panel matplotlib monitor
+docs/CONTROL-RESEARCH.md           — Tank mix, RC input, loop patterns research
+live_plot.py                       — Real-time matplotlib monitor
 monitor.py                         — Simple serial monitor
 ```
+
+## Coding Rules
+
+### Architecture
+- All code in `rc_test.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
+- Structs go in `types.h` (solves Arduino auto-prototype limitation)
+- All tunable constants go in the `[CONFIG]` section — no magic numbers in code
+- When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
+
+### Real-Time Safety
+- **No blocking calls in the main loop** — no `delay()`, no `pulseIn()`, no `while` loops
+- Use `micros()` fresh at point of use — never capture before a blocking call and use after
+- Per-channel failsafe — each RC channel has an independent timeout, never combined
+- ISRs must be under 10us — read pin, store timestamp, exit
+
+### Style
+- Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
+- Use `constrain()` at all servo output boundaries
+- Comment each `[MODULE]` section header with a brief description
+- Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 
 ## Build & Upload
 - Board: Arduino Nano R4

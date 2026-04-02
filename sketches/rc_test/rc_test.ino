@@ -64,7 +64,7 @@ const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 
 // Override switch thresholds (CH5 pulse width)
 const int OVR_LO = 1400;  // Below → RC only
-const int OVR_HI = 1600;  // Above → Joystick only
+const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
 // Expo curve: output = LINEAR*|x| + SQUARE*x^2 (must sum to 1.0)
 const float EXPO_LINEAR = 0.3f;  // More low-speed authority for tight spaces
@@ -213,17 +213,22 @@ void updateJoystick(unsigned long now) {
 // [MIXER] — Override switch selects authority
 // ═══════════════════════════════════════════════════════════════
 //
-// CH5 LOW  → RC only (Jason full control)
-// CH5 MID  → RC priority (joystick if RC idle)
-// CH5 HIGH → Joystick only (Malaki full control)
+// RC ALWAYS has control. The switch controls joystick authority:
+//   CH5 LOW  → RC only (joystick disabled)
+//   CH5 MID  → Both active, RC overrides joystick when RC non-neutral
+//   CH5 HIGH → 50/50 blend (RC + joystick averaged)
 
 MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
   MixerOutput out;
   if (ovr < OVR_LO) {
+    // Mode 1: RC only
     out.left = rcL;  out.right = rcR;
   } else if (ovr > OVR_HI) {
-    out.left = joyL; out.right = joyR;
+    // Mode 3: 50/50 blend — both contribute equally
+    out.left  = SVC + ((rcL - SVC) + (joyL - SVC)) / 2;
+    out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
   } else {
+    // Mode 2: RC priority — joystick active only when RC sticks are centered
     bool rcActive = (rcL != SVC) || (rcR != SVC);
     if (rcActive) { out.left = rcL;  out.right = rcR; }
     else          { out.left = joyL; out.right = joyR; }
@@ -326,7 +331,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V3.3 ===");
+    Serial.println("# === Digger V3.4 ===");
     Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok");
   }
 }

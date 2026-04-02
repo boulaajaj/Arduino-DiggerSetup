@@ -15,7 +15,7 @@ Panels:
   8. OutR — Right ESC Output    (saddlebrown)
 
 CSV format from sketch:
-  RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,XbusB
+  RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok
 
 Usage:
   python live_plot.py
@@ -47,7 +47,7 @@ CHANNELS = [
 ]
 
 # CSV column indices matching sketch output
-# RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,XbusB
+# RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok
 CSV_MAP = [0, 1, 2, 3, 4, 5, 6, 7]  # maps channel index to CSV column
 
 # -----------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def update(_frame):
                 if raw.startswith("#") or not raw:
                     continue
                 parts = raw.split(",")
-                if len(parts) >= 9:
+                if len(parts) >= 10:
                     for ch_idx, csv_col in enumerate(CSV_MAP):
                         buffers[ch_idx].append(int(parts[csv_col]))
             except (ValueError, UnicodeDecodeError, IndexError):

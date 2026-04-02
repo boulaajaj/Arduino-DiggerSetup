@@ -66,9 +66,9 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 
 | Position | Mode | Who Controls |
 |----------|------|-------------|
-| LOW | RC only | Jason has full authority |
-| MID | RC priority | Joystick active if RC sticks centered |
-| HIGH | Joystick only | Malaki has full authority |
+| LOW | RC only | Jason has full authority, joystick disabled |
+| MID | RC priority | Both active, RC overrides when non-neutral |
+| HIGH | 50/50 blend | RC + joystick averaged, both always contribute |
 
 ### Dynamics Pipeline
 
