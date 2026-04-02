@@ -1,4 +1,4 @@
-// types.h — Shared data structures for Digger Control V3.1
+// types.h — Shared data structures for Digger Control V3.4
 #pragma once
 #include <Arduino.h>
 

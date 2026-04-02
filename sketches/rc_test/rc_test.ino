@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V3.1 — Arduino Nano R4
+// Digger Control V3.4 — Arduino Nano R4
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input tank mixer for 3-ton ride-on excavator.
