@@ -67,21 +67,22 @@ const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → Joystick only
 
 // Expo curve: output = LINEAR*|x| + SQUARE*x^2 (must sum to 1.0)
-const float EXPO_LINEAR = 0.2f;
-const float EXPO_SQUARE = 0.8f;
+const float EXPO_LINEAR = 0.3f;  // More low-speed authority for tight spaces
+const float EXPO_SQUARE = 0.7f;  // Smooth high-speed range
 
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
 
-// Inertia — asymmetric exponential filter (heavy machine feel)
-const float TAU_ACCEL = 1.5f;  // Accel time constant (s) — 63% in 1.5s
-const float TAU_DECEL = 3.0f;  // Decel/coast time constant (s) — slow stop
+// Inertia — asymmetric exponential filter
+// Tuned for ~50 lb machine, 4-5 ft long. Smooth but nimble.
+const float TAU_ACCEL = 0.3f;  // Accel (s) — 63% in 0.3s, 95% in ~0.9s
+const float TAU_DECEL = 0.5f;  // Decel/coast (s) — 63% in 0.5s, 95% in ~1.5s
 
 // Spin turn safety — power cap during counter-rotation
-const float SPIN_LIMIT = 0.5f;  // 50% at full pivot
+const float SPIN_LIMIT = 0.35f;  // 35% at full pivot
 
 // Reverse speed limit — percentage of forward max
-const float REVERSE_LIMIT = 0.5f;  // 50% max reverse
+const float REVERSE_LIMIT = 0.35f;  // 35% max reverse
 
 // Failsafe
 const unsigned long FAILSAFE_US = 500000UL;  // 0.5s per-channel timeout
@@ -318,7 +319,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V3.1 ===");
+    Serial.println("# === Digger V3.2 ===");
     Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok");
   }
 }
