@@ -28,10 +28,10 @@ D0  <- X.BUS shared bus (Serial RX)        [Both ESCs on one bus — conflicts w
 D1  -> X.BUS TX (Serial TX)               [For half-duplex commands, if needed]
 D2  <- RC CH1 (Left motor, pre-mixed)      [attachInterrupt CHANGE]
 D3  <- RC CH4 (Control mode, 3-pos)        [attachInterrupt CHANGE]
-D4  <- RC CH2 (Right motor, pre-mixed)     [pulseIn — no interrupt on D4]
+D4  <- RC CH2 (Right motor, pre-mixed)     [non-blocking poll — no interrupt on D4]
 D5     (available)                          [reserved for future use]
 D6     (available)                          [reserved for future use]
-D7  <- RC CH5 (Override switch, 3-pos)     [pulseIn — no interrupt on D7]
+D7  <- RC CH5 (Override switch, 3-pos)     [non-blocking poll — no interrupt on D7]
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A2  <- CS7581 Current Sensor (Left)        [14-bit ADC]
@@ -44,8 +44,8 @@ GND -> All components (common ground)
 ```
 
 **Interrupt limitation:** On the Nano R4, `attachInterrupt()` only works on
-D2 and D3. For D4 and D7, use `pulseIn()` (blocking but acceptable at low
-update rates for RC signals).
+D2 and D3. For D4 and D7, use non-blocking `PulseReader` polling (see
+`types.h`). Never use `pulseIn()` — it blocks and causes timestamp bugs.
 
 ### UART Architecture (Nano R4)
 The Nano R4 has a single hardware UART on D0/D1, which is also the USB
