@@ -1,19 +1,19 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V3.4 — Arduino Nano R4
+// Digger Control V4.0 — S.BUS Edition
 // ═══════════════════════════════════════════════════════════════
 //
-// Dual-input tank mixer for 3-ton ride-on excavator.
+// Dual-input tank mixer for ride-on excavator (~50 lbs).
 // RC operator (Jason) and joystick rider (Malaki) share control
 // via 3-position override switch.
 //
 // Signal flow:
-//   RC Input ──┐
-//              ├─► Mixer ─► Spin Limiter ─► Reverse Limiter
-//   Joystick ─┘         ─► Soft Limit ─► Inertia ─► ESC
+//   RC (S.BUS) ──┐
+//                ├─► Mixer ─► Spin Limiter ─► Reverse Limiter
+//   Joystick ───┘         ─► Soft Limit ─► Inertia ─► ESC
 //
 // Modules (search "[NAME]" to jump):
 //   [CONFIG]     All tunable constants
-//   [RC]         RC input — ISR (D2/D3) + non-blocking poll (D4/D7)
+//   [RC]         S.BUS input — all channels on one wire via Serial1
 //   [JOYSTICK]   ADC input — deadband, expo curve, tank mix
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [DYNAMICS]   Spin/reverse limiter, soft power cap, inertia
@@ -21,18 +21,21 @@
 //   [DEBUG]      10 Hz serial CSV telemetry
 //
 // Pin map:
-//   D2  ← RC CH1 (left track)       [interrupt]
-//   D3  ← RC CH4 (control mode)     [interrupt]
-//   D4  ← RC CH2 (right track)      [non-blocking poll]
-//   D7  ← RC CH5 (override switch)  [non-blocking poll]
+//   D0  ← S.BUS (all RC channels, Serial1 RX via NPN inverter)
+//   D2     (free — available for hall sensor L)
+//   D3     (free — available for hall sensor R)
 //   A0  ← Joystick Y (throttle)     [14-bit ADC]
 //   A1  ← Joystick X (steering)     [14-bit ADC]
 //   D9  → Left ESC                   [Servo PWM]
 //   D10 → Right ESC                  [Servo PWM]
 //
-// Reference: docs/CONTROL-RESEARCH.md
+// S.BUS wiring:
+//   R7FG CH7 signal ──[1K]──► NPN base
+//   NPN emitter ──► GND
+//   5V ──[10K]──┬──► NPN collector ──► D0 (Serial1 RX)
 
 #include <Servo.h>
+#include "sbus.h"
 #include "types.h"
 
 
@@ -41,14 +44,20 @@
 // ═══════════════════════════════════════════════════════════════
 
 // Pins
-const uint8_t PIN_RC_CH1 = 2;   // Left track (interrupt)
-const uint8_t PIN_RC_CH4 = 3;   // Control mode (interrupt)
-const uint8_t PIN_RC_CH2 = 4;   // Right track (polled)
-const uint8_t PIN_RC_CH5 = 7;   // Override switch (polled)
 const uint8_t PIN_JOY_Y  = A0;  // Throttle
 const uint8_t PIN_JOY_X  = A1;  // Steering
 const uint8_t PIN_ESC_L  = 9;   // Left ESC
 const uint8_t PIN_ESC_R  = 10;  // Right ESC
+
+// S.BUS channel mapping (0-indexed)
+const uint8_t SBUS_CH_LEFT  = 0;  // CH1 = left track (pre-mixed by transmitter)
+const uint8_t SBUS_CH_RIGHT = 1;  // CH2 = right track (pre-mixed by transmitter)
+const uint8_t SBUS_CH_MODE  = 3;  // CH4 = control mode (3-pos switch)
+const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
+
+// S.BUS value range (raw 172-1811, center ~992)
+const int SBUS_MIN = 172;
+const int SBUS_MAX = 1811;
 
 // Servo PWM range
 const int SVC   = 1500;  // Center (neutral)
@@ -59,10 +68,10 @@ const int SVMAX = 2000;  // Full forward
 const int ADC_CENTER = 8192;  // 14-bit midpoint
 
 // Deadbands
-const int RC_DEADBAND  = 50;   // RC pulse (us)
+const int RC_DEADBAND  = 50;   // RC mapped pulse (us)
 const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 
-// Override switch thresholds (CH5 pulse width)
+// Override switch thresholds (mapped to PWM-equivalent)
 const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
@@ -84,84 +93,40 @@ const float SPIN_LIMIT = 0.25f;  // 25% at full pivot
 // Reverse speed limit — percentage of forward max
 const float REVERSE_LIMIT = 0.25f;  // 25% max reverse
 
-// Failsafe
-const unsigned long FAILSAFE_US = 500000UL;  // 0.5s per-channel timeout
-
 // Debug
 const unsigned long PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
 
 // ═══════════════════════════════════════════════════════════════
-// [RC] — RC input: ISR for D2/D3, non-blocking poll for D4/D7
+// [RC] — S.BUS input: all channels on D0 via Serial1
 // ═══════════════════════════════════════════════════════════════
 //
-// D2/D3 have hardware interrupt support — ISR fires on every edge.
-// D4/D7 do NOT support attachInterrupt on Nano R4 (confirmed).
-// Instead of blocking pulseIn(), we use PulseReader (types.h) which
-// samples pin state every loop iteration and tracks edges.
+// S.BUS delivers all 16 channels + failsafe + frame-lost flags
+// over a single wire at 143Hz. The bolderflight/sbus library
+// handles Serial1 configuration (100000 baud, 8E2, inverted via
+// external NPN transistor on D0).
 //
-// All channels have independent failsafe — if a channel hasn't
-// received a valid pulse within FAILSAFE_US, it returns neutral.
+// Channel values are raw S.BUS (172-1811). We map them to
+// PWM-equivalent (1000-2000us) so the rest of the pipeline
+// (deadband, mixer, dynamics) works unchanged.
 
-// Interrupt channels (D2, D3)
-RCChannel rc1 = {SVC, 0, false};  // Left track
-RCChannel rc4 = {SVC, 0, false};  // Control mode
+bfs::SbusRx sbusRx(&Serial1);
+bfs::SbusData sbusData;
+bool sbusValid = false;  // True when receiving frames
 
-volatile unsigned long isr1Rise = 0, isr4Rise = 0;
-volatile int isr1Pw = SVC, isr4Pw = SVC;
-volatile unsigned long isr1Time = 0, isr4Time = 0;
-
-void isrCh1() {
-  unsigned long now = micros();
-  if (digitalRead(PIN_RC_CH1) == HIGH) {
-    isr1Rise = now;
-  } else {
-    unsigned long pw = now - isr1Rise;
-    if (pw >= 800 && pw <= 2200) { isr1Pw = pw; isr1Time = now; }
-  }
-}
-
-void isrCh4() {
-  unsigned long now = micros();
-  if (digitalRead(PIN_RC_CH4) == HIGH) {
-    isr4Rise = now;
-  } else {
-    unsigned long pw = now - isr4Rise;
-    if (pw >= 800 && pw <= 2200) { isr4Pw = pw; isr4Time = now; }
-  }
-}
-
-// Polled channels (D4, D7) — non-blocking, zero delay
-PulseReader poll2, poll5;
-
-// Snapshot: copy ISR data + evaluate all failsafes with FRESH timestamp
-void rcSnapshot() {
-  // Copy ISR data and capture timestamp inside the same critical section.
-  // This prevents an ISR from updating isr*Time between now and the copy,
-  // which would make lastOk > now and cause unsigned underflow.
-  noInterrupts();
-  rc1.pw = isr1Pw;  rc1.lastOk = isr1Time;
-  rc4.pw = isr4Pw;  rc4.lastOk = isr4Time;
-  unsigned long now = micros();
-  interrupts();
-
-  // Per-channel failsafe
-  rc1.valid = (now - rc1.lastOk) < FAILSAFE_US;
-  rc4.valid = (now - rc4.lastOk) < FAILSAFE_US;
-
-  // Polled channels use their own timestamps (always fresh)
-  poll2.valid = (now - poll2.lastOk) < FAILSAFE_US;
-  poll5.valid = (now - poll5.lastOk) < FAILSAFE_US;
+// Map S.BUS value (172-1811) to servo PWM (1000-2000)
+int sbusToServo(int raw) {
+  return map(constrain(raw, SBUS_MIN, SBUS_MAX), SBUS_MIN, SBUS_MAX, SVMIN, SVMAX);
 }
 
 int rcDeadband(int pw) {
   return (abs(pw - SVC) <= RC_DEADBAND) ? SVC : pw;
 }
 
-// Safe accessors — return neutral if channel has no signal
-int rcLeft()     { return rc1.valid ? rcDeadband(rc1.pw) : SVC; }
-int rcRight()    { return poll2.valid ? rcDeadband(poll2.pw) : SVC; }
-int rcOverride() { return poll5.valid ? poll5.pw : SVMIN; }  // Default RC-only if CH5 lost
+// Safe accessors — return neutral (or RC-only mode) if S.BUS lost
+int rcLeft()     { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_LEFT]))  : SVC; }
+int rcRight()    { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_RIGHT])) : SVC; }
+int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SVMIN; }  // Default RC-only if lost
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -188,10 +153,9 @@ int joyToServo(int adc) {
 }
 
 // Cached joystick state — updated at ADC_INTERVAL, not every loop.
-// This keeps the ADC blocking (~800us) from starving the PulseReader.
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, SVC, SVC};
 unsigned long lastAdcTime = 0;
-const unsigned long ADC_INTERVAL = 10000UL;  // 10ms = 100Hz (plenty for joystick)
+const unsigned long ADC_INTERVAL = 10000UL;  // 10ms = 100Hz
 
 void updateJoystick(unsigned long now) {
   if ((now - lastAdcTime) < ADC_INTERVAL) return;
@@ -261,8 +225,6 @@ int softLimit(float deviation) {
   return SVC + (int)(val >= 0.0f ? val + 0.5f : val - 0.5f);
 }
 
-// Spin limiter: graduated power reduction during counter-rotation.
-// Full pivot (equal opposing) → SPIN_LIMIT. Gentle curve → ~100%.
 void applySpinLimit(int &left, int &right) {
   float dL = (float)(left - SVC);
   float dR = (float)(right - SVC);
@@ -276,17 +238,12 @@ void applySpinLimit(int &left, int &right) {
   }
 }
 
-// Reverse limiter: cap backward speed to REVERSE_LIMIT of forward max.
-// "Backward" = servo value below SVC (1500). Forward is above.
 void applyReverseLimit(int &left, int &right) {
   float maxReverse = SOFT_RANGE * REVERSE_LIMIT;
   if (left < SVC)  left  = max(left,  SVC - (int)maxReverse);
   if (right < SVC) right = max(right, SVC - (int)maxReverse);
 }
 
-// Inertia: asymmetric exponential filter.
-// TAU_ACCEL when speeding up (shorter = faster response).
-// TAU_DECEL when slowing down (longer = more coast).
 void applyInertia(float targetL, float targetR, float dts) {
   bool accelL = fabsf(targetL) > fabsf(posL) + 1.0f;
   bool accelR = fabsf(targetR) > fabsf(posR) + 1.0f;
@@ -325,7 +282,7 @@ void outputWrite() {
 // [DEBUG] — 10 Hz serial CSV telemetry
 // ═══════════════════════════════════════════════════════════════
 //
-// Columns: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok
+// Columns: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost
 
 unsigned long prevPrint = 0;
 
@@ -333,19 +290,25 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V3.4 ===");
-    Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok");
+    Serial.println("# === Digger V4.0 — S.BUS ===");
+    Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost");
   }
 }
 
 void debugPrint(unsigned long now, const JoystickState &js) {
   if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
+
+  int rc1 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_LEFT])  : SVC;
+  int rc2 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_RIGHT]) : SVC;
+  int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
+  int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVC;
+
   char buf[100];
   sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-          rc1.pw, poll2.pw, rc4.pw, poll5.pw,
+          rc1, rc2, rc4, rc5,
           js.rawY, js.rawX, outL, outR,
-          (int)rc1.valid, (int)poll2.valid);
+          sbusData.failsafe, sbusData.lost_frame);
   Serial.println(buf);
 }
 
@@ -358,17 +321,7 @@ unsigned long prevUs = 0;
 
 void setup() {
   analogReadResolution(14);
-
-  // Interrupt RC channels
-  pinMode(PIN_RC_CH1, INPUT);
-  pinMode(PIN_RC_CH4, INPUT);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH1), isrCh1, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_RC_CH4), isrCh4, CHANGE);
-
-  // Polled RC channels (non-blocking)
-  poll2.init(PIN_RC_CH2);
-  poll5.init(PIN_RC_CH5);
-
+  sbusRx.Begin();  // Configures Serial1 at 100000, 8E2
   outputInit();
   debugInit();
   prevUs = micros();
@@ -381,10 +334,11 @@ void loop() {
   prevUs = now;
 
   // 1. Read inputs
-  poll2.poll();              // Non-blocking RC edge detection (~4us)
-  poll5.poll();              // Non-blocking RC edge detection (~4us)
-  rcSnapshot();              // Copy ISR data + failsafe (~5us)
-  updateJoystick(now);       // ADC only every 10ms (~800us when active, 0 otherwise)
+  if (sbusRx.Read()) {
+    sbusData = sbusRx.data();
+    sbusValid = !sbusData.failsafe;  // Receiver-reported failsafe
+  }
+  updateJoystick(now);
 
   // 2. Mix (override selects authority)
   MixerOutput mix = mixInputs(rcLeft(), rcRight(), rcOverride(),
