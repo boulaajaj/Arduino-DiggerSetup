@@ -1,7 +1,7 @@
 """Deploy Digger Control sketch via arduino-cli.
 
 Usage:
-  python scripts/deploy.py              # use defaults from board.cfg
+  python scripts/deploy.py              # use built-in defaults
   python scripts/deploy.py --port COM5  # override port
 """
 import argparse
