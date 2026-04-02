@@ -304,7 +304,7 @@ void debugPrint(unsigned long now, const JoystickState &js) {
   int rc1 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_LEFT])  : SVC;
   int rc2 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_RIGHT]) : SVC;
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
-  int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVC;
+  int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
   char buf[100];
   sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
