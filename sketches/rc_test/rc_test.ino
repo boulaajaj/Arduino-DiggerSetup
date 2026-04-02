@@ -257,7 +257,8 @@ float fastTanh(float x) {
 
 int softLimit(float deviation) {
   if (fabsf(deviation) < 0.5f) return SVC;
-  return SVC + (int)(SOFT_RANGE * fastTanh(deviation / SOFT_RANGE) + 0.5f);
+  float val = SOFT_RANGE * fastTanh(deviation / SOFT_RANGE);
+  return SVC + (int)(val >= 0.0f ? val + 0.5f : val - 0.5f);
 }
 
 // Spin limiter: graduated power reduction during counter-rotation.
@@ -313,8 +314,8 @@ void outputInit() {
 }
 
 void outputWrite() {
-  outL = constrain(SVC + (int)(posL + 0.5f), SVMIN, SVMAX);
-  outR = constrain(SVC + (int)(posR + 0.5f), SVMIN, SVMAX);
+  outL = constrain(SVC + (int)(posL >= 0.0f ? posL + 0.5f : posL - 0.5f), SVMIN, SVMAX);
+  outR = constrain(SVC + (int)(posR >= 0.0f ? posR + 0.5f : posR - 0.5f), SVMIN, SVMAX);
   escL.writeMicroseconds(outL);
   escR.writeMicroseconds(outR);
 }
