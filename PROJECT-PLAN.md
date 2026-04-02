@@ -83,13 +83,13 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `EXPO_LINEAR` | 0.2 | Linear blend of expo curve |
-| `EXPO_SQUARE` | 0.8 | Quadratic blend (sum to 1.0) |
+| `EXPO_LINEAR` | 0.3 | Linear blend of expo curve |
+| `EXPO_SQUARE` | 0.7 | Quadratic blend (sum to 1.0) |
 | `SOFT_RANGE` | 400 us | Max servo offset from center |
-| `TAU_ACCEL` | 1.5 s | Acceleration time constant |
-| `TAU_DECEL` | 3.0 s | Deceleration/coast time constant |
-| `SPIN_LIMIT` | 0.5 | Power cap at full pivot turn (50%) |
-| `REVERSE_LIMIT` | 0.5 | Max reverse as fraction of forward (50%) |
+| `TAU_ACCEL` | 0.3 s | Acceleration time constant |
+| `TAU_DECEL` | 0.5 s | Deceleration/coast time constant |
+| `SPIN_LIMIT` | 0.25 | Power cap at full pivot turn (25%) |
+| `REVERSE_LIMIT` | 0.25 | Max reverse as fraction of forward (25%) |
 | `RC_DEADBAND` | 50 us | RC pulse dead zone |
 | `JOY_DEADBAND` | 480 | Joystick ADC dead zone (~5.9%) |
 | `FAILSAFE_US` | 500 ms | Per-channel signal timeout |
@@ -100,7 +100,7 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 
 ```
 sketches/rc_test/
-  rc_test.ino       — Main controller sketch (V3.1)
+  rc_test.ino       — Main controller sketch (V3.4)
   types.h           — Shared structs (RCChannel, PulseReader, etc.)
 
 sketches/xbus_probe/
