@@ -345,9 +345,14 @@ void loop() {
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
   updateJoystick(now);
 
-  // 2. Mix (override selects authority)
-  MixerOutput mix = mixInputs(rcLeft(), rcRight(), rcOverride(),
-                              cachedJoy.left, cachedJoy.right);
+  // 2. RC lockout — no RC signal means no movement, period
+  MixerOutput mix;
+  if (!sbusValid) {
+    mix.left = SVC;  mix.right = SVC;  // All output neutral
+  } else {
+    mix = mixInputs(rcLeft(), rcRight(), rcOverride(),
+                    cachedJoy.left, cachedJoy.right);
+  }
 
   // 3. Dynamics pipeline
   applySpinLimit(mix.left, mix.right);
