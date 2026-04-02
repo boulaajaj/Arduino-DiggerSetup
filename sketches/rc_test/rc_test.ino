@@ -186,19 +186,26 @@ int joyToServo(int adc) {
   return SVC + (int)(sign * expoCurve(norm) * SOFT_RANGE);
 }
 
-JoystickState readJoystick() {
-  JoystickState js;
-  analogRead(PIN_JOY_Y); delayMicroseconds(100);
-  js.rawY = analogRead(PIN_JOY_Y);
-  analogRead(PIN_JOY_X); delayMicroseconds(100);
-  js.rawX = analogRead(PIN_JOY_X);
+// Cached joystick state — updated at ADC_INTERVAL, not every loop.
+// This keeps the ADC blocking (~800us) from starving the PulseReader.
+JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, SVC, SVC};
+unsigned long lastAdcTime = 0;
+const unsigned long ADC_INTERVAL = 10000UL;  // 10ms = 100Hz (plenty for joystick)
 
-  int throttle = joyToServo(joyDeadband(js.rawY));
-  int steer    = joyToServo(joyDeadband(js.rawX));
+void updateJoystick(unsigned long now) {
+  if ((now - lastAdcTime) < ADC_INTERVAL) return;
+  lastAdcTime = now;
+
+  analogRead(PIN_JOY_Y); delayMicroseconds(100);
+  cachedJoy.rawY = analogRead(PIN_JOY_Y);
+  analogRead(PIN_JOY_X); delayMicroseconds(100);
+  cachedJoy.rawX = analogRead(PIN_JOY_X);
+
+  int throttle = joyToServo(joyDeadband(cachedJoy.rawY));
+  int steer    = joyToServo(joyDeadband(cachedJoy.rawX));
   int offset   = steer - SVC;
-  js.left  = constrain(throttle + offset, SVMIN, SVMAX);
-  js.right = constrain(throttle - offset, SVMIN, SVMAX);
-  return js;
+  cachedJoy.left  = constrain(throttle + offset, SVMIN, SVMAX);
+  cachedJoy.right = constrain(throttle - offset, SVMIN, SVMAX);
 }
 
 
@@ -319,7 +326,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V3.2 ===");
+    Serial.println("# === Digger V3.3 ===");
     Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok");
   }
 }
@@ -366,15 +373,15 @@ void loop() {
   if (dts <= 0) return;
   prevUs = now;
 
-  // 1. Read inputs (all non-blocking)
-  poll2.poll();
-  poll5.poll();
-  rcSnapshot();
-  JoystickState js = readJoystick();
+  // 1. Read inputs
+  poll2.poll();              // Non-blocking RC edge detection (~4us)
+  poll5.poll();              // Non-blocking RC edge detection (~4us)
+  rcSnapshot();              // Copy ISR data + failsafe (~5us)
+  updateJoystick(now);       // ADC only every 10ms (~800us when active, 0 otherwise)
 
   // 2. Mix (override selects authority)
   MixerOutput mix = mixInputs(rcLeft(), rcRight(), rcOverride(),
-                              js.left, js.right);
+                              cachedJoy.left, cachedJoy.right);
 
   // 3. Dynamics pipeline
   applySpinLimit(mix.left, mix.right);
@@ -387,5 +394,5 @@ void loop() {
   outputWrite();
 
   // 5. Debug
-  debugPrint(now, js);
+  debugPrint(now, cachedJoy);
 }
