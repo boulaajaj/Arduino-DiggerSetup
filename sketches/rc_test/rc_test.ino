@@ -136,12 +136,13 @@ PulseReader poll2, poll5;
 
 // Snapshot: copy ISR data + evaluate all failsafes with FRESH timestamp
 void rcSnapshot() {
-  unsigned long now = micros();  // Fresh — never stale
-
-  // Copy interrupt data atomically
+  // Copy ISR data and capture timestamp inside the same critical section.
+  // This prevents an ISR from updating isr*Time between now and the copy,
+  // which would make lastOk > now and cause unsigned underflow.
   noInterrupts();
   rc1.pw = isr1Pw;  rc1.lastOk = isr1Time;
   rc4.pw = isr4Pw;  rc4.lastOk = isr4Time;
+  unsigned long now = micros();
   interrupts();
 
   // Per-channel failsafe
