@@ -28,7 +28,7 @@ SoftwareSerial xbus(XBUS_RX_PIN, XBUS_TX_PIN);
 int currentBaud = 0;
 unsigned long baudStart = 0;
 unsigned long totalBytes = 0;
-unsigned long scanStart = 0;
+unsigned long lastReport = 0;
 uint8_t rxBuf[64];
 int rxCount = 0;
 
@@ -54,7 +54,6 @@ void setup() {
 
   pinMode(XBUS_RX_PIN, INPUT);
   tryBaud(0);
-  scanStart = millis();
 }
 
 void loop() {
@@ -79,8 +78,9 @@ void loop() {
 
   unsigned long now = millis();
 
-  // Report every 2 seconds
-  if (now - baudStart >= 2000 && totalBytes > 0 && (now - baudStart) % 2000 < 50) {
+  // Report every 2 seconds (once per interval)
+  if (totalBytes > 0 && (now - lastReport) >= 2000) {
+    lastReport = now;
     Serial.print("# ");
     Serial.print(BAUDS[currentBaud]);
     Serial.print(" baud: ");
