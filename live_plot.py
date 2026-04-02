@@ -1,27 +1,26 @@
 """
-Live Plot — Tank Mixer Monitor
-===============================
-Real-time 7-panel plot for the Arduino tank mixer.
-Reads serial data from the Arduino and displays all inputs + outputs.
+Live Plot — Digger Control Monitor (Nano R4)
+=============================================
+Real-time plot for the Arduino Nano R4 digger controller.
+Reads CSV from USB serial and displays all inputs + outputs.
 
 Panels:
-  1. D2  — RC CH1 Throttle     (blue)
-  2. D4  — RC CH2 Steering     (red)
-  3. D7  — RC CH5 Override     (green)
-  4. A0  — Joystick Y          (purple)
-  5. A1  — Joystick X          (cyan)
-  6. L   — Left ESC output     (orange)
-  7. R   — Right ESC output    (brown)
+  1. RC1  — CH1 Left Motor      (blue)
+  2. RC2  — CH2 Right Motor     (red)
+  3. RC4  — CH4 Control Mode    (green)
+  4. RC5  — CH5 Override        (orange)
+  5. JoyY — Joystick Throttle   (purple)
+  6. JoyX — Joystick Steering   (cyan)
+  7. OutL — Left ESC Output     (darkorange)
+  8. OutR — Right ESC Output    (saddlebrown)
+
+CSV format from sketch:
+  RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok
 
 Usage:
   python live_plot.py
-  (or Ctrl+Shift+B in VS Code -> "Live Plot")
-
-Expects serial format (115200 baud):
-  D2=1500  D4=1500  D7=1000  A0=512  A1=512  L=1500  R=1500
 """
 
-import re
 from collections import deque
 
 import matplotlib.animation as animation
@@ -31,68 +30,59 @@ import serial
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-PORT   = "COM7"
+PORT   = "COM8"
 BAUD   = 115200
-WINDOW = 200  # Number of data points visible on screen
+WINDOW = 200
 
-# Channel definitions: (key, label, color, y_range, center, unit)
+# Channel definitions: (key, label, color, y_range, center)
 CHANNELS = [
-    ("d2",   "D2 — CH1 Throttle",    "blue",        (800, 2200), 1500, "us"),
-    ("d4",   "D4 — CH2 Steering",    "red",         (800, 2200), 1500, "us"),
-    ("d7",   "D7 — CH5 Override",    "green",       (800, 2200), 1500, "us"),
-    ("a0",   "A0 — Joystick Y",      "purple",      (0, 1023),   512,  "ADC"),
-    ("a1",   "A1 — Joystick X",      "darkcyan",    (0, 1023),   512,  "ADC"),
-    ("lesc", "L — Left ESC (40%)",  "darkorange",  (1200, 1800), 1500, "us"),
-    ("resc", "R — Right ESC (40%)", "saddlebrown", (1200, 1800), 1500, "us"),
+    ("rc1",  "RC CH1 Left Motor [D2]",       "blue",        (800, 2200),  1500),
+    ("rc2",  "RC CH2 Right Motor [D4]",      "red",         (800, 2200),  1500),
+    ("rc4",  "RC CH4 Control Mode [D3]",     "green",       (800, 2200),  1500),
+    ("rc5",  "RC CH5 Override Switch [D7]",  "darkorange",  (800, 2200),  1000),
+    ("jy",   "Joystick Y Throttle [A0]",     "purple",      (0, 16383),   8192),
+    ("jx",   "Joystick X Steering [A1]",     "darkcyan",    (0, 16383),   8192),
+    ("outl", "Left ESC Output [D9]",         "orangered",   (1200, 1800), 1500),
+    ("outr", "Right ESC Output [D10]",       "saddlebrown", (1200, 1800), 1500),
 ]
 
-# Indices of servo-range channels that get 1000/2000 reference lines
-SERVO_CHANNELS = [0, 1, 2, 5, 6]
-
-# Serial parse pattern (must match Arduino output format)
-# Arduino sends: D2=...  D4=...  D7=...  A0=...  A1=...  L=...  R=...
-PATTERN = re.compile(
-    r"D2=(\d+)\s+D4=(\d+)\s+D7=(\d+)\s+A0=(\d+)\s+A1=(\d+)\s+L=(\d+)\s+R=(\d+)"
-)
-
-# Regex group -> buffer mapping: groups match channel order directly
-PARSE_ORDER = [0, 1, 2, 3, 4, 5, 6]
+# CSV column indices matching sketch output
+# RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,CH1ok,CH2ok
+CSV_MAP = [0, 1, 2, 3, 4, 5, 6, 7]  # maps channel index to CSV column
 
 # -----------------------------------------------------------------------------
 # Data Buffers
 # -----------------------------------------------------------------------------
-buffers = {}
-for key, _, _, _, center, _ in CHANNELS:
-    buffers[key] = deque([center] * WINDOW, maxlen=WINDOW)
-
-buffer_list = [buffers[ch[0]] for ch in CHANNELS]
+buffers = []
+for _, _, _, _, center in CHANNELS:
+    buffers.append(deque([center] * WINDOW, maxlen=WINDOW))
 
 # -----------------------------------------------------------------------------
 # Plot Setup
 # -----------------------------------------------------------------------------
-fig, axes = plt.subplots(len(CHANNELS), 1, figsize=(10, 11), sharex=True)
-fig.suptitle("Tank Mixer Monitor — Live", fontsize=14, fontweight="bold")
+fig, axes = plt.subplots(len(CHANNELS), 1, figsize=(10, 12), sharex=True)
+fig.suptitle("Digger Control — Live Monitor (Nano R4)", fontsize=14, fontweight="bold")
 
 plot_lines = []
-for i, (key, label, color, ylim, center, unit) in enumerate(CHANNELS):
+for i, (key, label, color, ylim, center) in enumerate(CHANNELS):
     ax = axes[i]
     line, = ax.plot([], [], color=color, linewidth=1.5)
     plot_lines.append(line)
-
-    ax.set_ylabel(unit)
     ax.set_ylim(*ylim)
     ax.set_title(label, fontsize=10, color=color, loc="left")
     ax.axhline(y=center, color="gray", linestyle="--", alpha=0.5)
     ax.grid(True, alpha=0.3)
 
-for i in SERVO_CHANNELS:
+# Servo range reference lines
+for i in [0, 1, 2, 3, 6, 7]:
     axes[i].axhline(y=1000, color="gray", linestyle=":", alpha=0.3)
     axes[i].axhline(y=2000, color="gray", linestyle=":", alpha=0.3)
 
-# ESC output limit lines (40% power cap = 1300-1700us)
-for i in [5, 6]:
-    axes[i].axhline(y=1300, color="red", linestyle="--", alpha=0.4, label="40% limit")
-    axes[i].axhline(y=1700, color="red", linestyle="--", alpha=0.4)
+# ESC power limit lines (SOFT_RANGE=400us → 1100-1900us max, reverse capped at 25%)
+for i in [6, 7]:
+    axes[i].axhline(y=1100, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1900, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1400, color="orange", linestyle=":", alpha=0.4)  # reverse limit
 
 axes[-1].set_xlabel("Samples")
 plt.tight_layout()
@@ -106,30 +96,31 @@ ser = serial.Serial(PORT, BAUD, timeout=0.1)
 # Animation Update
 # -----------------------------------------------------------------------------
 def update(_frame):
-    """Read all available serial lines and update plot data."""
-    while ser.in_waiting:
-        try:
-            raw = ser.readline().decode("utf-8", errors="ignore").strip()
-            match = PATTERN.search(raw)
-            if match:
-                for group_idx, buf_idx in enumerate(PARSE_ORDER):
-                    buffer_list[buf_idx].append(int(match.group(group_idx + 1)))
-        except (ValueError, UnicodeDecodeError):
-            pass
+    try:
+        while ser.in_waiting:
+            try:
+                raw = ser.readline().decode("utf-8", errors="ignore").strip()
+                if raw.startswith("#") or not raw:
+                    continue
+                parts = raw.split(",")
+                if len(parts) >= 10:
+                    for ch_idx, csv_col in enumerate(CSV_MAP):
+                        buffers[ch_idx].append(int(parts[csv_col]))
+            except (ValueError, UnicodeDecodeError, IndexError):
+                pass
+    except (serial.SerialException, OSError):
+        pass
 
     x = range(WINDOW)
-    for line, buf in zip(plot_lines, buffer_list):
+    for line, buf in zip(plot_lines, buffers):
         line.set_data(x, buf)
 
     for ax in axes:
         ax.set_xlim(0, WINDOW)
 
-    for i, (key, label, color, _, _, unit) in enumerate(CHANNELS):
-        value = buffer_list[i][-1]
-        suffix = "us" if unit == "us" else ""
-        axes[i].set_title(
-            f"{label}: {value}{suffix}", fontsize=10, color=color, loc="left"
-        )
+    for i, (key, label, color, _, _) in enumerate(CHANNELS):
+        value = buffers[i][-1]
+        axes[i].set_title(f"{label}: {value}", fontsize=10, color=color, loc="left")
 
     return plot_lines
 
