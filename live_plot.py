@@ -78,10 +78,11 @@ for i in [0, 1, 2, 3, 6, 7]:
     axes[i].axhline(y=1000, color="gray", linestyle=":", alpha=0.3)
     axes[i].axhline(y=2000, color="gray", linestyle=":", alpha=0.3)
 
-# ESC power limit lines (50% = 1250-1750us)
+# ESC power limit lines (SOFT_RANGE=400us → 1100-1900us max, reverse capped at 25%)
 for i in [6, 7]:
-    axes[i].axhline(y=1250, color="red", linestyle="--", alpha=0.4)
-    axes[i].axhline(y=1750, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1100, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1900, color="red", linestyle="--", alpha=0.4)
+    axes[i].axhline(y=1400, color="orange", linestyle=":", alpha=0.4)  # reverse limit
 
 axes[-1].set_xlabel("Samples")
 plt.tight_layout()
