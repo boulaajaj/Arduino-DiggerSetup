@@ -161,7 +161,7 @@ int rcDeadband(int pw) {
 // Safe accessors — return neutral if channel has no signal
 int rcLeft()     { return rc1.valid ? rcDeadband(rc1.pw) : SVC; }
 int rcRight()    { return poll2.valid ? rcDeadband(poll2.pw) : SVC; }
-int rcOverride() { return poll5.valid ? poll5.pw : SVC; }
+int rcOverride() { return poll5.valid ? poll5.pw : SVMIN; }  // Default RC-only if CH5 lost
 
 
 // ═══════════════════════════════════════════════════════════════
