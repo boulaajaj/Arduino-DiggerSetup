@@ -1,7 +1,6 @@
-"""Deploy sketch to Arduino Nano R4 via arduino-cli.
+"""Deploy Digger Control sketch to Arduino Nano R4 via arduino-cli.
 
-NOTE: This script was originally for UNO Q (SSH + App Lab). Now uses
-arduino-cli for direct compile and upload to Nano R4 over USB.
+Usage: python scripts/deploy.py
 """
 import subprocess
 import sys
@@ -33,5 +32,3 @@ if result.returncode != 0:
     sys.exit(1)
 
 print('\nDone. Open Serial Monitor at 115200 baud.')
-print('Note: If X.BUS is connected to D0, Serial Monitor will not work.')
-print('Disconnect X.BUS from D0 for debugging.')
