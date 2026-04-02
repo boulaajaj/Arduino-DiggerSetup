@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V4.0 — S.BUS Edition
+// Digger Control V4.1 — S.BUS Edition
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input tank mixer for ride-on excavator (~50 lbs).
@@ -240,7 +240,13 @@ void applySpinLimit(int &left, int &right) {
   }
 }
 
+// Reverse limiter: caps backward speed during straight-line reverse only.
+// During counter-rotation (turning), the spin limiter handles safety and
+// both tracks must remain balanced — reverse limit would break that balance.
 void applyReverseLimit(int &left, int &right) {
+  float dL = (float)(left - SVC);
+  float dR = (float)(right - SVC);
+  if (dL * dR < 0) return;  // Counter-rotating (turning) — skip, spin limiter handles it
   float maxReverse = SOFT_RANGE * REVERSE_LIMIT;
   if (left < SVC)  left  = max(left,  SVC - (int)maxReverse);
   if (right < SVC) right = max(right, SVC - (int)maxReverse);
@@ -292,7 +298,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V4.0 — S.BUS ===");
+    Serial.println("# === Digger V4.1 — S.BUS ===");
     Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost");
   }
 }
