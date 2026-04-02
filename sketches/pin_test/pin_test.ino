@@ -1,109 +1,127 @@
-// D0 Signal Detection Test — Arduino Nano R4
-// Tests whether Serial1 is on D0, and whether the pin sees any signal.
-// Disables Serial1 and does raw digitalRead to detect toggling.
+// Pin Interrupt Test — Arduino Nano R4
+// Tests whether attachInterrupt() works on D2, D3, D4, D7.
+// D2/D3 should work (documented). D4/D7 are the question marks.
+//
+// Wire: connect a jumper from any PWM output (or just tap the pin
+// with a jumper to 3.3V/GND) to trigger edges on each pin.
+// Or connect RC receiver channels to generate real signals.
+//
+// Every second, prints interrupt counts for all four pins.
+
+volatile unsigned long countD2 = 0;
+volatile unsigned long countD3 = 0;
+volatile unsigned long countD4 = 0;
+volatile unsigned long countD7 = 0;
+
+// Also track whether attachInterrupt returned without error
+bool d2_attached = false;
+bool d3_attached = false;
+bool d4_attached = false;
+bool d7_attached = false;
+
+void isrD2() { countD2++; }
+void isrD3() { countD3++; }
+void isrD4() { countD4++; }
+void isrD7() { countD7++; }
 
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);
-  delay(1000);
+  delay(500);
 
-  Serial.println("# === D0 SIGNAL DETECTION TEST ===");
+  Serial.println("# === PIN INTERRUPT TEST ===");
+  Serial.println("# Testing attachInterrupt on D2, D3, D4, D7 (CHANGE mode)");
   Serial.println("#");
 
-  // --- Test 1: Raw digitalRead on D0 (no Serial1) ---
-  Serial.println("# TEST 1: Raw digitalRead on D0 (Serial1 disabled)");
-  pinMode(0, INPUT);
+  // Check digitalPinToInterrupt for each pin
+  int irqD2 = digitalPinToInterrupt(2);
+  int irqD3 = digitalPinToInterrupt(3);
+  int irqD4 = digitalPinToInterrupt(4);
+  int irqD7 = digitalPinToInterrupt(7);
 
-  int toggles = 0;
-  bool last = digitalRead(0);
-  unsigned long start = micros();
-  // Sample D0 for 1 second at max speed
-  while (micros() - start < 1000000UL) {
-    bool now = digitalRead(0);
-    if (now != last) { toggles++; last = now; }
-  }
-  Serial.print("#   D0 toggles in 1s: ");
-  Serial.println(toggles);
-  Serial.print("#   D0 current state: ");
-  Serial.println(digitalRead(0) ? "HIGH (3.3V — UART idle)" : "LOW");
+  Serial.print("# digitalPinToInterrupt(D2) = "); Serial.println(irqD2);
+  Serial.print("# digitalPinToInterrupt(D3) = "); Serial.println(irqD3);
+  Serial.print("# digitalPinToInterrupt(D4) = "); Serial.println(irqD4);
+  Serial.print("# digitalPinToInterrupt(D7) = "); Serial.println(irqD7);
+  Serial.println("#");
 
-  if (toggles == 0) {
-    Serial.println("#   -> NO activity. ESC is not transmitting (line idle).");
+  // Set all pins as inputs
+  pinMode(2, INPUT);
+  pinMode(3, INPUT);
+  pinMode(4, INPUT);
+  pinMode(7, INPUT);
+
+  // Attempt to attach interrupts on all four pins
+  // If digitalPinToInterrupt returns NOT_AN_INTERRUPT (-1),
+  // attachInterrupt will silently fail on most cores.
+  if (irqD2 >= 0) {
+    attachInterrupt(irqD2, isrD2, CHANGE);
+    d2_attached = true;
+    Serial.println("# D2: interrupt ATTACHED");
   } else {
-    Serial.println("#   -> SIGNAL DETECTED! ESC is transmitting.");
-    // Estimate baud from toggle rate (each bit = 1 toggle for alternating pattern)
-    Serial.print("#   -> Estimated toggle rate: ");
-    Serial.print(toggles);
-    Serial.println(" Hz");
+    Serial.println("# D2: NOT_AN_INTERRUPT — cannot attach");
   }
 
-  // --- Test 2: Check Serial1 on D0 at each baud rate ---
-  Serial.println("#");
-  Serial.println("# TEST 2: Serial1 at each baud rate (3s each)");
-
-  const long bauds[] = {9600, 19200, 38400, 57600, 100000, 115200, 250000};
-  const int nbauds = 7;
-
-  for (int i = 0; i < nbauds; i++) {
-    Serial1.begin(bauds[i]);
-    delay(100);  // Let UART settle
-
-    // Drain any buffered garbage
-    while (Serial1.available()) Serial1.read();
-
-    // Count bytes for 3 seconds
-    int bytes = 0;
-    uint8_t firstBytes[16];
-    int captured = 0;
-    unsigned long t = millis();
-    while (millis() - t < 3000) {
-      if (Serial1.available()) {
-        uint8_t b = Serial1.read();
-        if (captured < 16) firstBytes[captured] = b;
-        captured++;
-        bytes++;
-      }
-    }
-
-    Serial.print("#   ");
-    Serial.print(bauds[i]);
-    Serial.print(" baud: ");
-    Serial.print(bytes);
-    Serial.print(" bytes");
-
-    if (bytes > 0) {
-      Serial.print(" -> RECEIVED! First bytes: ");
-      for (int j = 0; j < min(captured, 16); j++) {
-        if (firstBytes[j] < 16) Serial.print("0");
-        Serial.print(firstBytes[j], HEX);
-        Serial.print(" ");
-      }
-    }
-    Serial.println();
-
-    Serial1.end();
+  if (irqD3 >= 0) {
+    attachInterrupt(irqD3, isrD3, CHANGE);
+    d3_attached = true;
+    Serial.println("# D3: interrupt ATTACHED");
+  } else {
+    Serial.println("# D3: NOT_AN_INTERRUPT — cannot attach");
   }
 
-  // --- Test 3: Check if Serial (not Serial1) is on D0 ---
-  Serial.println("#");
-  Serial.println("# TEST 3: Pin identity check");
-  Serial.print("#   digitalPinToInterrupt(0) = ");
-  Serial.println(digitalPinToInterrupt(0));
-  Serial.print("#   digitalPinToInterrupt(1) = ");
-  Serial.println(digitalPinToInterrupt(1));
+  if (irqD4 >= 0) {
+    attachInterrupt(irqD4, isrD4, CHANGE);
+    d4_attached = true;
+    Serial.println("# D4: interrupt ATTACHED");
+  } else {
+    Serial.println("# D4: NOT_AN_INTERRUPT — cannot attach");
+  }
 
-  // Check if we can read D0 while Serial is active
-  // (if Serial uses D0, digitalRead would conflict)
-  Serial.print("#   D0 read while Serial active: ");
-  Serial.println(digitalRead(0) ? "HIGH" : "LOW");
+  if (irqD7 >= 0) {
+    attachInterrupt(irqD7, isrD7, CHANGE);
+    d7_attached = true;
+    Serial.println("# D7: interrupt ATTACHED");
+  } else {
+    Serial.println("# D7: NOT_AN_INTERRUPT — cannot attach");
+  }
 
   Serial.println("#");
-  Serial.println("# TEST COMPLETE");
-  Serial.println("# If all tests show 0 bytes: ESC requires polling (won't auto-transmit)");
-  Serial.println("# If toggles > 0 but 0 bytes: baud rate not in our list");
+  Serial.println("# Printing counts every second. Tap pins to generate edges.");
+  Serial.println("# Format: D2=count D3=count D4=count D7=count");
+  Serial.println("#");
 }
 
+unsigned long lastPrint = 0;
+
 void loop() {
-  // Just idle
-  delay(1000);
+  if (millis() - lastPrint >= 1000) {
+    lastPrint = millis();
+
+    // Snapshot counts with interrupts disabled
+    noInterrupts();
+    unsigned long c2 = countD2;
+    unsigned long c3 = countD3;
+    unsigned long c4 = countD4;
+    unsigned long c7 = countD7;
+    interrupts();
+
+    Serial.print("D2=");
+    Serial.print(c2);
+    Serial.print(d2_attached ? "(ok) " : "(no) ");
+
+    Serial.print("D3=");
+    Serial.print(c3);
+    Serial.print(d3_attached ? "(ok) " : "(no) ");
+
+    Serial.print("D4=");
+    Serial.print(c4);
+    Serial.print(d4_attached ? "(ok) " : "(no) ");
+
+    Serial.print("D7=");
+    Serial.print(c7);
+    Serial.print(d7_attached ? "(ok) " : "(no) ");
+
+    Serial.println();
+  }
 }

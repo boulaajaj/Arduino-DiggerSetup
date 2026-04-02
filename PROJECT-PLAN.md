@@ -1,584 +1,216 @@
 # Excavator Track Controller — Project Plan
 
 ## What This Does
-An Arduino Nano R4 sits between an RC receiver and two ESCs, implementing a
-**tank-style mixer** with a secondary joystick input (for the rider/operator).
-The RC transmitter always takes priority. A third RC channel acts as a
-joystick enable/override switch.
+
+An Arduino Nano R4 sits between an RC receiver and two ESCs, implementing
+a **tank-style mixer** with a secondary joystick input for the rider.
+The RC transmitter (Jason) can always override. A 3-position switch
+selects who has authority.
 
 The controller provides:
-- **Exponential response curve** for fine low-speed control
-- **Inertia simulation** so the tracks feel heavy (smooth ramp, gradual stop)
-- **Dual-loop PID** — inner current loop (feedforward) + outer RPM loop (feedback)
-- **Soft power limits** (exponential saturation, no hard clamps)
-- **Anti-runaway failsafe** to prevent compensation from diverging
-
----
-
-## Inventory
-
-| # | Component | Model / Part | Key Specs |
-|---|-----------|-------------|-----------|
-| 1 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 14-bit ADC, 5V tolerant GPIO |
-| 2 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
-| 3 | ESC (x2) | XC E10 Sensored Brushless 140A | XT60 power, servo PWM input |
-| 4 | Motor (x2) | XC E3665 2500KV Sensored Brushless | 8mm shaft |
-| 5 | RC System | Radiolink RC6GS V3 + R7FG receiver | 6CH, gyro receiver |
-| 6 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect |
-| 7 | Current Sensor (x2) | CS7581 Hall-effect | Per-motor current monitoring |
-| 8 | RPM/Telemetry | ESC X.BUS (primary) | Serial telemetry: RPM, current, voltage, temp |
-| 9 | RPM Feedback (x2) | Motor hall sensor tap (fallback) | Parallel tap on motor→ESC sensor cable |
-
----
-
-## Inputs
-
-| Ch | Source | Signal Type | Pin | Description |
-|----|--------|-------------|-----|-------------|
-| 1 | RC Receiver | Servo PWM | D2 | Left motor (pre-mixed by transmitter) |
-| 2 | RC Receiver | Servo PWM | D4 | Right motor (pre-mixed by transmitter) |
-| 4 | RC Receiver | Servo PWM | D3 | Control mode selector (3-pos: RAW/RPM/FULL) |
-| 5 | RC Receiver | Servo PWM | D7 | Override switch (3-pos) |
-| — | Joystick | Analog 0-5V | A0 | Throttle Y axis (direct — 5V tolerant) |
-| — | Joystick | Analog 0-5V | A1 | Steering X axis (direct — 5V tolerant) |
-| — | CS7581 | Analog | A2 | Current sensor — left motor |
-| — | CS7581 | Analog | A3 | Current sensor — right motor |
-| — | ESC X.BUS | Serial UART | D0 (Serial RX) | X.BUS telemetry — shared bus, both ESCs (RPM, current, voltage, temp) |
-| — | Motor Hall Tap (L) | Digital 5V | D5 | RPM feedback — left motor (FALLBACK if X.BUS too slow) |
-| — | Motor Hall Tap (R) | Digital 5V | D6 | RPM feedback — right motor (FALLBACK if X.BUS too slow) |
-
-> **5V tolerant:** The Nano R4 has 5V tolerant GPIO. The joystick (0-5V)
-> and RC receiver (5V servo pulses) connect directly — no voltage dividers
-> or level shifters needed.
->
-> **Interrupt limitation:** `attachInterrupt()` only works on D2 and D3.
-> D4 and D7 use `pulseIn()` instead.
-
-> **Note:** The RC transmitter has its own internal tank mixing. CH1 and CH2
-> arrive as left/right motor signals, NOT as throttle/steering. The Arduino
-> passes them through directly. The joystick outputs raw throttle/steering,
-> so the Arduino applies tank mixing only to the joystick signals.
-
-## Outputs (2 channels)
-
-| Ch | Destination | Signal Type | Pin | Description |
-|----|-------------|-------------|-----|-------------|
-| A | Left Track ESC | Servo PWM | D9 | Left motor speed + direction |
-| B | Right Track ESC | Servo PWM | D10 | Right motor speed + direction |
-
----
-
-## Control Mode Switch (Receiver CH4 -> D3, 3-position switch)
-
-| CH4 Position | PWM Value | Mode | What Runs |
-|-------------|-----------|------|-----------|
-| LOW (~1000) | RAW | Direct stick-to-ESC, no processing layers |
-| MID (~1500) | RPM_ONLY | Outer RPM PID loop only (speed regulation) |
-| HIGH (~2000) | FULL_STACK | Inner current FF + outer RPM + expo + inertia |
-
-**RAW — Direct pass-through:** Stick → deadband → linear map → hard power
-clamp → ESC. No PID, no expo curve, no inertia. Feels like the old Nano V3
-setup. Instant response, no smoothing. Good for baseline comparison.
-
-**RPM_ONLY — Speed regulation only:** Stick → deadband → linear map → RPM
-PID trim → hard power clamp → ESC. The outer RPM loop maintains consistent
-track speed under varying load, but no anticipation of load spikes (no
-current feedforward) and no inertia smoothing. Good for testing whether
-RPM feedback alone is sufficient.
-
-**FULL_STACK — Premium control:** Stick → deadband → expo curve → tank mix →
-mode select → current feedforward → RPM trim → anti-runaway → soft power
-limit → inertia simulation → ESC. Disturbances are absorbed before the
-operator feels them. Tracks feel heavy and deliberate. The full experience.
-
-**Mode transitions:** When CH4 is flipped, all PID integrals, inertia
-velocity/position, and anti-runaway state are reset to zero. This prevents
-jumps or lurches when switching modes on the field.
-
-**Hard current safety cutoff (100A) is ALWAYS active in ALL modes.**
-
----
-
-## Override Switch Logic (Receiver CH5 -> D7, 3-position switch)
-
-| CH5 Position | PWM Value | Joystick | RC Receiver |
-|-------------|-----------|---------|-------------|
-| LOW (~1000) | Mode 1 | Disabled | Full control |
-| MID (~1500) | Mode 2 | Active | Fully overrides joystick |
-| HIGH (~2000)| Mode 3 | Active | 50% override (blended control) |
-
-**Mode 1 — Remote only:** Joystick input is completely ignored. RC
-transmitter has full authority over both tracks.
-
-**Mode 2 — Remote + Joystick (full override):** Joystick is active and
-controls the tracks when RC sticks are at neutral. When RC gives any
-non-neutral input (outside +/-50us deadband), RC takes 100% priority and
-joystick is ignored.
-
-**Mode 3 — Remote + Joystick (blended):** Both inputs are active
-simultaneously. Output is 50% RC + 50% joystick, so the joystick retains
-partial authority even when RC is giving input. Useful for fine-tuning
-position while someone assists via remote.
-
----
-
-## Signal Processing Pipeline (V2.1 — Dual-Loop Architecture)
-
-```
-RC (attachInterrupt ISR) ──────────────────────────────────────┐
-                                                                ├─ Mode Select ─┐
-Joystick (analogRead 14-bit) ─ Deadband ─ Expo Curve ─ Tank Mix┘               │
-                                                                                v
-                                              ┌─ Inner Loop (FEEDFORWARD) ─────┤
-                                              │  CS7581 current sensors         │
-                                              │  Detects load spike INSTANTLY   │
-                                              │  Pre-boosts before RPM drops    │
-                                              └────────────────────────────────┤
-                                              ┌─ Outer Loop (FEEDBACK) ────────┤
-                                              │  X.BUS RPM (or hall sensor)    │
-                                              │  Measures actual motor speed   │
-                                              │  Fine-tunes to hold target RPM │
-                                              └────────────────────────────────┤
-                                                                                v
-                                                    Soft Power Scale (tanh)     │
-                                                    (50%, no hard clamps)       │
-                                                                                v
-                                                    Inertia Simulation          │
-                                                    (spring-damper model)       │
-                                                                                v
-                                                    Anti-Runaway Check          │
-                                                                                v
-                                                    Servo Output (D9, D10)
-```
-
-### Dual-Loop Control Strategy (DECIDED 2026-03-21)
-
-**Both current AND RPM feedback are used simultaneously — NOT one or the other.**
-
-- **Inner loop (feedforward via current):** CS7581 current sensors detect load
-  disturbances instantly. When a track hits mud or an obstacle, current spikes
-  BEFORE RPM drops. The inner loop pre-compensates by boosting power before
-  the operator feels anything.
-
-- **Outer loop (feedback via RPM):** X.BUS telemetry (or hall sensor tap) measures
-  actual motor speed. This closes the loop on whether the compensation actually
-  worked. It fine-tunes the ESC command to hold the target RPM.
-
-- **Result:** Disturbances are absorbed before they become perceptible to a human.
-  Current predicts the impact; RPM confirms the recovery. This is a standard
-  industrial motor control pattern (inner current loop + outer speed loop).
-
-### RPM Source: X.BUS First, Hall Sensor Fallback
-
-**Primary — ESC X.BUS telemetry (testing required):**
-The XC E10 has a dedicated X.BUS wire (3-pin: Yellow=data, Brown=GND, Red=BEC+).
-The manual says it supports "real-time control of ESC and reading of operation
-data through Bus" for "robot control or other automated programming control."
-The X.BUS provides RPM + current + voltage + temperature in one packet.
-
-**If X.BUS update rate is sufficient (>20 Hz for outer loop):** Use X.BUS for
-the outer RPM loop. The inner loop still uses CS7581 current sensors directly
-(ADC speed, no serial latency). This is the cleanest wiring solution.
-
-**Fallback — Direct motor hall sensor tap:**
-If X.BUS is too slow or unreliable, tap the motor's existing hall sensor cable
-in parallel. This gives microsecond-resolution RPM at interrupt speed but
-requires Y-splitters and signal isolation to prevent ESC/Arduino
-interference. (No voltage dividers needed — Nano R4 is 5V tolerant.)
-
-**Step 1 (NOW):** Run `sketches/xbus_probe/xbus_probe.ino` to determine:
-  - What baud rate X.BUS uses
-  - What data format the packets are in
-  - How fast packets arrive (Hz)
-  - Whether the data is clean and decodable
-
-### RC Reading — Interrupts + pulseIn
-RC CH1 (D2) and CH4 (D3) are decoded via `attachInterrupt()` on CHANGE.
-RC CH2 (D4) and CH5 (D7) use `pulseIn()` — the Nano R4 only supports
-hardware interrupts on D2 and D3. `pulseIn()` is blocking but RC signals
-update at ~50Hz, which is acceptable for the control loop.
-
-### Exponential Response Curve
-Joystick input is mapped through `pow(normalized, 2.5)`. This gives fine
-control at low stick (for precise maneuvering) and full authority at max
-stick (for travel speed). The 14-bit ADC provides 16384 steps of resolution.
-
-### Tank Mix (Joystick Only)
-```
-steerOffset = steering - 1500
-left  = throttle + steerOffset
-right = throttle - steerOffset
-```
-
-RC signals are already tank-mixed by the transmitter and pass through
-without a second mix.
-
-### PID Load Compensation — "Cruise Control for Tracks"
-
-#### Current Implementation (V2.0) — Current-Based
-Closed-loop PID monitors per-motor current via CS7581 sensors. When a track
-encounters resistance (mud, cold/stiff rubber, obstacle, uphill), it draws
-more current than expected. The PID **boosts** the output to push through
-and maintain consistent track speed.
-
-How it works:
-1. Compute expected current from commanded output: `expected = delta * CURRENT_PER_UNIT`
-2. Compare against measured current from CS7581
-3. If measured > expected, resistance is detected
-4. PID computes a **boost** (extra us added to the ESC command)
-5. Boost is applied in the direction of travel
-
-**Adaptive gains:** At higher speeds, gains are reduced for stability
-(prevents oscillation). At low speed (precise maneuvering), gains are
-higher for responsive compensation. A `tanh()` soft ceiling on the boost
-ensures it approaches COMP_MAX_BOOST smoothly — never abruptly.
-
-**Hard safety cutoff:** If current exceeds CURRENT_HARD_LIMIT (100A), the
-motor is forced to neutral immediately. This is separate from the PID —
-it's a last-resort protection against motor stall, short, or jam.
-
-#### Planned Upgrade (V2.1) — RPM-Based PID via Motor Hall Sensor Tap
-
-**Decision (2026-03-20):** Upgrade PID feedback from current-based to
-RPM-based using a passive tap on the motor's existing hall sensor cable.
-
-**Why RPM instead of current:**
-- Current is a proxy for load, not speed. True closed-loop speed control
-  requires measuring actual motor RPM.
-- Handles all disturbances (mud, cold rubber, uphill, weight changes)
-  because it measures what actually matters: is the motor spinning at the
-  commanded speed?
-
-**Why tap at the motor (not at the sprocket):**
-- High resolution: many pulses per motor revolution (4 edges/rev with 2 hall lines)
-- Zero delay: measures motor shaft directly, no gearbox backlash lag
-- The signal already exists: motor's internal hall sensors are wired to the ESC
-
-**Why not Bluetooth telemetry from the ESC:**
-- 50-200ms latency — too slow for 20kHz PID loop
-- Proprietary Hobbywing protocol, poorly documented
-- Requires extra BT hardware on both sides
-- Far more code complexity for inferior results
-
-**Motor sensor cable pinout (6-pin JST-ZH, standard Hobbywing):**
-
-| Pin | Signal |
-|-----|--------|
-| 1 | 5V (from ESC) |
-| 2 | Hall A |
-| 3 | Hall B |
-| 4 | Hall C |
-| 5 | Temperature / NC |
-| 6 | GND |
-
-> **VERIFY THIS PINOUT** on the actual XC E3665 sensor cable before wiring.
-> Hobbywing generally follows this standard, but confirm with a multimeter.
-
-**Wiring — passive parallel tap (non-invasive):**
-```
-Motor Hall A ──────┬──── ESC Hall A
-                   │
-              Arduino D5 (direct — 5V tolerant)
-
-Motor Hall B ──────┬──── ESC Hall B
-                   │
-              Arduino D6 (direct — 5V tolerant)
-
-Motor GND ─────────┬──── ESC GND
-                   │
-              Arduino GND
-```
-
-> **No level shifting needed!** The Nano R4 has 5V tolerant GPIO. Hall sensor
-> outputs are 5V and connect directly to D5/D6.
-
-**Resolution (4-pole motor, 2 pole pairs):**
-- 2 electrical revolutions per mechanical revolution
-- Counting rising edges on 2 hall lines = 4 edges per motor revolution
-- At 5,000 RPM (loaded): ~333 edges/sec
-- At 100 RPM: ~7 edges/sec
-- Both are well within Arduino interrupt capability
-
-**RPM calculation (interval method — better at low RPM):**
-```
-edgesPerRev = 4  // 2 hall lines × 2 pole pairs
-RPM = 60,000,000 / (microsBetweenEdges × edgesPerRev)
-```
-
-**V2.1 PID loop:**
-```
-target RPM  = f(stick position)     // stick maps to desired speed
-actual RPM  = from hall sensor tap  // measured motor speed
-error       = target - actual
-PID output  = adjust ESC command to close the gap
-```
-
-Current sensors (CS7581) will remain active for:
-- Hard safety cutoff (100A — motor stall / short / jam protection)
-- Telemetry and diagnostics
-- Possible future dual-loop control (inner current, outer RPM)
-
-### Soft Power Limits (Exponential Saturation)
-Instead of hard clamps at OUTPUT_MIN/OUTPUT_MAX, the output follows a
-`tanh()` curve that asymptotically approaches the limit. Small inputs pass
-through nearly linearly; large inputs compress smoothly. No abrupt cutoff.
-
-```
-output = limit * tanh(input / limit)
-```
-
-### Inertia Simulation (Spring-Damper Model)
-Replaces V1.2's asymmetric EMA with a physics-based model that makes the
-output feel heavy:
-
-```
-spring_force = RESPONSE_FORCE * (target - position)
-friction     = -FRICTION_COEFF * velocity
-acceleration = (spring_force + friction) / VIRTUAL_MASS
-velocity    += acceleration * dt
-position    += velocity * dt
-```
-
-- **Heavy ramp-up:** Mass resists acceleration
-- **At low speed:** Friction dominates, stops cleanly
-- **At high speed:** Takes longer to stop (momentum)
-- **Near neutral:** Snaps to zero (prevents micro-drift)
-
-### Anti-Runaway Failsafe
-If the PID boost has been at or near COMP_MAX_BOOST (>85%) for more than
-2 seconds continuously, the track is physically stuck — the PID is pushing
-as hard as it can but the resistance isn't going away. Rather than burning
-out the motor or causing erratic behavior, the system goes to neutral.
-
-The failsafe **latches** until the operator returns the stick to neutral,
-which forces a deliberate restart. This prevents the machine from lurching
-when the failsafe clears.
-
-### Deadbands
-- **RC:** +/-50us around 1500 — values in 1450-1550 snap to neutral
-- **Joystick:** +/-480 around 8192 (14-bit ADC) — ~3% dead zone at center
-
-### RC Failsafe
-- If no RC signal for 500ms, both ESCs go to neutral (1500us = stop)
-
----
-
-## Power
-
-| Rail | Powers | Notes |
-|------|--------|-------|
-| 5V | RC Receiver VCC | From Arduino 5V pin |
-| 5V | Joystick VCC | Genie 101174GT, ~5mA draw |
-| 3.3V | Current sensors | If CS7581 variant is 3.3V-powered (Nano R4 has 3.3V pin) |
-| GND | All components | Common ground is mandatory |
-| VIN | Arduino itself | 7-24V from battery/BEC |
-
-> **Joystick confirmed:** Genie 101174GT dual-axis joystick.
-> Runs on 5V, outputs 0-5V analog per axis, center ~2.5V. Negligible
-> current draw. Arduino 5V pin can power both the receiver and joystick.
-> Connects directly to A0/A1 — Nano R4 is 5V tolerant.
-
----
-
-## Joystick Details (Genie 101174GT)
-
-- **Part number:** 101174 / 101174GT
-- **Type:** Dual-axis with active electronics (Hall effect suspected)
-- **Power:** 5V DC
-- **Output:** 0-5V analog per axis (center position ~2.5V)
-- **Harness:** 6-wire adapter harness (3 per side)
-- **Source:** Amazon ASIN B0F99C27BW (~$73)
-
----
-
-## Wiring Diagram (V2.4 — Nano R4, Shared X.BUS)
-
-**IMPORTANT CORRECTIONS (2026-03-29):**
-- XC E10 "X.BUS" is NOT Spektrum X-Bus (I2C). It has ONE data wire → cannot be I2C.
-- It is a proprietary XC Technology protocol, almost certainly **half-duplex UART**.
-- Industry survey: 8-10 of 12 major ESC brands use UART serial for telemetry.
-- Both ESCs share one bus on D0 — the X.BUS is designed for up to 16 addressed ESCs.
-
-```
-                       ARDUINO NANO R4
-                    ┌───────────────────┐
-  X.BUS (shared)──>│ D0  (Serial RX)   │  ← Both ESCs on one bus (direct — 5V tolerant)
-    RC CH1 ────────>│ D2  (left motor)  │  [attachInterrupt]
-    RC CH4 ────────>│ D3  (ctrl mode)   │  [attachInterrupt]
-    RC CH2 ────────>│ D4  (right motor) │  [pulseIn]
-    [reserved]─────>│ D5                │  ← Available for future use
-    [reserved]─────>│ D6                │  ← Available for future use
-    RC CH5 ────────>│ D7  (override)    │  [pulseIn]
-                    │              D9  ~│──> Left Track ESC (servo PWM)
-                    │             D10  ~│──> Right Track ESC (servo PWM)
-                    │                   │
-  Joy Y (direct)──>│ A0  (throttle)    │  ← 5V tolerant, no divider needed
-  Joy X (direct)──>│ A1  (steering)    │  ← 5V tolerant, no divider needed
-  CS7581 Left ─────>│ A2  (current L)   │
-  CS7581 Right ────>│ A3  (current R)   │
-                    │                   │
-         5V ───────>│ 5V         GND   │<── Common GND
-   Battery ────────>│ VIN               │
-                    └───────────────────┘
-
-  ESC X.BUS Wiring (SHARED BUS — both ESCs on one wire):
-    ESC Left  (addr 0) Yellow ──┬── ESC Right (addr 1) Yellow
-                                │
-                           [10kΩ pull-up to 5V]
-                                │
-                              D0 (Serial RX) ← direct, no divider needed
-    Both ESC Brown (GND) ─────── Arduino GND
-    Both ESC Red   (BEC+) ─────── NOT CONNECTED
-
-  Debug Output:
-    Serial over USB (USB-C cable to PC, 115200 baud)
-    NOTE: X.BUS on D0 conflicts with USB Serial — disconnect X.BUS for debugging
-```
-
----
-
-## Pin Summary (Quick Reference)
-
-```
-D0  <- X.BUS shared bus (Serial RX)      [Hardware UART, both ESCs on one bus, direct]
-D1  -> X.BUS TX (Serial TX)              [For half-duplex commands, if needed]
-D2  <- RC CH1 (Left motor, pre-mixed)    [attachInterrupt, CHANGE]
-D3  <- RC CH4 (Control mode, 3-pos)      [attachInterrupt, CHANGE]
-D4  <- RC CH2 (Right motor, pre-mixed)   [pulseIn — no interrupt on D4]
-D5     (available)                        [reserved for future use]
-D6     (available)                        [reserved for future use]
-D7  <- RC CH5 (Override switch, 3-pos)   [pulseIn — no interrupt on D7]
-A0  <- Joystick Y axis (Throttle)        [14-bit ADC, 0-5V direct (5V tolerant)]
-A1  <- Joystick X axis (Steering)        [14-bit ADC, 0-5V direct (5V tolerant)]
-A2  <- CS7581 Current Sensor (Left)      [14-bit ADC]
-A3  <- CS7581 Current Sensor (Right)     [14-bit ADC]
-D9  -> Left Track ESC                    [Servo PWM output]
-D10 -> Right Track ESC                   [Servo PWM output]
-5V  -> RC Receiver + Joystick VCC
-VIN <- Battery / BEC (7-24V)
-GND -> All components (common ground)
-```
+- **Exponential response curve** — fine low-speed control, full range at high stick
+- **Inertia simulation** — asymmetric accel/decel for heavy machine feel
+- **Spin turn limiter** — graduated power reduction during counter-rotation
+- **Reverse speed limit** — caps backward speed to 50% of forward
+- **Soft power limits** — tanh saturation, no hard clamps
+- **Per-channel failsafe** — each RC channel independently monitored
 
 ---
 
 ## Hardware
 
-### Previous: Arduino Nano V3 Clone
-- **MCU:** ATmega328P (AVR, 16MHz, 2KB RAM, 32KB flash)
-- **USB:** CH340G — requires driver install
-- **RC reading:** Pin Change Interrupts (PCINT2) on D2, D4, D7
-- **Board package:** `arduino:avr` -> Board: Arduino Nano
-- **ADC:** 10-bit (1024 steps), 5V reference
-- **Logic:** 5V
-- **Status:** Retired — insufficient for PID + current sensing at 20kHz
-
-### Current: Arduino Nano R4
-- **MCU:** Renesas RA4M1 (Arm Cortex-M4, 48MHz, 32KB RAM, 256KB flash)
-- **USB:** Native USB-C — no driver needed
-- **RC reading:** `attachInterrupt()` on D2/D3 only; `pulseIn()` for D4/D7
-- **Board package:** `arduino:renesas_uno`
-- **FQBN:** `arduino:renesas_uno:nanor4`
-- **Port:** COM8
-- **ADC:** 14-bit (16384 steps), 5V reference
-- **Logic:** 5V tolerant — no voltage dividers or level shifters needed
-- **Loop rate:** 20,000+ Hz target
-- **Why upgrade from Nano V3:** 3x clock speed + FPU for float math. The PID + expo
-  curve + inertia simulation + 4x ADC reads need ~30-50us per loop.
-  ATmega328P at 16MHz without FPU cannot achieve this.
+| # | Component | Model | Key Specs |
+|---|-----------|-------|-----------|
+| 1 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 14-bit ADC, 5V tolerant |
+| 2 | Battery (x2) | OVONIC 3S LiPo 15000mAh | 11.1V, EC5, 130C |
+| 3 | ESC (x2) | XC E10 Sensored 140A | Servo PWM input, X.BUS telemetry |
+| 4 | Motor (x2) | XC E3665 2500KV Sensored | 4-pole, hall sensor, 8mm shaft |
+| 5 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, gyro receiver |
+| 6 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect |
+| 7 | Current Sensor (x2) | CS7581 Hall-effect | Per-motor current |
 
 ---
 
-## Software
+## Pin Map
 
-### Sketch: `sketches/rc_test/rc_test.ino`
-- **Version:** V2.0 (Nano R4, PID, inertia, soft limits)
-- **Loop rate:** 20,000+ Hz (micros()-based timing, zero blocking)
-- **Serial output:** 20 Hz at 115200 baud (telemetry with current data)
+```
+D2  ← RC CH1 (left track, pre-mixed)   [attachInterrupt CHANGE]
+D3  ← RC CH4 (control mode, 3-pos)     [attachInterrupt CHANGE]
+D4  ← RC CH2 (right track, pre-mixed)  [non-blocking poll — no IRQ on D4]
+D5     (reserved for left hall sensor)
+D6     (reserved for right hall sensor)
+D7  ← RC CH5 (override switch, 3-pos)  [non-blocking poll — no IRQ on D7]
+D9  → Left ESC                          [Servo PWM]
+D10 → Right ESC                         [Servo PWM]
+A0  ← Joystick Y (throttle)             [14-bit ADC, 0-5V direct]
+A1  ← Joystick X (steering)             [14-bit ADC, 0-5V direct]
+A2  ← CS7581 current sensor (left)      [14-bit ADC]
+A3  ← CS7581 current sensor (right)     [14-bit ADC]
+5V  → RC receiver + joystick VCC
+GND → All components (common ground)
+```
 
-### Sketch: `sketches/xbus_probe/xbus_probe.ino`
-- **Purpose:** Test/probe X.BUS telemetry from XC E10 ESC
-- **What it does:**
-  1. Auto-scans baud rates (115200, 100000, 19200, 57600, 38400, 9600)
-  2. Dumps raw hex bytes for manual pattern analysis
-  3. Attempts Spektrum X-Bus ESC packet decoding (address 0x20)
-  4. Measures packet arrival rate (Hz) and inter-packet gap (ms)
-  5. Reports decoded RPM, current, voltage, temperature
-- **Wiring:** ESC X.BUS Yellow → D0 (Serial RX) direct (5V tolerant)
-  - Debug output via Serial over USB (disconnect X.BUS from D0 first)
-- **Decision gate:** If packets arrive >20 Hz with clean data → use X.BUS
-  for dual-loop PID. If too slow → fall back to hall sensor tap.
+D0/D1 reserved for X.BUS (Serial1) — conflicts with USB Serial during debug.
 
-### Live Plot: `live_plot.py`
-- **7-panel real-time monitor** (matplotlib)
-- Displays all inputs (D2, D4, D7, A0, A1) and both ESC outputs (L, R)
-- TODO: Add current sensor panels (IL, IR) and PID reduction panels (RL, RR)
-- Run: `python live_plot.py` or `Ctrl+Shift+B` in VS Code -> "Live Plot"
+---
 
-### Tuning Constants (V2.0)
+## Signal Pipeline
+
+```
+RC (ISR + poll) ──┐
+                  ├─► Mixer ─► Spin Limiter ─► Reverse Limiter
+Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Output
+```
+
+### Override Switch (CH5)
+
+| Position | Mode | Who Controls |
+|----------|------|-------------|
+| LOW | RC only | Jason has full authority |
+| MID | RC priority | Joystick active if RC sticks centered |
+| HIGH | Joystick only | Malaki has full authority |
+
+### Dynamics Pipeline
+
+1. **Spin limiter** — graduated power cap during counter-rotation (50% at full pivot)
+2. **Reverse limiter** — backward speed capped at 50% of forward max
+3. **Soft limit** — tanh saturation caps max servo deviation
+4. **Inertia** — asymmetric exponential: accel ~1.5s, decel/coast ~3.0s
+
+---
+
+## Tuning Constants
+
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `POWER_LIMIT_PCT` | 50 | Max output as % of full range |
-| `EXP_CURVE` | 2.5 | Expo exponent (1=linear, 3=very fine) |
-| `VIRTUAL_MASS` | 3.0 | Inertia: higher = more sluggish |
-| `FRICTION_COEFF` | 8.0 | Inertia: higher = stops sooner |
-| `RESPONSE_FORCE` | 20.0 | Inertia: higher = tracks stick faster |
-| `CURRENT_PER_UNIT` | 0.25 A/us | Expected current per us of output |
-| `COMP_MAX_BOOST` | 50us | Max extra us the PID can add |
-| `COMP_KP` | 0.3 | PID proportional gain |
-| `COMP_KI` | 0.05 | PID integral gain |
-| `COMP_KD` | 0.01 | PID derivative gain |
-| `CURRENT_HARD_LIMIT` | 100A | Force neutral (safety cutoff) |
-| `RUNAWAY_TIME` | 2s | Anti-runaway time window |
-| `RC_DEADBAND` | +/-50us | RC neutral zone |
-| `JOY_DEADBAND` | +/-480 | Joystick neutral zone (14-bit ADC) |
-| `FAILSAFE_TIMEOUT` | 500ms | Neutral if RC lost |
+| `EXPO_LINEAR` | 0.2 | Linear blend of expo curve |
+| `EXPO_SQUARE` | 0.8 | Quadratic blend (sum to 1.0) |
+| `SOFT_RANGE` | 400 us | Max servo offset from center |
+| `TAU_ACCEL` | 1.5 s | Acceleration time constant |
+| `TAU_DECEL` | 3.0 s | Deceleration/coast time constant |
+| `SPIN_LIMIT` | 0.5 | Power cap at full pivot turn (50%) |
+| `REVERSE_LIMIT` | 0.5 | Max reverse as fraction of forward (50%) |
+| `RC_DEADBAND` | 50 us | RC pulse dead zone |
+| `JOY_DEADBAND` | 480 | Joystick ADC dead zone (~5.9%) |
+| `FAILSAFE_US` | 500 ms | Per-channel signal timeout |
+
+---
+
+## File Map
+
+```
+sketches/rc_test/
+  rc_test.ino       — Main controller sketch (V3.1)
+  types.h           — Shared structs (RCChannel, PulseReader, etc.)
+
+sketches/xbus_probe/
+  xbus_probe.ino    — X.BUS telemetry probe (standalone)
+
+sketches/hw_diagnostic/
+  hw_diagnostic.ino — Hardware diagnostic (ADC, RC, signal check)
+
+sketches/pin_test/
+  pin_test.ino      — Interrupt pin capability test
+
+docs/
+  CONTROL-RESEARCH.md — Tank mix, RC input, loop patterns research
+
+live_plot.py        — Real-time 7-panel matplotlib monitor
+monitor.py          — Simple serial monitor
+PROJECT-PLAN.md     — This file
+OPERATOR-GUIDE.md   — User guide for Jason (RC) and Malaki (joystick)
+```
+
+---
+
+## Build & Upload
+
+```bash
+# Compile
+arduino-cli compile --fqbn arduino:renesas_uno:nanor4 sketches/rc_test/rc_test.ino
+
+# Upload (COM8)
+arduino-cli upload --fqbn arduino:renesas_uno:nanor4 -p COM8 sketches/rc_test/rc_test.ino
+
+# Monitor serial
+python monitor.py
+
+# Live plot
+python live_plot.py
+```
 
 ---
 
 ## Status
 
-### Completed
-- [x] Joystick voltage/signal confirmed (Genie 101174GT, 5V, analog)
-- [x] RC CH1 (D2) verified — left motor, center ~1500us
-- [x] RC CH2 (D4) verified — right motor, center ~1497us
-- [x] RC CH5 (D7) verified — 3-pos override, LOW ~972us, HIGH ~2060us
-- [x] Tank mixer V1.2 written and tested (Nano V3)
-- [x] RC pass-through verified (transmitter pre-mixes)
-- [x] Joystick tank mix verified
-- [x] 7-panel live plot with ESC output monitoring
-- [x] V2.0 sketch written for Nano R4 (PID, inertia, soft limits)
-- [x] Decided: Dual-loop PID (inner current + outer RPM)
-- [x] Decided: X.BUS telemetry first, hall sensor tap as fallback
-- [x] X.BUS probe sketch written (`sketches/xbus_probe/xbus_probe.ino`)
+### Working (V3.1 — deployed on Nano R4)
+- [x] Non-blocking RC input on all 4 channels (ISR + PulseReader)
+- [x] Per-channel failsafe (independent 0.5s timeout)
+- [x] Expo response curve (20% linear + 80% quadratic)
+- [x] Inertia simulation (asymmetric: 1.5s accel, 3.0s decel)
+- [x] Spin turn limiter (50% at full pivot, graduated)
+- [x] Reverse speed limiter (50% of forward max)
+- [x] Soft power limits (tanh saturation)
+- [x] Override switch (3-pos: RC only / RC priority / Joystick only)
+- [x] Tank mix for joystick (RC pre-mixed by transmitter)
+- [x] ADC crosstalk fix (double-read with settling delay)
+- [x] 10 Hz CSV telemetry with signal health indicators
+- [x] Modular code architecture with searchable [MODULE] sections
 
-### Step 1: X.BUS Telemetry Validation (NOW)
-- [ ] **Wire both ESC X.BUS Yellow wires to shared bus** → D0 (Serial RX, direct — 5V tolerant)
-- [ ] **Upload and run xbus_probe sketch** to Nano R4 (COM8)
-- [ ] **Test with one ESC first** (disconnect X.BUS from D0 to use Serial Monitor for debug)
-- [ ] **Determine baud rate** (auto-scan will find it)
-- [ ] **Measure packet rate** — need >20 Hz for outer RPM loop
-- [ ] **Verify data decode** — RPM, current, voltage, temp values make sense
-- [ ] **DECISION GATE:** X.BUS fast enough? → V2.2 with X.BUS. Too slow? → Hall sensor fallback.
+### Pending — Field Tuning
+- [ ] Expo/inertia field tuning (TAU_ACCEL, TAU_DECEL, EXPO blend)
+- [ ] Spin turn limit calibration (SPIN_LIMIT value)
+- [ ] Reverse limit calibration (REVERSE_LIMIT value)
 
-### Step 2a: If X.BUS Works (V2.1 with X.BUS)
-- [ ] Integrate X.BUS serial reading into main rc_test.ino sketch
-- [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (X.BUS)
-- [ ] Add X.BUS telemetry to serial output + update live_plot.py
-- [ ] Verify both ESCs respond on shared X.BUS (addressed bus)
-- [ ] Bench test dual-loop PID with ESC powered
+### Pending — Telemetry & PID
+- [ ] **Waiting on XC Technology reply** (email sent 2026-03-31):
+  - X.BUS protocol spec → implement polling → test if transceivers survived BEC damage
+  - E3665 hall sensor pinout → wire RPM tap if X.BUS fails
+- [ ] CS7581 current sensor wiring and calibration (A2, A3)
+- [ ] RPM closed-loop PID (target RPM from stick, actual from sensor)
+- [ ] Dual-loop PID: inner current (feedforward) + outer RPM (feedback)
+- [ ] Add RPM + current panels to live_plot.py
 
-### Step 2b: If X.BUS Too Slow (V2.1 with Hall Sensor Tap)
-- [ ] Verify hall sensor cable pinout on actual XC E3665 before wiring
-- [ ] Connect hall tap lines directly to D5 and D6 (5V tolerant, no dividers)
-- [ ] Add RPM hall sensor interrupt code to sketch (D5, D6)
-- [ ] Implement dual-loop PID: inner current (CS7581) + outer RPM (hall)
-- [ ] Signal isolation to prevent ESC/Arduino interference/noise
-- [ ] Add RPM fields to serial telemetry + update live_plot.py
+### Pending — Integration
+- [ ] Bench test with ESCs at reduced power
+- [ ] Field test on excavator
+- [ ] Battery voltage monitoring
+- [ ] Emergency stop integration
 
-### Remaining (Both Paths)
-- [ ] Joystick harness wiring identified (reverse engineering in progress)
-- [ ] CS7581 current sensor wiring and calibration
-- [ ] Bench test on Nano R4 with ESCs disconnected
-- [ ] Field test with ESCs at reduced power
-- [ ] Battery voltage monitoring (future phase)
-- [ ] Beeper/buzzer warnings (future phase)
+---
+
+## X.BUS Telemetry Status
+
+**XC E10 "X.BUS" is NOT Spektrum X-Bus.** It is XC Technology's
+proprietary protocol on a single data wire (not I2C).
+
+### Probing Results (2026-03-31): Zero Data
+- Passive listening: 7 baud rates, zero bytes
+- Active probing: All known protocols, zero responses
+- Raw D0 sampling: zero toggles (line electrically dead at 3.3V)
+- While driving under load: still zero
+
+### Possible BEC Damage
+Both ESC BEC red wires were connected together at 8.5V for 15-30min.
+20-30% chance X.BUS hardware is damaged. **Rule: NEVER connect both
+ESC BEC red wires. Only one BEC powers the bus.**
+
+### Strategy
+1. Wait for XC Technology reply with protocol spec
+2. If X.BUS dead → motor hall sensor tap for RPM (needs pinout from XC)
+3. RPM feedback is for closed-loop PID, not just display
+
+---
+
+## Architecture Decisions Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-03-20 | RPM via motor hall tap (not sprocket, not BT) | High resolution, zero latency, signal exists |
+| 2026-03-21 | Dual-loop PID (current + RPM) | Inner predicts, outer confirms — standard industrial |
+| 2026-03-29 | XC X.BUS is UART not I2C | Single data wire, can't be I2C |
+| 2026-03-30 | Revert from UNO Q to Nano R4 | UNO Q had Router Bridge complexity |
+| 2026-04-01 | Non-blocking poll replaces pulseIn | pulseIn caused stale timestamp bug |
+| 2026-04-01 | Per-channel failsafe | Combined failsafe masked dead channels |
+| 2026-04-01 | Reverse limit 50% | Safety: limited visibility, operator reaction time |
+| 2026-04-01 | Spin limit 50% at full pivot | Safety: full-speed pivot throws operator |
