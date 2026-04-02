@@ -112,7 +112,9 @@ const unsigned long PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
 bfs::SbusRx sbusRx(&Serial1);
 bfs::SbusData sbusData;
-bool sbusValid = false;  // True when receiving frames
+bool sbusValid = false;           // True when receiving non-failsafe frames
+unsigned long sbusLastFrame = 0;  // Timestamp of last decoded frame
+const unsigned long SBUS_TIMEOUT = 100000UL;  // 100ms — force invalid if no frames
 
 // Map S.BUS value (172-1811) to servo PWM (1000-2000)
 int sbusToServo(int raw) {
@@ -336,8 +338,11 @@ void loop() {
   // 1. Read inputs
   if (sbusRx.Read()) {
     sbusData = sbusRx.data();
-    sbusValid = !sbusData.failsafe;  // Receiver-reported failsafe
+    sbusLastFrame = now;
+    sbusValid = !sbusData.failsafe;
   }
+  // Force invalid if no frames for 100ms (wire unplugged / Serial1 stalled)
+  if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
   updateJoystick(now);
 
   // 2. Mix (override selects authority)
