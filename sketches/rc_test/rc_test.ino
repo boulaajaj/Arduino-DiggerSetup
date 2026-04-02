@@ -79,10 +79,10 @@ const float TAU_ACCEL = 0.3f;  // Accel (s) — 63% in 0.3s, 95% in ~0.9s
 const float TAU_DECEL = 0.5f;  // Decel/coast (s) — 63% in 0.5s, 95% in ~1.5s
 
 // Spin turn safety — power cap during counter-rotation
-const float SPIN_LIMIT = 0.35f;  // 35% at full pivot
+const float SPIN_LIMIT = 0.25f;  // 25% at full pivot
 
 // Reverse speed limit — percentage of forward max
-const float REVERSE_LIMIT = 0.35f;  // 35% max reverse
+const float REVERSE_LIMIT = 0.25f;  // 25% max reverse
 
 // Failsafe
 const unsigned long FAILSAFE_US = 500000UL;  // 0.5s per-channel timeout
