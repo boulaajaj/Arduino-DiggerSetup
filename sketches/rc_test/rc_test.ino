@@ -308,9 +308,12 @@ void applySpinLimit(int &left, int &right) {
   }
 }
 
-// Reverse limiter: caps backward speed during straight-line reverse only.
-// During counter-rotation (turning), the spin limiter handles safety and
-// both tracks must remain balanced — reverse limit would break that balance.
+// Reverse limiter: caps backward speed during STRAIGHT-LINE reverse only.
+// During counter-rotation (turning), this is intentionally skipped because:
+// 1. The spin limiter already caps pivot speed (SPIN_LIMIT)
+// 2. The pivot balance forces equal magnitude for clean 360 turns
+// 3. Applying reverse limit during turns would break track symmetry
+// Note: reverse deviation during pivots may exceed REVERSE_LIMIT — this is by design.
 void applyReverseLimit(int &left, int &right) {
   float dL = (float)(left - SVC);
   float dR = (float)(right - SVC);
@@ -436,10 +439,11 @@ void loop() {
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
   updateJoystick(now);
 
-  // 2. RC lockout — no RC signal means no movement, period
+  // 2. RC lockout — no RC signal means immediate stop
   MixerOutput mix;
   if (!sbusValid) {
-    mix.left = SVC;  mix.right = SVC;  // All output neutral
+    mix.left = SVC;  mix.right = SVC;
+    posL = 0;  posR = 0;  // Reset inertia — stop immediately, no coasting
   } else {
     mix = mixInputs(rcLeft(), rcRight(), rcOverride(),
                     cachedJoy.left, cachedJoy.right);
