@@ -1,0 +1,53 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    # Advisory only — does not block merge. Remove continue-on-error to make strict.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lizard
+        run: pip install lizard
+      - name: Run complexity analysis
+        run: |
+          echo "=== Complexity Analysis (advisory) ==="
+          echo "Thresholds: CCN > 10, length > 50 lines, params > 6"
+          echo ""
+          # Copy .ino to .cpp for lizard compatibility
+          find . -name '*.ino' -not -path './.git/*' | while read f; do
+            cp "$f" "${f%.ino}.cpp.tmp"
+          done
+          find . \( -name '*.cpp' -o -name '*.h' -o -name '*.cpp.tmp' \) -not -path './.git/*' | \
+            xargs lizard -C 10 -L 50 -a 6 -w || true
+          # Clean up temp files
+          find . -name '*.cpp.tmp' -delete
+      - name: Check for anti-patterns
+        run: |
+          echo "=== Anti-Pattern Check ==="
+          warnings=0
+
+          # Flag delay() in production sketch (rc_test)
+          if grep -rn 'delay(' sketches/rc_test/ --include='*.ino' --include='*.cpp' --include='*.h' | grep -v '//.*delay' | grep -v 'delayMicroseconds'; then
+            echo "WARNING: delay() found in production sketch (rc_test) — blocking call"
+            warnings=$((warnings + 1))
+          fi
+
+          # Flag pulseIn() anywhere
+          if grep -rn 'pulseIn(' sketches/ --include='*.ino' --include='*.cpp' --include='*.h'; then
+            echo "WARNING: pulseIn() found — this is a blocking call"
+            warnings=$((warnings + 1))
+          fi
+
+          echo ""
+          if [ $warnings -gt 0 ]; then
+            echo "Found $warnings anti-pattern warning(s) — review recommended"
+          else
+            echo "No anti-patterns detected"
+          fi

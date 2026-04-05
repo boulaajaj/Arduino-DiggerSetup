@@ -1,0 +1,83 @@
+name: Structure Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  structure-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate project structure
+        run: |
+          errors=0
+
+          # Check: all .ino files must be in sketches/<name>/<name>.ino
+          # Excludes docs/ (wokwi simulation stubs are intentionally outside sketches/)
+          while IFS= read -r f; do
+            # Normalize path: strip leading ./
+            nf="${f#./}"
+            dir=$(dirname "$nf")
+            parent=$(dirname "$dir")
+            dirname_base=$(basename "$dir")
+            filename_base=$(basename "$nf" .ino)
+            if [ "$parent" != "sketches" ]; then
+              echo "ERROR: .ino file outside sketches/: $f"
+              errors=$((errors + 1))
+            elif [ "$dirname_base" != "$filename_base" ]; then
+              echo "ERROR: Directory/filename mismatch: $f (dir=$dirname_base, file=$filename_base)"
+              errors=$((errors + 1))
+            fi
+          done < <(find . -name '*.ino' -not -path './.git/*' -not -path './docs/*')
+
+          # Check: no orphan directories in sketches/
+          if [ -d sketches ]; then
+            for dir in sketches/*/; do
+              name=$(basename "$dir")
+              if [ ! -f "sketches/$name/$name.ino" ]; then
+                echo "ERROR: Orphan sketch directory without matching .ino: $dir"
+                errors=$((errors + 1))
+              fi
+            done
+          fi
+
+          # Check: sketch names are lowercase_snake_case
+          if [ -d sketches ]; then
+            for dir in sketches/*/; do
+              name=$(basename "$dir")
+              if ! echo "$name" | grep -qE '^[a-z][a-z0-9_]*$'; then
+                echo "ERROR: Sketch name not lowercase_snake_case: $name"
+                errors=$((errors + 1))
+              fi
+            done
+          fi
+
+          # Check: .py files only in root or scripts/
+          while IFS= read -r f; do
+            nf="${f#./}"
+            dir=$(dirname "$nf")
+            if [ "$dir" != "." ] && [ "$dir" != "scripts" ]; then
+              echo "ERROR: Python file in unexpected location: $f"
+              errors=$((errors + 1))
+            fi
+          done < <(find . -name '*.py' -not -path './.git/*' -not -path './node_modules/*')
+
+          # Check: .md files only in root or docs/
+          while IFS= read -r f; do
+            nf="${f#./}"
+            dir=$(dirname "$nf")
+            if [ "$dir" != "." ] && [ "$dir" != "docs" ] && [[ "$dir" != .github* ]]; then
+              echo "ERROR: Markdown file in unexpected location: $f"
+              errors=$((errors + 1))
+            fi
+          done < <(find . -name '*.md' -not -path './.git/*' -not -path './node_modules/*')
+
+          if [ $errors -gt 0 ]; then
+            echo "FAILED: $errors structure violation(s) found"
+            exit 1
+          else
+            echo "OK: All structure checks passed"
+          fi

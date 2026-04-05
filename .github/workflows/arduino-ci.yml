@@ -1,0 +1,35 @@
+name: Arduino CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sketch:
+          - rc_test
+          - hw_diagnostic
+          - pin_test
+          - sbus_test
+          - serial2_test
+          - telem_decode
+          - usb_test
+          - xbus_inverted_test
+          - xbus_poll_test
+          - xbus_probe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install board and libraries
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:renesas_uno
+          arduino-cli lib install "Bolder Flight Systems SBUS"
+      - name: Compile ${{ matrix.sketch }}
+        run: arduino-cli compile --fqbn arduino:renesas_uno:nanor4 sketches/${{ matrix.sketch }}
