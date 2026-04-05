@@ -18,7 +18,8 @@ jobs:
           errors=0
 
           # Check: all .ino files must be in sketches/<name>/<name>.ino
-          # Excludes docs/ (wokwi simulation stubs are intentionally outside sketches/)
+          # Excludes docs/ tree (wokwi simulation stubs are intentionally outside sketches/)
+          # Uses -prune to reliably skip the entire docs/ subtree
           while IFS= read -r f; do
             # Normalize path: strip leading ./
             nf="${f#./}"
@@ -33,7 +34,7 @@ jobs:
               echo "ERROR: Directory/filename mismatch: $f (dir=$dirname_base, file=$filename_base)"
               errors=$((errors + 1))
             fi
-          done < <(find . -name '*.ino' -not -path './.git/*' -not -path './docs/*')
+          done < <(find . \( -path './.git' -o -path './docs' \) -prune -o -name '*.ino' -print)
 
           # Check: no orphan directories in sketches/
           if [ -d sketches ]; then
@@ -67,11 +68,13 @@ jobs:
             fi
           done < <(find . -name '*.py' -not -path './.git/*' -not -path './node_modules/*')
 
-          # Check: .md files only in root or docs/
+          # Check: .md files only in root, docs/ (any depth), or .github/ (any depth)
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
-            if [ "$dir" != "." ] && [ "$dir" != "docs" ] && [[ "$dir" != .github* ]]; then
+            if [ "$dir" != "." ] &&
+               [ "$dir" != "docs" ] && [[ "$dir" != docs/* ]] &&
+               [ "$dir" != ".github" ] && [[ "$dir" != .github/* ]]; then
               echo "ERROR: Markdown file in unexpected location: $f"
               errors=$((errors + 1))
             fi
