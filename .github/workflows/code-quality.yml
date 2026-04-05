@@ -9,6 +9,8 @@ on:
 jobs:
   code-quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Advisory only — does not block merge. Remove continue-on-error to make strict.
     continue-on-error: true
     steps:

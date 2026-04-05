@@ -9,6 +9,8 @@ on:
 jobs:
   cpplint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install cpplint
@@ -18,6 +20,8 @@ jobs:
 
   markdownlint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install markdownlint-cli

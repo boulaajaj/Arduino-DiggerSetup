@@ -7,8 +7,8 @@ Safety-critical: code errors can cause a 50lb machine with a child riding it to 
 ## Critical Checks (Flag as errors)
 - **Blocking calls in loop()**: Flag any use of `delay()`, `pulseIn()`, or blocking `while` loops in production sketches. The control loop must be non-blocking at ~20kHz.
 - **Missing constrain() on servo output**: Every value written to `writeMicroseconds()` MUST be constrained to 1000-2000.
-- **Integer overflow**: Watch for arithmetic on `int` (16-bit on some platforms, 32-bit on ARM) that could overflow. Flag multiplication of large values without casting to `long` first.
-- **Float without f suffix**: Flag `1.0` (promotes to double, software-emulated on some ARM cores). Should be `1.0f`.
+- **Integer overflow**: Watch for arithmetic that could overflow 32-bit `int` (e.g. multiplying two large values like `micros()` differences, sensor readings). Flag multiplication without explicit casts. Extra care if code is ever ported to 8/16-bit AVR platforms.
+- **Float without f suffix**: Flag `1.0` (promotes to `double`). The Cortex-M4 FPU handles single-precision `float` in hardware, but `double` has no hardware support on the RA4M1 — double-precision operations fall back to software emulation and are significantly slower. Always use `1.0f` to keep arithmetic in the hardware FPU.
 - **Magic numbers**: Flag raw numeric constants outside the [CONFIG] section. All tunables must be named constants.
 - **Missing failsafe**: Any new RC input path must have a timeout/failsafe that returns to neutral (SVC = 1500) when signal is lost.
 - **Global state mutation**: Flag functions that modify global state without clear documentation. Prefer passing state explicitly.
