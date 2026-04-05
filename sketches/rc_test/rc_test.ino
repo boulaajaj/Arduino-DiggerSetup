@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V4.1 — S.BUS Edition
+// Digger Control V4.2 — S.BUS + ESC Telemetry
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input tank mixer for ride-on excavator (~50 lbs).
@@ -22,8 +22,8 @@
 //
 // Pin map:
 //   D0  ← S.BUS (all RC channels, Serial1 RX via NPN inverter)
-//   D2     (free — available for hall sensor L)
-//   D3     (free — available for hall sensor R)
+//   D2  ← ESC telemetry RX (SoftwareSerial via NPN inverter)
+//   D3  → ESC telemetry TX (SoftwareSerial via 1K to bus)
 //   A0  ← Joystick Y (throttle)     [14-bit ADC]
 //   A1  ← Joystick X (steering)     [14-bit ADC]
 //   D9  → Left ESC                   [Servo PWM]
@@ -35,6 +35,7 @@
 //   5V ──[10K]──┬──► NPN collector ──► D0 (Serial1 RX)
 
 #include <Servo.h>
+#include <SoftwareSerial.h>
 #include "sbus.h"
 #include "types.h"
 
@@ -75,9 +76,7 @@ const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
-// Expo curve: output = LINEAR*|x| + SQUARE*x^2 (must sum to 1.0)
-const float EXPO_LINEAR = 0.3f;  // More low-speed authority for tight spaces
-const float EXPO_SQUARE = 0.7f;  // Smooth high-speed range
+// Expo curve: cubic (power 3) — gentle creep in first 50%, fast ramp after
 
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
@@ -132,6 +131,74 @@ int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SV
 
 
 // ═══════════════════════════════════════════════════════════════
+// [TELEMETRY] — ESC telemetry via Hobbywing V4 polling on D2/D3
+// ═══════════════════════════════════════════════════════════════
+//
+// Polls both ESCs on a shared bus using SoftwareSerial at 19200 baud.
+// Alternates between ESC 0 and ESC 1 addressed requests.
+// Each ESC responds with 5-byte telemetry packets (sent 3x each).
+// RX on D2 (via NPN inverter), TX on D3 (via 1K resistor to bus).
+
+const uint8_t TELEM_RX = 2;
+const uint8_t TELEM_TX = 3;
+
+SoftwareSerial telemSerial(TELEM_RX, TELEM_TX);
+
+// Hobbywing V4 poll commands (last byte = sum of first 5)
+const uint8_t HW_POLL_ESC0[] = {0x9B, 0x03, 0x00, 0x00, 0x00, 0x9E};
+const uint8_t HW_POLL_ESC1[] = {0x9B, 0x03, 0x00, 0x00, 0x01, 0x9F};
+
+// Telemetry state
+unsigned long lastTelemPoll = 0;
+const unsigned long TELEM_INTERVAL = 50000UL;  // 50ms = 20Hz per ESC (alternating)
+bool pollEsc1Next = false;
+
+// Raw telemetry values (best-effort decode from 5-byte packets)
+// We extract a 16-bit value from bytes [2:3] of each response as RPM-like data
+int telemRawL = 0;  // ESC 0 (left) latest raw value
+int telemRawR = 0;  // ESC 1 (right) latest raw value
+int telemBytesL = 0, telemBytesR = 0;  // Bytes received per poll cycle
+
+void telemInit() {
+  telemSerial.begin(19200);
+}
+
+void telemPoll(unsigned long now) {
+  if ((now - lastTelemPoll) < TELEM_INTERVAL) return;
+  lastTelemPoll = now;
+
+  // Read any pending response bytes from previous poll
+  uint8_t buf[32];
+  int count = 0;
+  while (telemSerial.available() && count < 32) {
+    buf[count++] = telemSerial.read();
+  }
+
+  // Try to extract a value from the response (5-byte packets, look for repeated patterns)
+  if (count >= 5) {
+    // Use bytes [1] and [2] as a 16-bit raw telemetry value
+    // These appear to change with motor state
+    int rawVal = ((int)buf[1] << 8) | buf[2];
+    if (pollEsc1Next) {
+      telemRawL = rawVal;  // Previous poll was ESC 0
+      telemBytesL = count;
+    } else {
+      telemRawR = rawVal;  // Previous poll was ESC 1
+      telemBytesR = count;
+    }
+  }
+
+  // Send next poll (alternate between ESC 0 and ESC 1)
+  if (pollEsc1Next) {
+    telemSerial.write(HW_POLL_ESC1, 6);
+  } else {
+    telemSerial.write(HW_POLL_ESC0, 6);
+  }
+  pollEsc1Next = !pollEsc1Next;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // [JOYSTICK] — ADC, deadband, expo curve, tank mix
 // ═══════════════════════════════════════════════════════════════
 //
@@ -141,7 +208,7 @@ int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SV
 
 float expoCurve(float x) {
   float a = fabsf(x);
-  return EXPO_LINEAR * a + EXPO_SQUARE * a * a;
+  return a * a * a;  // Cubic: 10%→0.1%, 50%→12.5%, 100%→100%
 }
 
 int joyDeadband(int adc) {
@@ -209,10 +276,11 @@ MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
 // ═══════════════════════════════════════════════════════════════
 //
 // Processing order:
-//   1. Spin limiter   — reduce power during counter-rotation
+//   1. Spin limiter    — reduce power during counter-rotation
 //   2. Reverse limiter — cap backward speed to REVERSE_LIMIT
-//   3. Soft limit      — tanh saturation caps max deviation
-//   4. Inertia         — asymmetric exponential (heavy feel)
+//   3. Pivot balance   — force equal magnitude during counter-rotation
+//   4. Soft limit      — tanh saturation caps max deviation
+//   5. Inertia         — asymmetric exponential (heavy feel)
 
 float posL = 0, posR = 0;  // Smoothed servo offset from center
 
@@ -250,6 +318,20 @@ void applyReverseLimit(int &left, int &right) {
   float maxReverse = SOFT_RANGE * REVERSE_LIMIT;
   if (left < SVC)  left  = max(left,  SVC - (int)maxReverse);
   if (right < SVC) right = max(right, SVC - (int)maxReverse);
+}
+
+// Pivot balance: when counter-rotating, force both tracks to equal magnitude.
+// The faster track's magnitude is applied to both. Spin limiter already
+// capped the max speed — this just ensures symmetry for a clean 360.
+void applyPivotBalance(int &left, int &right) {
+  float dL = (float)(left - SVC);
+  float dR = (float)(right - SVC);
+  if (dL * dR >= 0) return;  // Not counter-rotating — skip
+  float magL = fabsf(dL);
+  float magR = fabsf(dR);
+  float mag = max(magL, magR);
+  left  = SVC + (int)((dL >= 0 ? 1.0f : -1.0f) * mag);
+  right = SVC + (int)((dR >= 0 ? 1.0f : -1.0f) * mag);
 }
 
 void applyInertia(float targetL, float targetR, float dts) {
@@ -290,7 +372,7 @@ void outputWrite() {
 // [DEBUG] — 10 Hz serial CSV telemetry
 // ═══════════════════════════════════════════════════════════════
 //
-// Columns: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost
+// Columns: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost,EscL,EscR
 
 unsigned long prevPrint = 0;
 
@@ -298,8 +380,8 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V4.1 — S.BUS ===");
-    Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost");
+    Serial.println("# === Digger V4.2 — S.BUS + Telemetry ===");
+    Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost,EscL,EscR");
   }
 }
 
@@ -312,11 +394,12 @@ void debugPrint(unsigned long now, const JoystickState &js) {
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
-  char buf[100];
-  sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  char buf[120];
+  sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
           rc1, rc2, rc4, rc5,
           js.rawY, js.rawX, outL, outR,
-          sbusData.failsafe, sbusData.lost_frame);
+          sbusData.failsafe, sbusData.lost_frame,
+          telemRawL, telemRawR);
   Serial.println(buf);
 }
 
@@ -330,6 +413,7 @@ unsigned long prevUs = 0;
 void setup() {
   analogReadResolution(14);
   sbusRx.Begin();  // Configures Serial1 at 100000, 8E2
+  telemInit();     // SoftwareSerial at 19200 on D2/D3
   outputInit();
   debugInit();
   prevUs = micros();
@@ -341,7 +425,8 @@ void loop() {
   if (dts <= 0) return;
   prevUs = now;
 
-  // 1. Read inputs
+  // 1. Read inputs + poll ESC telemetry
+  telemPoll(now);
   if (sbusRx.Read()) {
     sbusData = sbusRx.data();
     sbusLastFrame = now;
@@ -363,6 +448,7 @@ void loop() {
   // 3. Dynamics pipeline
   applySpinLimit(mix.left, mix.right);
   applyReverseLimit(mix.left, mix.right);
+  applyPivotBalance(mix.left, mix.right);
   int scL = softLimit((float)(mix.left  - SVC));
   int scR = softLimit((float)(mix.right - SVC));
   applyInertia((float)(scL - SVC), (float)(scR - SVC), dts);
