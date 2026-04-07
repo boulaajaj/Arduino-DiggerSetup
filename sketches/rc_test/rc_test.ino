@@ -76,7 +76,7 @@ const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
-// Expo curve: cubic (power 3) — gentle creep in first 50%, fast ramp after
+// Expo curve: 30% linear + 70% cubic — smooth low-end, no ESC deadband jump
 
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
@@ -87,10 +87,13 @@ const float TAU_ACCEL = 0.3f;  // Accel (s) — 63% in 0.3s, 95% in ~0.9s
 const float TAU_DECEL = 0.5f;  // Decel/coast (s) — 63% in 0.5s, 95% in ~1.5s
 
 // Spin turn safety — power cap during counter-rotation
-const float SPIN_LIMIT = 0.25f;  // 25% at full pivot
+const float SPIN_LIMIT = 0.45f;  // 45% at full pivot (35% still too weak for joystick on ground)
 
 // Reverse speed limit — percentage of forward max
-const float REVERSE_LIMIT = 0.25f;  // 25% max reverse
+const float REVERSE_LIMIT = 0.35f;  // 35% max reverse
+
+// Steering decay — reduce steering sensitivity at higher speeds
+const float STEER_DECAY = 0.5f;  // At full speed, steering is 50% of max
 
 // Debug
 const unsigned long PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
@@ -208,7 +211,7 @@ void telemPoll(unsigned long now) {
 
 float expoCurve(float x) {
   float a = fabsf(x);
-  return a * a * a;  // Cubic: 10%→0.1%, 50%→12.5%, 100%→100%
+  return 0.3f * a + 0.7f * a * a * a;  // Blend: 10%→3.07%, 50%→23.75%, 100%→100%
 }
 
 int joyDeadband(int adc) {
@@ -237,7 +240,13 @@ void updateJoystick(unsigned long now) {
 
   int throttle = joyToServo(joyDeadband(cachedJoy.rawY));
   int steer    = joyToServo(joyDeadband(cachedJoy.rawX));
-  int offset   = steer - SVC;
+  int offset   = -(steer - SVC);  // Invert: joystick left = turn left
+
+  // Steering decay: reduce steering as speed increases
+  float speed = fabsf((float)(throttle - SVC)) / SOFT_RANGE;  // 0-1
+  float decay = 1.0f - speed * STEER_DECAY;
+  offset = (int)((float)offset * decay);
+
   cachedJoy.left  = constrain(throttle + offset, SVMIN, SVMAX);
   cachedJoy.right = constrain(throttle - offset, SVMIN, SVMAX);
 }
