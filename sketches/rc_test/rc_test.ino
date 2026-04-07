@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V4.2 — S.BUS + ESC Telemetry
+// Digger Control V4.3 — S.BUS + ESC Telemetry
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input tank mixer for ride-on excavator (~50 lbs).
@@ -76,7 +76,9 @@ const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
-// Expo curve: 30% linear + 70% cubic — smooth low-end, no ESC deadband jump
+// Expo curve blend weights — smooth low-end, no ESC deadband jump
+const float EXPO_LINEAR = 0.3f;   // Linear component (low-end response)
+const float EXPO_CUBIC  = 0.7f;   // Cubic component (high-end precision)
 
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
@@ -211,7 +213,7 @@ void telemPoll(unsigned long now) {
 
 float expoCurve(float x) {
   float a = fabsf(x);
-  return 0.3f * a + 0.7f * a * a * a;  // Blend: 10%→3.07%, 50%→23.75%, 100%→100%
+  return EXPO_LINEAR * a + EXPO_CUBIC * a * a * a;
 }
 
 int joyDeadband(int adc) {
@@ -392,7 +394,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V4.2 — S.BUS + Telemetry ===");
+    Serial.println("# === Digger V4.3 — S.BUS + Telemetry ===");
     Serial.println("# CSV: RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost,EscL,EscR");
   }
 }
