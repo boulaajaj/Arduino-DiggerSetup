@@ -8,6 +8,7 @@ The RC transmitter (Jason) can always override. A 3-position switch
 selects who has authority.
 
 The controller provides:
+
 - **Exponential response curve** — fine low-speed control, full range at high stick
 - **Inertia simulation** — asymmetric accel/decel for heavy machine feel
 - **Spin turn limiter** — graduated power reduction during counter-rotation
@@ -20,7 +21,7 @@ The controller provides:
 ## Hardware
 
 | # | Component | Model | Key Specs |
-|---|-----------|-------|-----------|
+| --- | ----------- | ------- | ----------- |
 | 1 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 14-bit ADC, 5V tolerant |
 | 2 | Battery (x2) | OVONIC 3S LiPo 15000mAh | 11.1V, EC5, 130C |
 | 3 | ESC (x2) | XC E10 Sensored 140A | Servo PWM input, X.BUS telemetry |
@@ -33,7 +34,7 @@ The controller provides:
 
 ## Pin Map
 
-```
+```text
 D2  ← RC CH1 (left track, pre-mixed)   [attachInterrupt CHANGE]
 D3  ← RC CH4 (control mode, 3-pos)     [attachInterrupt CHANGE]
 D4  ← RC CH2 (right track, pre-mixed)  [non-blocking poll — no IRQ on D4]
@@ -56,7 +57,7 @@ D0/D1 reserved for X.BUS (Serial1) — conflicts with USB Serial during debug.
 
 ## Signal Pipeline
 
-```
+```text
 RC (ISR + poll) ──┐
                   ├─► Mixer ─► Spin Limiter ─► Reverse Limiter
 Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Output
@@ -65,7 +66,7 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 ### Override Switch (CH5)
 
 | Position | Mode | Who Controls |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | LOW | RC only | Jason has full authority, joystick disabled |
 | MID | RC priority | Both active, RC overrides when non-neutral |
 | HIGH | 50/50 blend | RC + joystick averaged, both always contribute |
@@ -82,7 +83,7 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 ## Tuning Constants
 
 | Constant | Value | Description |
-|----------|-------|-------------|
+| ---------- | ------- | ------------- |
 | `EXPO_LINEAR` | 0.3 | Linear blend of expo curve |
 | `EXPO_SQUARE` | 0.7 | Quadratic blend (sum to 1.0) |
 | `SOFT_RANGE` | 400 us | Max servo offset from center |
@@ -98,7 +99,7 @@ Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Outp
 
 ## File Map
 
-```
+```text
 sketches/rc_test/
   rc_test.ino       — Main controller sketch (V3.4)
   types.h           — Shared structs (RCChannel, PulseReader, etc.)
@@ -144,6 +145,7 @@ python live_plot.py
 ## Status
 
 ### Working (V3.1 — deployed on Nano R4)
+
 - [x] Non-blocking RC input on all 4 channels (ISR + PulseReader)
 - [x] Per-channel failsafe (independent 0.5s timeout)
 - [x] Expo response curve (20% linear + 80% quadratic)
@@ -158,11 +160,13 @@ python live_plot.py
 - [x] Modular code architecture with searchable [MODULE] sections
 
 ### Pending — Field Tuning
+
 - [ ] Expo/inertia field tuning (TAU_ACCEL, TAU_DECEL, EXPO blend)
 - [ ] Spin turn limit calibration (SPIN_LIMIT value)
 - [ ] Reverse limit calibration (REVERSE_LIMIT value)
 
 ### Pending — Telemetry & PID
+
 - [ ] **Waiting on XC Technology reply** (email sent 2026-03-31):
   - X.BUS protocol spec → implement polling → test if transceivers survived BEC damage
   - E3665 hall sensor pinout → wire RPM tap if X.BUS fails
@@ -172,6 +176,7 @@ python live_plot.py
 - [ ] Add RPM + current panels to live_plot.py
 
 ### Pending — Integration
+
 - [ ] Bench test with ESCs at reduced power
 - [ ] Field test on excavator
 - [ ] Battery voltage monitoring
@@ -185,17 +190,20 @@ python live_plot.py
 proprietary protocol on a single data wire (not I2C).
 
 ### Probing Results (2026-03-31): Zero Data
+
 - Passive listening: 7 baud rates, zero bytes
 - Active probing: All known protocols, zero responses
 - Raw D0 sampling: zero toggles (line electrically dead at 3.3V)
 - While driving under load: still zero
 
 ### Possible BEC Damage
+
 Both ESC BEC red wires were connected together at 8.5V for 15-30min.
 20-30% chance X.BUS hardware is damaged. **Rule: NEVER connect both
 ESC BEC red wires. Only one BEC powers the bus.**
 
 ### Strategy
+
 1. Wait for XC Technology reply with protocol spec
 2. If X.BUS dead → motor hall sensor tap for RPM (needs pinout from XC)
 3. RPM feedback is for closed-loop PID, not just display
@@ -205,7 +213,7 @@ ESC BEC red wires. Only one BEC powers the bus.**
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
-|------|----------|-----------|
+| ------ | ---------- | ----------- |
 | 2026-03-20 | RPM via motor hall tap (not sprocket, not BT) | High resolution, zero latency, signal exists |
 | 2026-03-21 | Dual-loop PID (current + RPM) | Inner predicts, outer confirms — standard industrial |
 | 2026-03-29 | XC X.BUS is UART not I2C | Single data wire, can't be I2C |

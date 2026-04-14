@@ -11,6 +11,7 @@ probing through receiving the official protocol specification.
 Hobbywing ESCs).
 
 **What we tried:**
+
 - `sketches/xbus_probe/xbus_probe.ino` — Passive listener on D0 (Serial RX)
 - Scanned baud rates: 115200, 100000, 19200, 57600, 38400, 9600
 - Looked for Spektrum X-Bus ESC telemetry packets (0x20 address, big-endian,
@@ -20,6 +21,7 @@ Hobbywing ESCs).
 **Result:** Zero data at all baud rates. No signal activity on the bus wire.
 
 **Why it failed:**
+
 1. X.BUS is master-slave — the ESC never transmits unless polled
 2. We had no TX connection — couldn't send requests even if we knew the protocol
 3. We were decoding the wrong protocol (Spektrum, not XC proprietary)
@@ -30,6 +32,7 @@ Hobbywing ESCs).
 invert it to see UART data.
 
 **What we tried:**
+
 - `sketches/xbus_inverted_test/xbus_inverted_test.ino` — Passive listener
   via NPN inverter circuit on D2
 - Wiring: X.BUS Yellow → 1K → NPN base, 10K pull-up on collector → D2
@@ -40,6 +43,7 @@ invert it to see UART data.
 running." No signal detected through the inverter either.
 
 **Why it failed:**
+
 1. Same master-slave issue — nothing to listen to
 2. The inverter was wrong anyway — X.BUS is standard UART polarity (not
    inverted like S.BUS)
@@ -50,6 +54,7 @@ running." No signal detected through the inverter either.
 get responses.
 
 **What we tried:**
+
 - `sketches/xbus_poll_test/xbus_poll_test.ino` — Active polling on D2/D3
   via SoftwareSerial
 - Half-duplex circuit: D3 (TX) via 1K resistor, D2 (RX) via NPN inverter
@@ -68,6 +73,7 @@ V4 command. Subsequently captured "875 polls, 33KB of data" with automatic
 V4/V5 protocol switching.
 
 **What actually happened (post-mortem):**
+
 - The "data" was almost certainly **our own TX bytes echoing back** through
   the shared half-duplex bus connection. SoftwareSerial does not suppress
   echo on half-duplex wiring.
@@ -82,6 +88,7 @@ V4/V5 protocol switching.
 ### Phase 4: Research & Conclusion (Apr 4-7, 2026)
 
 **Research findings:**
+
 - Investigated JR PROPO XBUS protocol: 250 kbps, 3.3V, 14ms packets, CRC —
   completely different protocol that shares the "XBUS" name
 - Determined XC's "X.BUS" is a proprietary protocol, not JR PROPO XBUS
@@ -92,6 +99,7 @@ V4/V5 protocol switching.
   telemetry output. Telemetry only available via Bluetooth (XC-Link app)."
 
 **Why the conclusion was wrong:**
+
 - X.BUS absolutely does provide telemetry — but only when polled with the
   correct XC proprietary protocol
 - The protocol was undocumented in English and not discoverable through web
@@ -100,7 +108,7 @@ V4/V5 protocol switching.
 
 ### Phase 5: Official Protocol Received (Apr 14, 2026)
 
-**What happened:** XC-ESC Technology (sales7@xc-bldc.com) responded to our
+**What happened:** XC-ESC Technology (<sales7@xc-bldc.com>) responded to our
 March 31 email with the complete X.BUS protocol documentation package:
 
 1. **X.BUS Bus Control Protocol V1.0.0** (revised V1.0.1, 2025-12-03) —
@@ -113,7 +121,7 @@ March 31 email with the complete X.BUS protocol documentation package:
 **Key revelations from the official spec:**
 
 | What | Our assumption | Reality |
-|------|---------------|---------|
+| ------ | --------------- | --------- |
 | Architecture | ESC might auto-broadcast | **Master-slave: ESC only responds to polls** |
 | Protocol | Spektrum / Hobbywing / JR | **Custom modbus-like (XC proprietary)** |
 | Baud rate | 115200 was one of our tests | **115200 confirmed** |

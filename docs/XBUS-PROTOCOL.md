@@ -41,6 +41,7 @@ half-duplex bus where one master (the Arduino/MCU) controls one or more slave
 devices (ESCs).
 
 Key characteristics:
+
 - Master-slave architecture — **slaves never transmit on their own**
 - All data exchange is initiated and controlled by the master
 - Single-wire half-duplex bus (idle state: HIGH via pull-up resistor)
@@ -50,7 +51,7 @@ Key characteristics:
 ## 2. Terminology
 
 | Term | Definition |
-|------|-----------|
+| ------ | ----------- |
 | **Master** | The controlling device in the master-slave network. Controls slave behavior. In our case: the Arduino. |
 | **Slave** | The controlled device. Receives commands from the master and responds with data or performs actions. In our case: the XC E10 ESC(s). |
 | **SAdr** | Slave Address (0x00-0x0F for point-to-point, 0xFF for broadcast). |
@@ -61,7 +62,7 @@ Key characteristics:
 ### 3.1 Hardware / UART Configuration
 
 | Parameter | Value | Notes |
-|-----------|-------|-------|
+| ----------- | ------- | ------- |
 | Baud rate | **115200** | |
 | Start bits | 1 | |
 | Data bits | 8 | |
@@ -76,40 +77,47 @@ Key characteristics:
 All frames (master and slave) share the same structure. The **header byte**
 distinguishes direction.
 
-```
+```text
 ┌────────┬──────┬───────────┬──────────┬──────────┬───────────┬──────────┐
 │ Header │ SAdr │ Extra     │ FuncCode │ DataLen  │ Data      │ Checksum │
 │ 1 byte │ 1 B  │ 1 byte    │ 1 byte   │ 1 byte   │ 0-33 B    │ 1 byte   │
 └────────┴──────┴───────────┴──────────┴──────────┴───────────┴──────────┘
 ```
 
-**Header (1 byte)**
+#### Header (1 byte)
+
 - `0x0F` — Frame sent by master (master → slave)
 - `0xF0` — Frame sent by slave (slave → master)
 
-**SAdr — Slave Address (1 byte)**
+#### SAdr — Slave Address (1 byte)
+
 - `0x00`-`0x0F` — Point-to-point control (address a specific slave)
 - `0xFF` — Broadcast control (address all slaves)
 
-**Extra Byte (1 byte)**
+#### Extra Byte (1 byte)
+
 - In service control (point-to-point): ignored, can be any value
 - In broadcast control: interpreted as an auxiliary control address
   (specific meaning depends on the function code)
 
-**Function Code (1 byte)**
+#### Function Code (1 byte)
+
 - `0x10`-`0x1F` — Service control: register operations
   - `0x10` = Read register
   - `0x11` = Write register
 - `0x50`-`0x9F` — Broadcast: bulk register write (each code has its own format)
 - `0xA0`-`0xAF` — Broadcast: state control (restart, clear flags, etc.)
 
-**Data Length (1 byte)**
+#### Data Length (1 byte)
+
 - Number of bytes in the data segment (max 33)
 
-**Data Segment (0-33 bytes)**
+#### Data Segment (0-33 bytes)
+
 - Payload contents depend on the function code
 
-**Checksum (1 byte)**
+#### Checksum (1 byte)
+
 - Cumulative sum from SAdr through the Extra Byte (inclusive), taking the
   lowest 8 bits.
 - `checksum = (SAdr + ExtraByte) & 0xFF`
@@ -118,6 +126,7 @@ distinguishes direction.
 > it states "cumulative sum from SAdr to Extra Byte (inclusive)." This covers
 > only 2 bytes, which seems insufficient for data integrity. During
 > implementation, we will test both interpretations:
+>
 > 1. Sum of SAdr + Extra Byte only (as literally stated)
 > 2. Sum of all bytes from SAdr through end of Data segment (as is standard
 >    in Modbus-like protocols)
@@ -134,10 +143,11 @@ and `0x11` (write).
 
 Read one or more register values from a specific slave.
 
-**Example: Read registers 0x03 and 0x23 from slave #2**
+Example: Read registers 0x03 and 0x23 from slave #2:
 
 Master sends:
-```
+
+```text
 0x0F  0x02  0x00  0x10  0x02  0x03 0x23  [checksum]
  │     │     │     │     │     └─────── Data: register addresses to read
  │     │     │     │     └──────────── Length: 2 bytes
@@ -148,7 +158,8 @@ Master sends:
 ```
 
 Slave responds:
-```
+
+```text
 0xF0  0x02  0x00  0x10  0x06  0x03 0x01 0x03  0x23 0x00 0x02  [checksum]
                                │              │
                                │              └── Reg 0x23 = 0x0200
@@ -159,6 +170,7 @@ Response data format: for each register, 1 byte address + 2 bytes value
 (little-endian). So reading N registers returns 3*N data bytes.
 
 **Notes:**
+
 - All registers can be read
 - Reading 0 registers returns a response identical to the request (except header)
 
@@ -166,10 +178,11 @@ Response data format: for each register, 1 byte address + 2 bytes value
 
 Write values to one or more registers on a specific slave.
 
-**Example: Write 0x2219 to register 0x07 and 0x0001 to register 0x04 on slave #3**
+Example: Write 0x2219 to register 0x07 and 0x0001 to register 0x04 on slave #3:
 
 Master sends:
-```
+
+```text
 0x0F  0x03  0x00  0x11  0x06  0x07 0x19 0x22  0x04 0x01 0x00  [checksum]
                                │                │
                                │                └── Reg 0x04 = 0x0001 (LE)
@@ -180,7 +193,8 @@ Write data format: for each register, 1 byte address + 2 bytes value
 (little-endian). So writing N registers sends 3*N data bytes.
 
 Slave responds:
-```
+
+```text
 0xF0  0x03  0x00  0x11  0x02  0x07 0x04  [checksum]
                                └─────── Successfully written register addresses
 ```
@@ -188,18 +202,20 @@ Slave responds:
 **Write response status codes:**
 
 | Return Value | Meaning |
-|-------------|---------|
+| ------------- | --------- |
 | `< 0xF0` | Success (the register address itself is echoed back) |
 | `0xF1` | Register index does not exist |
 | `0xF2` | Attribute error (e.g., writing to a read-only register) |
 | `0xF3` | Value out of range (exceeds register's min/max bounds) |
 
 **Notes:**
+
 - Most registers are read-only and can only be configured via the XC-Link
   phone app
 - Writing 0 registers returns a response identical to the request (except header)
 
 **Timeouts:**
+
 - Service control: master must receive a complete response within **10ms**
 
 ## 5. Broadcast Data / Control
@@ -218,24 +234,25 @@ ESCs and optionally requests telemetry from one specific ESC.
 
 Each ESC receives a 16-bit control value:
 
-```
+```text
 Bit:  15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
       ├──────── Throttle/Brake (int14) ────────┤ Rsvd │ T/B
 ```
 
 | Bit | Function |
-|-----|----------|
+| ----- | ---------- |
 | Bit 0 | **Type flag**: 0 = throttle, 1 = brake |
 | Bit 1 | Reserved (set to 0) |
 | Bits 2-15 | Signed 14-bit value (as int14) |
 
 | Bit 0 | Bits 2-15 Meaning | Range |
-|-------|-------------------|-------|
+| ------- | ------------------- | ------- |
 | 0 (throttle) | Throttle value in 0.1% steps | -1000 to +1000 (-100.0% to +100.0%) |
 | 1 (brake) | Brake value in 0.1% steps | 0 to +1000 (0% to +100.0%) |
 
 **Encoding formula:**
-```
+
+```text
 For throttle:  encoded = (throttle_value << 2) | 0    // bit0 = 0
 For brake:     encoded = (brake_value << 2) | 1       // bit0 = 1
 ```
@@ -243,15 +260,16 @@ For brake:     encoded = (brake_value << 2) | 1       // bit0 = 1
 Equivalent: `(value * 4) | type_flag`
 
 **Encoding examples:**
+
 | Input | Calculation | Encoded (hex) | Bytes (LE) |
-|-------|------------|---------------|------------|
+| ------- | ------------ | --------------- | ------------ |
 | Throttle +56.2% | (562 * 4) \| 0 = 2248 | 0x08C8 | 0xC8, 0x08 |
 | Brake 21.0% | (210 * 4) \| 1 = 841 | 0x0349 | 0x49, 0x03 |
 | Throttle -12.8% | (-128 * 4) \| 0 = -512 | 0xFE00 | 0x00, 0xFE |
 
 #### Master Request Frame
 
-```
+```text
 ┌──────┬──────┬────────────┬──────┬─────┬────────┬────────┬─────┬──────────┐
 │ 0x0F │ 0xFF │ Target SAdr│ 0x50 │ Len │ Val[0] │ Val[1] │ ... │ Checksum │
 │      │      │ (for telem)│      │     │ 2 bytes│ 2 bytes│     │          │
@@ -271,7 +289,7 @@ Equivalent: `(value * 4) | type_flag`
 
 The ESC whose address matches the Target SAdr responds with:
 
-```
+```text
 ┌──────┬──────┬──────┬──────┬──────┬──────────────────────────────┬──────────┐
 │ 0xF0 │ 0xFF │ 0x03 │ 0x50 │  17  │ Telemetry data (17 bytes)    │ Checksum │
 └──────┴──────┴──────┴──────┴──────┴──────────────────────────────┴──────────┘
@@ -284,7 +302,7 @@ The ESC whose address matches the Target SAdr responds with:
 **Telemetry data fields (17 bytes, all little-endian):**
 
 | Offset | Size | Type | Field | Unit | Notes |
-|--------|------|------|-------|------|-------|
+| -------- | ------ | ------ | ------- | ------ | ------- |
 | 0 | 2 | int16 | Output RPM | Hz | Electrical frequency, not mechanical RPM |
 | 2 | 2 | int16 | Bus Current | 0.1 A | Battery/DC bus current |
 | 4 | 2 | int16 | Phase Current | 0.1 A | Motor phase current |
@@ -302,7 +320,7 @@ The ESC whose address matches the Target SAdr responds with:
 #### Running Status Bitfield
 
 | Bit | Name | 0 | 1 |
-|-----|------|---|---|
+| ----- | ------ | --- | --- |
 | 0 | Over-voltage | Normal | Over-voltage |
 | 1 | Under-voltage | Normal | Under-voltage |
 | 2 | Current limiting | Normal | Current limited |
@@ -326,12 +344,14 @@ response within **2ms**.
 #### Worked Example
 
 Simultaneously command 3 ESCs and request telemetry from ESC #2:
+
 - ESC #0: throttle +56.2%
 - ESC #1: brake 21.0%
 - ESC #2: throttle -12.8% (also return telemetry)
 
 **Master sends:**
-```
+
+```text
 0x0F  0xFF  0x02  0x50  0x06  0xC8 0x08  0x49 0x03  0x00 0xFE  [checksum]
  │     │     │     │     │     └── ESC0   └── ESC1   └── ESC2
  │     │     │     │     └── Length: 6 bytes (3 ESCs x 2 bytes)
@@ -348,12 +368,13 @@ Simultaneously command 3 ESCs and request telemetry from ESC #2:
 State control commands for global or targeted ESC management.
 
 **Frame format:**
-```
+
+```text
 0x0F  0xFF  [target SAdr]  [func code]  0x00  [checksum]
 ```
 
 | Function Code | Command | Description |
-|--------------|---------|-------------|
+| -------------- | --------- | ------------- |
 | `0xA0` | **Restart** | If Extra = specific SAdr: restart that ESC. If Extra = 0xFF: restart all ESCs. Data length = 0. |
 | `0xA1` | **Clear restart flag** | Clears bit 15 (restart status) in the running status bitfield. Allows you to detect if an ESC has restarted since the last clear. If Extra = specific SAdr: clear for that ESC. If Extra = 0xFF: clear for all. Data length = 0. |
 | `0xA2`-`0xAF` | Reserved | Not documented |
@@ -365,7 +386,7 @@ via the XC-Link phone app and stored in flash. Registers can be read via
 function code `0x10`.
 
 | Addr | Name | Default | Min | Max | R/W | Description |
-|------|------|---------|-----|-----|-----|-------------|
+| ------ | ------ | --------- | ----- | ----- | ----- | ------------- |
 | 0x00 | runMode | 1 | 0 | 2 | R | 0: Direct fwd/rev, 1: Fwd/rev with brake, 2: Forward-only with brake |
 | 0x01 | throtOut | 0 | -1000 | +1000 | R | Current throttle output (x0.1%) |
 | 0x02 | motSpeed | 0 | -32768 | +32767 | R | Motor speed (Hz) |
@@ -399,14 +420,14 @@ The official reference schematic provides a half-duplex UART-to-single-wire
 bus converter. The bus connector (J1) is a 3-pin 2.54mm header:
 
 | J1 Pin | Signal | Description |
-|--------|--------|-------------|
+| -------- | -------- | ------------- |
 | 1 | TR.BUS | Single-wire data bus |
 | 2 | (varies) | Power or NC |
 | 3 | GND | Ground |
 
 ### TX Path (MCU → Bus)
 
-```
+```text
 MCU_TX ──►|── D4 (SS1030HEWS) ──┬── R7 (0Ω jumper) ──► TR.BUS
                                  │
                           D3 ──►|── (clamp to bus/3.3V)
@@ -421,7 +442,7 @@ MCU_TX ──►|── D4 (SS1030HEWS) ──┬── R7 (0Ω jumper) ──�
 
 ### RX Path (Bus → MCU)
 
-```
+```text
                     3.3V
                      │
                    ┌─┤ R8 (2K) ── reference divider
@@ -452,7 +473,7 @@ TR.BUS ── R9 (2K) ─┤ U3 (LMV331TP-TR comparator)
 The Nano R4 has 5V tolerant GPIO and operates its UART at 5V logic levels.
 For bench testing, a simplified circuit can be used:
 
-```
+```text
                     5V (or 3.3V)
                      │
                     [3K-10K pull-up]
@@ -482,7 +503,7 @@ The official control flowchart (translated from the companion document
 "车模电调X.BUS最简控制流程.pdf") describes the recommended master control
 loop running at **10ms period (10-50ms acceptable)**:
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  Control cycle start (10ms period)  │
 │  Acceptable range: 10-50ms         │
@@ -594,15 +615,18 @@ X.BUS testing and configuration. **This application is not needed for our
 Arduino implementation** but is documented here for completeness.
 
 **Requirements:**
+
 - LabVIEW runtime environment (download from XC-ESC's Baidu cloud share)
 - XC925 USB-to-X.BUS adapter (purchase from XC-ESC aftermarket support)
 
 **Source code:** `XBusMain.zip` contains 3 LabVIEW VI files:
+
 - `XCpBusMain.vi` — Main application
 - `selSerial.vi` — Serial port selector
 - `showSta.vi` — Status display
 
 The desktop app screenshot (Appendix 4 in the original document) shows:
+
 - Real-time throttle sliders for multiple ESCs
 - RX/TX data hex display
 - Register value readout panel
@@ -613,7 +637,7 @@ The desktop app screenshot (Appendix 4 in the original document) shows:
 ## Revision History
 
 | Version | Date | Author | Changes |
-|---------|------|--------|---------|
+| --------- | ------ | -------- | --------- |
 | V1.0.0 | 2024-03-26 | Wu Changxu | Initial release |
 | V1.0.1 | 2025-12-03 | Wu Changxu | 1. Modified running status frame data length. 2. Reorganized status flag bits. |
 

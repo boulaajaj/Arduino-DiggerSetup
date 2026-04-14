@@ -16,16 +16,16 @@ The Nano R4 (Renesas RA4M1) has limited `attachInterrupt()` support.
 Not all digital pins have IRQ lines routed to the Interrupt Control Unit.
 
 | Pin | attachInterrupt | Notes |
-|-----|-----------------|-------|
-| D0  | Yes | Conflicts with Serial RX |
-| D1  | Yes | Conflicts with Serial TX |
-| D2  | Yes | Primary — used for RC CH1 |
-| D3  | Yes | Primary — used for RC CH4 |
-| D4  | **No** | digitalPinToInterrupt() returns -1 |
-| D5  | **No** | No IRQ line |
-| D6  | **No** | No IRQ line |
-| D7  | **No** | digitalPinToInterrupt() returns -1 |
-| D8  | Yes | Available |
+| --- | --- | --- |
+| D0 | Yes | Conflicts with Serial RX |
+| D1 | Yes | Conflicts with Serial TX |
+| D2 | Yes | Primary — used for RC CH1 |
+| D3 | Yes | Primary — used for RC CH4 |
+| D4 | **No** | digitalPinToInterrupt() returns -1 |
+| D5 | **No** | No IRQ line |
+| D6 | **No** | No IRQ line |
+| D7 | **No** | digitalPinToInterrupt() returns -1 |
+| D8 | Yes | Available |
 | D12 | Yes | Available |
 | D13 | Yes | Available (also LED_BUILTIN) |
 
@@ -87,6 +87,7 @@ struct PulseReader {
 ```
 
 **Advantages over pulseIn():**
+
 - Zero blocking — returns immediately every call
 - Works at any loop rate (faster loop = more precise edge detection)
 - Consistent timestamps — no stale `now` problem
@@ -118,7 +119,7 @@ standards.
 ### Reverse Speed Limiting
 
 | Parameter | Value | Rationale |
-|-----------|-------|-----------|
+| ----------- | ------- | ----------- |
 | Max reverse | 50% of forward | Visibility is limited in reverse; operator reaction time is longer |
 | Reverse ramp | Same as forward decel | Gradual engagement prevents track shock |
 
@@ -128,7 +129,7 @@ depending on model. 50% is a safe starting point for a ride-on excavator.
 ### Pivot Turn (Counter-Rotation) Limiting
 
 | Parameter | Value | Rationale |
-|-----------|-------|-----------|
+| ----------- | ------- | ----------- |
 | Full pivot power | 40-50% of forward max | Full-speed pivot on a 3t machine throws the operator |
 | Graduated blend | Linear from 100% (straight) to 50% (full pivot) | Smooth transition, no abrupt cutoff |
 
@@ -139,7 +140,7 @@ differ. Scale = 1.0 - spinRatio * (1.0 - SPIN_LIMIT).
 ### Turn Rate During Forward Travel
 
 | Parameter | Value | Rationale |
-|-----------|-------|-----------|
+| ----------- | ------- | ----------- |
 | Inside track minimum | 0% (can stop, not reverse) during forward travel | Prevents unexpected reversal at speed |
 | Differential limit | Inside track >= 20% of outside track at high speed | Prevents tip-over on hard surfaces |
 
@@ -150,7 +151,7 @@ extreme lateral forces.
 ### Acceleration and Deceleration
 
 | Parameter | Value | Rationale |
-|-----------|-------|-----------|
+| ----------- | ------- | ----------- |
 | Accel time constant | 1.0-2.0s (63% of target) | Prevents track slip on loose ground |
 | Decel time constant | 2.0-4.0s (63% coast-down) | Simulates momentum of heavy machine |
 | Asymmetric ratio | Decel ~2x slower than accel | Machine should coast, not stop abruptly |
@@ -160,16 +161,18 @@ hydrostatic drive. Electric drive must simulate this or the machine feels
 unnaturally responsive ("go-kart feel").
 
 The asymmetric exponential filter is the recommended pattern:
-```
+
+```text
 alpha = dt / (dt + tau)
 position += (target - position) * alpha
 ```
+
 Where `tau` = TAU_ACCEL when speeding up, TAU_DECEL when slowing down.
 
 ### Exponential Response Curve
 
 | Parameter | Value | Rationale |
-|-----------|-------|-----------|
+| ----------- | ------- | ----------- |
 | Expo blend | 20% linear + 80% quadratic | Fine control at low stick, full range at high stick |
 | Equivalent expo | ~1.8 power curve | Matches industrial joystick controller feel |
 | Dead zone | 3-8% of travel | Prevents unintended creep; our 480/8192 = 5.9% is good |
@@ -182,7 +185,7 @@ gives slightly more low-speed authority than pure quadratic.
 ### Safety Practices
 
 | Practice | Implementation | Standard |
-|----------|---------------|----------|
+| ---------- | --------------- | ---------- |
 | Dead zone | 3-8% center dead zone | Common practice |
 | Failsafe | Neutral on signal loss (per-channel, 0.5s) | ISO 15817 |
 | Emergency stop | Bypass all ramps, immediate neutral | ISO 13850 |
@@ -219,6 +222,7 @@ void loop() {
 ```
 
 **Key principles:**
+
 - Loop runs as fast as possible (input polling benefits from speed)
 - Control math runs at a fixed rate (decoupled from loop speed)
 - No blocking calls anywhere in the main loop
@@ -237,6 +241,7 @@ void loop() {
 ### Float vs Fixed-Point
 
 The Nano R4 has a hardware FPU (VFPv4). Float operations are 1-2 cycles:
+
 - Use `float` for control math, filters, expo curves
 - Use `int` for sensor values, PWM outputs, counters
 - Never use `double` (software emulated, 10x slower)
@@ -250,7 +255,7 @@ Current sketch uses ~300 bytes of globals + ~3KB Arduino runtime.
 ### Timing Budget (per loop iteration at 48MHz)
 
 | Operation | Time |
-|-----------|------|
+| ----------- | ------ |
 | micros() | 2 us |
 | digitalRead() x4 (polling) | 4 us |
 | analogRead() x2 (double-read) | 400 us |
@@ -271,13 +276,14 @@ and future features.
 
 ### Module Pattern (Single .ino + types.h)
 
-```
+```text
 sketches/rc_test/
   rc_test.ino    — Main sketch with [MODULE] sections
   types.h        — Shared struct definitions
 ```
 
 Each module is marked with `[MODULE_NAME]` comments for searchability:
+
 - `[CONFIG]` — All tunable constants
 - `[RC]` — RC input (ISR + polling + failsafe)
 - `[JOYSTICK]` — ADC reading, expo, tank mix
