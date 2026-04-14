@@ -363,7 +363,7 @@ void debugPrint(unsigned long now, const JoystickState &js) {
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
   char buf[100];
-  sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
           rcT, rcS, rc4, rc5,
           js.rawY, js.rawX, outL, outR,
           sbusData.failsafe, sbusData.lost_frame);
