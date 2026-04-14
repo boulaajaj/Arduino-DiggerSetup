@@ -12,3 +12,8 @@ struct JoystickState {
 struct MixerOutput {
   int left, right;   // Servo commands (us) before dynamics
 };
+
+// RC tank-mixed output (throttle + steering → left/right)
+struct RCMixed {
+  int left, right;
+};
