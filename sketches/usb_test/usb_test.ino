@@ -5,7 +5,7 @@ int count = 0;
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial) { ; } // Wait for USB Serial to connect
+  while (!Serial) { ; }  // Wait for USB Serial to connect
 
   pinMode(LED_BUILTIN, OUTPUT);
 

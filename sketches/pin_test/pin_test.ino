@@ -8,10 +8,10 @@
 //
 // Every second, prints interrupt counts for all four pins.
 
-volatile unsigned long countD2 = 0;
-volatile unsigned long countD3 = 0;
-volatile unsigned long countD4 = 0;
-volatile unsigned long countD7 = 0;
+volatile uint32_t countD2 = 0;
+volatile uint32_t countD3 = 0;
+volatile uint32_t countD4 = 0;
+volatile uint32_t countD7 = 0;
 
 // Also track whether attachInterrupt returned without error
 bool d2_attached = false;
@@ -26,7 +26,7 @@ void isrD7() { countD7++; }
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 3000);
+  while (!Serial && millis() < 3000) {}
   delay(500);
 
   Serial.println("# === PIN INTERRUPT TEST ===");
@@ -92,7 +92,7 @@ void setup() {
   Serial.println("#");
 }
 
-unsigned long lastPrint = 0;
+uint32_t lastPrint = 0;
 
 void loop() {
   if (millis() - lastPrint >= 1000) {
@@ -100,10 +100,10 @@ void loop() {
 
     // Snapshot counts with interrupts disabled
     noInterrupts();
-    unsigned long c2 = countD2;
-    unsigned long c3 = countD3;
-    unsigned long c4 = countD4;
-    unsigned long c7 = countD7;
+    uint32_t c2 = countD2;
+    uint32_t c3 = countD3;
+    uint32_t c4 = countD4;
+    uint32_t c7 = countD7;
     interrupts();
 
     Serial.print("D2=");

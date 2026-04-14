@@ -43,16 +43,16 @@ const uint8_t NUM_ESCS = 2;
 uint8_t telemetryTarget = 0;
 
 // Control loop period (ms) — protocol spec says 10-50ms acceptable
-const unsigned long CONTROL_PERIOD_MS = 20;  // 50 Hz
+const uint32_t CONTROL_PERIOD_MS = 20;  // 50 Hz
 
 // Telemetry response timeout (us) — spec says 2ms for broadcast
-const unsigned long TELEM_TIMEOUT_US = 3000;  // 3ms with margin
+const uint32_t TELEM_TIMEOUT_US = 3000;  // 3ms with margin
 
 // Throttle values for bench testing (0 = neutral, safe)
 int16_t throttle[2] = {0, 0};  // -1000 to +1000 (x0.1%)
 
 // Debug print interval
-const unsigned long PRINT_INTERVAL_MS = 500;
+const uint32_t PRINT_INTERVAL_MS = 500;
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -85,13 +85,13 @@ struct ESCTelemetry {
   int16_t  busCurrent;      // x0.1A
   int16_t  phaseCurrent;    // x0.1A
   uint16_t status;          // Bitfield (see XBUS-PROTOCOL.md)
-  int16_t  receivedThrottle; // x0.1%
+  int16_t  receivedThrottle;  // x0.1%
   int16_t  outputThrottle;  // x0.1%
   int16_t  busVoltage;      // x0.1V
   int16_t  escTempRaw;      // Actual = raw - 40 degC
   uint8_t  motorTemp;       // Spare/reserved
   bool     valid;           // True if successfully parsed
-  unsigned long timestamp;  // micros() when received
+  uint32_t timestamp;  // micros() when received
 };
 
 ESCTelemetry telem[NUM_ESCS];
@@ -130,7 +130,7 @@ uint8_t checksumFull(const uint8_t *frame, int len) {
 void encodeThrottle(int16_t value, bool isBrake, uint8_t *out) {
   uint16_t encoded = ((uint16_t)(value & 0x3FFF) << 2) | (isBrake ? 1 : 0);
   out[0] = encoded & 0xFF;        // Low byte
-  out[1] = (encoded >> 8) & 0xFF; // High byte
+  out[1] = (encoded >> 8) & 0xFF;  // High byte
 }
 
 // Send broadcast throttle command and request telemetry from targetESC
@@ -195,7 +195,7 @@ void sendRestart(uint8_t target) {
 // Wait for and parse a telemetry response frame
 // Returns true if a valid frame was received
 bool receiveTelemetry(uint8_t expectedESC) {
-  unsigned long startUs = micros();
+  uint32_t startUs = micros();
   rxLen = 0;
 
   // Wait for response bytes within timeout
@@ -263,10 +263,10 @@ bool receiveTelemetry(uint8_t expectedESC) {
 // [DEBUG] — Telemetry display
 // ═══════════════════════════════════════════════════════════════
 
-unsigned long lastPrintMs = 0;
-unsigned long totalPolls = 0;
-unsigned long goodFrames = 0;
-unsigned long badFrames = 0;
+uint32_t lastPrintMs = 0;
+uint32_t totalPolls = 0;
+uint32_t goodFrames = 0;
+uint32_t badFrames = 0;
 
 // Print status bits in human-readable format
 void printStatus(uint16_t status) {
@@ -285,7 +285,7 @@ void printStatus(uint16_t status) {
 }
 
 void printTelemetry() {
-  unsigned long now = millis();
+  uint32_t now = millis();
   if ((now - lastPrintMs) < PRINT_INTERVAL_MS) return;
   lastPrintMs = now;
 
@@ -305,7 +305,7 @@ void printTelemetry() {
       continue;
     }
 
-    unsigned long age = (micros() - t->timestamp) / 1000;
+    uint32_t age = (micros() - t->timestamp) / 1000;
 
     Serial.print("# ESC");
     Serial.print(i);
@@ -340,7 +340,7 @@ void printRawRX() {
   Serial.print("B): ");
   for (int i = 0; i < min(rxLen, 32); i++) {
     char hex[4];
-    sprintf(hex, "%02X ", rxBuf[i]);
+    snprintf(hex, sizeof(hex), "%02X ", rxBuf[i]);
     Serial.print(hex);
   }
   if (rxLen > 32) Serial.print("...");
@@ -352,14 +352,14 @@ void printRawRX() {
 // MAIN
 // ═══════════════════════════════════════════════════════════════
 
-unsigned long lastControlMs = 0;
+uint32_t lastControlMs = 0;
 bool firstReport = true;
 
 void setup() {
   Serial.begin(115200);
 
   // Wait for USB serial on Nano R4 (up to 2 seconds, then continue)
-  unsigned long waitStart = millis();
+  uint32_t waitStart = millis();
   while (!Serial && (millis() - waitStart) < 2000) {}
 
   Serial.println();
@@ -398,7 +398,7 @@ void setup() {
 }
 
 void loop() {
-  unsigned long now = millis();
+  uint32_t now = millis();
 
   // === Control loop at fixed period ===
   if ((now - lastControlMs) >= CONTROL_PERIOD_MS) {
@@ -440,19 +440,16 @@ void loop() {
       throttle[0] = constrain(cmd.substring(3).toInt(), -1000, 1000);
       Serial.print("# ESC0 throttle set to ");
       Serial.println(throttle[0]);
-    }
-    else if (cmd.startsWith("t1 ")) {
+    } else if (cmd.startsWith("t1 ")) {
       throttle[1] = constrain(cmd.substring(3).toInt(), -1000, 1000);
       Serial.print("# ESC1 throttle set to ");
       Serial.println(throttle[1]);
-    }
-    else if (cmd == "r") {
+    } else if (cmd == "r") {
       Serial.println("# Reading register 0x04 (ProtocolType) from ESC 0...");
       sendReadRegister(0, 0x04);
       delay(15);  // 10ms timeout per spec + margin
       printRawRX();
-    }
-    else if (cmd == "x") {
+    } else if (cmd == "x") {
       Serial.println("# Restarting all ESCs...");
       sendRestart(0xFF);
     }

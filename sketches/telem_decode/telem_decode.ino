@@ -12,7 +12,7 @@ const int ADC_CENTER = 8192, JOY_DEADBAND = 480;
 
 const uint8_t POLL[] = {0x9B, 0x03, 0x00, 0x00, 0x00, 0x9E};
 
-unsigned long lastPoll = 0, lastPrint = 0, totalRx = 0;
+uint32_t lastPoll = 0, lastPrint = 0, totalRx = 0;
 uint8_t rxBuf[64];
 int rxCount = 0;
 int outL = SVC, outR = SVC;
@@ -39,7 +39,7 @@ void setup() {
 }
 
 void loop() {
-  unsigned long now = millis();
+  uint32_t now = millis();
 
   // Joystick
   analogRead(PIN_JOY_Y); delayMicroseconds(100);
@@ -78,7 +78,7 @@ void loop() {
       Serial.print(" | ");
       for (int i = 0; i < rxCount && i < 32; i++) {
         char hex[4];
-        sprintf(hex, "%02X ", rxBuf[i]);
+        snprintf(hex, sizeof(hex), "%02X ", rxBuf[i]);
         Serial.print(hex);
       }
     }

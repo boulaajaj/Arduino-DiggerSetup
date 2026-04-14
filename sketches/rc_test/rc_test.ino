@@ -98,7 +98,7 @@ const float PIVOT_SPEED_CAP = 0.45f;  // Max track speed during pivot (45%)
 const float REVERSE_LIMIT = 0.35f;  // 35% max reverse
 
 // Debug
-const unsigned long PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
+const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -178,8 +178,8 @@ MixerOutput wheelSpeedsToServo(WheelSpeeds ws) {
 bfs::SbusRx sbusRx(&Serial1);
 bfs::SbusData sbusData;
 bool sbusValid = false;
-unsigned long sbusLastFrame = 0;
-const unsigned long SBUS_TIMEOUT = 100000UL;  // 100ms
+uint32_t sbusLastFrame = 0;
+const uint32_t SBUS_TIMEOUT = 100000UL;  // 100ms
 
 int sbusToServo(int raw) {
   return map(constrain(raw, SBUS_MIN, SBUS_MAX), SBUS_MIN, SBUS_MAX, SVMIN, SVMAX);
@@ -226,10 +226,10 @@ int joyDeadband(int adc) {
 
 // Cached joystick state — updated at ADC_INTERVAL, not every loop.
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, SVC, SVC};
-unsigned long lastAdcTime = 0;
-const unsigned long ADC_INTERVAL = 10000UL;  // 10ms = 100Hz
+uint32_t lastAdcTime = 0;
+const uint32_t ADC_INTERVAL = 10000UL;  // 10ms = 100Hz
 
-void updateJoystick(unsigned long now) {
+void updateJoystick(uint32_t now) {
   if ((now - lastAdcTime) < ADC_INTERVAL) return;
   lastAdcTime = now;
 
@@ -276,8 +276,13 @@ MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
     out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
   } else {
     bool rcActive = (rcL != SVC) || (rcR != SVC);
-    if (rcActive) { out.left = rcL;  out.right = rcR; }
-    else          { out.left = joyL; out.right = joyR; }
+    if (rcActive) {
+      out.left = rcL;
+      out.right = rcR;
+    } else {
+      out.left = joyL;
+      out.right = joyR;
+    }
   }
   return out;
 }
@@ -342,7 +347,7 @@ void outputWrite() {
 //
 // Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost
 
-unsigned long prevPrint = 0;
+uint32_t prevPrint = 0;
 
 void debugInit() {
   Serial.begin(115200);
@@ -353,7 +358,7 @@ void debugInit() {
   }
 }
 
-void debugPrint(unsigned long now, const JoystickState &js) {
+void debugPrint(uint32_t now, const JoystickState &js) {
   if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
 
@@ -375,7 +380,7 @@ void debugPrint(unsigned long now, const JoystickState &js) {
 // MAIN
 // ═══════════════════════════════════════════════════════════════
 
-unsigned long prevUs = 0;
+uint32_t prevUs = 0;
 
 void setup() {
   analogReadResolution(14);
@@ -386,7 +391,7 @@ void setup() {
 }
 
 void loop() {
-  unsigned long now = micros();
+  uint32_t now = micros();
   float dts = (float)(now - prevUs) * 1e-6f;
   if (dts <= 0) return;
   prevUs = now;
