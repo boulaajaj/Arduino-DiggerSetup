@@ -24,18 +24,13 @@ has authority.
 
 ## Pin Assignments (Nano R4)
 ```
-D0  <- X.BUS shared bus (Serial RX)        [Both ESCs on one bus — conflicts with USB Serial]
-D1  -> X.BUS TX (Serial TX)               [For half-duplex commands, if needed]
-D2  <- RC CH1 (Left motor, pre-mixed)      [attachInterrupt CHANGE]
-D3  <- RC CH4 (Control mode, 3-pos)        [attachInterrupt CHANGE]
-D4  <- RC CH2 (Right motor, pre-mixed)     [non-blocking poll — no interrupt on D4]
-D5     (available)                          [reserved for future use]
-D6     (available)                          [reserved for future use]
-D7  <- RC CH5 (Override switch, 3-pos)     [non-blocking poll — no interrupt on D7]
+D0  <- S.BUS input (Serial1 RX)           [All RC channels via NPN inverter]
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
-A2  <- CS7581 Current Sensor (Left)        [14-bit ADC]
-A3  <- CS7581 Current Sensor (Right)       [14-bit ADC]
+A2  <- CS7581 Current Sensor (Left)        [14-bit ADC, future]
+A3  <- CS7581 Current Sensor (Right)       [14-bit ADC, future]
+D5     (available)                          [reserved: hall sensor tap if needed]
+D6     (available)                          [reserved: hall sensor tap if needed]
 D9  -> Left Track ESC                      [Servo PWM output]
 D10 -> Right Track ESC                     [Servo PWM output]
 5V  -> RC Receiver + Joystick VCC
@@ -43,18 +38,27 @@ VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
 ```
 
-**Interrupt limitation:** On the Nano R4, `attachInterrupt()` only works on
-D2 and D3. For D4 and D7, use non-blocking `PulseReader` polling (see
-`types.h`). Never use `pulseIn()` — it blocks and causes timestamp bugs.
+**Future X.BUS pin assignment (when integrated):**
+```
+D0  <- X.BUS shared bus (Serial RX)        [Half-duplex, direct — no inverter]
+D1  -> X.BUS shared bus (Serial TX)        [Through 1K series resistor]
+```
+Note: X.BUS on D0/D1 conflicts with both USB Serial and S.BUS (Serial1).
+The final architecture will need to resolve this — either use S.BUS for RC
+input and X.BUS on a separate UART, or migrate RC to X.BUS-only control.
 
 ### UART Architecture (Nano R4)
 The Nano R4 has a single hardware UART on D0/D1, which is also the USB
 Serial connection. Standard Arduino `Serial` works over USB — no Router
 Bridge, no Monitor object, no special workarounds needed.
 
-**X.BUS Protocol:** XC E10 "X.BUS" is NOT Spektrum X-Bus (I2C). It is XC
-Technology's proprietary protocol, almost certainly half-duplex UART. Single
-data wire = cannot be I2C. Both ESCs share one bus (addressable 0-15).
+**X.BUS Protocol (CONFIRMED 2026-04-14):** XC E10 "X.BUS" is a proprietary
+modbus-like master-slave protocol by Shenzhen XC-ESC Technology Co., Ltd.
+NOT Spektrum X-Bus, NOT JR PROPO XBUS — completely unrelated protocols that
+share the name. Half-duplex UART on a single wire, 115200 baud, 8N1,
+little-endian, non-inverted (standard UART polarity, idle HIGH).
+Both ESCs share one bus (addressable 0-15). The Arduino acts as master —
+**ESCs never transmit unless polled**. Full protocol spec: `docs/XBUS-PROTOCOL.md`.
 
 | Port | Hardware | Pin | Function |
 |------|----------|-----|----------|
@@ -65,20 +69,22 @@ testing, unplug X.BUS from D0 to use Serial Monitor for debugging. Plug
 X.BUS back for field operation. No code change needed — just a wire swap.
 
 ## Architecture Summary
-Sketch: `sketches/rc_test/rc_test.ino` (V3.4) + `types.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V5.0 — Curvature Drive) + `types.h`
 
 Signal pipeline:
-1. RC inputs: D2/D3 via attachInterrupt (ISR), D4/D7 via non-blocking PulseReader (poll)
-2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve → tank mix
-3. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-4. Spin turn limiter (graduated, 35% at full pivot)
-5. Reverse speed limiter (35% of forward max)
+1. RC inputs: S.BUS on Serial1 (D0 via NPN inverter), all 16 channels
+2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve
+3. Both inputs → curvatureDrive() (WPILib algorithm):
+   - At speed: steering slows inner track only, outer holds speed
+   - At standstill: arcade-style pivot turns (45% cap)
+4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
+5. Reverse speed limiter (35% of forward max, straight-line only)
 6. Soft power scaling (tanh saturation)
 7. Inertia simulation (asymmetric exponential: 0.3s accel, 0.5s decel)
 8. Servo output to ESCs (D9, D10)
 
-Code organized in searchable [MODULE] sections: [CONFIG], [RC], [JOYSTICK],
-[MIXER], [DYNAMICS], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
+Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
+[JOYSTICK], [MIXER], [DYNAMICS], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
@@ -169,11 +175,18 @@ RPM = 60,000,000 / (microsBetweenEdges * edgesPerRevolution)
   motor speed. Fine-tunes to hold target RPM.
 - This is standard industrial motor control: inner current + outer speed loop.
 
-### RPM Source: X.BUS on Shared Bus + Hall Sensor Fallback
-- **Both ESCs:** X.BUS Yellow → D0 (Serial RX), shared bus (addressable 0-15)
-- **Fallback:** Direct motor hall sensor tap on D5/D6 (if X.BUS too slow)
-- **Debug:** Serial over USB (disconnect X.BUS from D0 for bench testing)
-- Test with `sketches/xbus_probe/xbus_probe.ino` first
+### RPM Source: X.BUS Telemetry (UPDATED 2026-04-14)
+X.BUS is the **primary RPM source**. The protocol provides RPM in Hz as part
+of its telemetry response (function code 0x50). No hall sensor tap or
+additional hardware needed — RPM comes over the same wire used for throttle.
+
+- **Both ESCs:** X.BUS Yellow wires joined → shared bus → D0 (Serial RX) + D1 (Serial TX)
+- **Bus wiring:** TX through 1K series resistor, RX direct, 3K-10K pull-up to 5V
+- **No NPN inverter** — X.BUS is standard UART (non-inverted), unlike S.BUS
+- **Fallback:** Hall sensor tap on D5/D6 remains available if X.BUS latency is insufficient
+- **Test with:** `sketches/xbus_master/xbus_master.ino`
+- **Full protocol spec:** `docs/XBUS-PROTOCOL.md`
+- **Investigation history:** `docs/XBUS-INVESTIGATION.md`
 
 ### Control Mode Selector (RC CH4 on D3, 3-position switch)
 | CH4 | Mode | Layers Active |
@@ -186,43 +199,56 @@ Flip CH4 on the field to A/B/C compare control quality in real-time.
 Mode transitions reset all PID/inertia state to prevent jumps.
 
 ## Implementation Status
-- [x] V2.0 sketch: expo curve, tank mix, inertia, soft limits
-- [x] PID load compensation (current-based, boosts under resistance)
-- [x] Anti-runaway failsafe
+- [x] V5.0 sketch: curvatureDrive, S.BUS, expo, inertia, soft limits
+- [x] PID load compensation design (current-based, boosts under resistance)
+- [x] Anti-runaway failsafe (S.BUS timeout + RC lockout)
 - [x] 7-panel live plot (live_plot.py)
 - [x] Operator guide for Jason and Malaki
-- [x] X.BUS probe sketch written
-- [ ] **X.BUS telemetry validation** ← NOW (wire, upload, test)
-- [ ] Dual-loop PID implementation (after X.BUS decision)
-- [ ] Joystick harness wiring identification
+- [x] X.BUS protocol investigation (passive, inverted, active polling)
+- [x] X.BUS official protocol received from XC-ESC Technology
+- [x] X.BUS protocol translated and documented (docs/XBUS-PROTOCOL.md)
+- [x] X.BUS master test sketch written (sketches/xbus_master/)
+- [ ] **X.BUS bench test with correct protocol** ← NEXT
+- [ ] X.BUS integration into main controller (replace Servo PWM with X.BUS throttle)
+- [ ] Dual-loop PID implementation (X.BUS telemetry provides RPM + current)
 - [ ] CS7581 current sensor wiring and calibration
-- [ ] Bench test on Nano R4
 - [ ] Field test at reduced power
 
 ## Next Steps
-1. **Wire both ESC X.BUS Yellow wires together** to shared bus
-2. **Add 10kΩ pull-up to 5V** on the shared bus (holds line HIGH when idle)
-3. **Connect shared bus to D0** (direct — Nano R4 is 5V tolerant)
-4. **Upload `sketches/xbus_probe/xbus_probe.ino`** to Nano R4 (COM8)
-5. **Test with one ESC first** (determine baud rate and protocol behavior):
-   - Which baud rate locks (auto-detected, prioritize 250000)
-   - Raw hex dump for pattern analysis
-   - Whether ESC auto-sends or requires polling
-   - Packet rate in Hz (need >20 Hz for outer loop)
-6. **Test with both ESCs** if single ESC works — verify addressed bus behavior
-7. **Contact XC Technology** (sales7@xc-bldc.com) for "XC.BUS Control Protocol" doc
-8. **Goal:** All telemetry AND throttle control via X.BUS — no hall sensors or current sensors
+1. **Build half-duplex bus circuit** (simplified for Nano R4):
+   - ESC X.BUS Yellow → shared bus
+   - Arduino D1 (TX) → 1K resistor → bus
+   - Arduino D0 (RX) → bus (direct, no inverter)
+   - 3K-10K pull-up to 5V on the bus
+   - **No NPN inverter** — X.BUS is non-inverted standard UART
+2. **Upload `sketches/xbus_master/xbus_master.ino`** to Nano R4 (COM8)
+3. **Test with one ESC first** — verify:
+   - Protocol handshake (0x0F/0xF0 headers)
+   - Checksum interpretation (narrow vs full)
+   - Telemetry response timing (<2ms)
+   - Status bit 3 (BUS_MODE) confirms X.BUS control active
+   - Status bit 11 (CAP_CHARGED) before sending throttle
+4. **Test with both ESCs** — verify addressed bus with 2 slaves
+5. **Integrate into main controller** — replace Servo PWM with X.BUS throttle,
+   use telemetry RPM for PID outer loop
+6. **Goal:** All control AND telemetry via X.BUS — one wire per ESC replaces
+   Servo PWM + hall sensors + current sensors
 
 ## File Map
 ```
-PROJECT-PLAN.md                    — Full technical specification
-OPERATOR-GUIDE.md                  — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino       — Main Arduino sketch (V3.4)
-sketches/rc_test/types.h           — Shared structs (RCChannel, PulseReader, etc.)
-sketches/xbus_probe/xbus_probe.ino — X.BUS telemetry probe/test sketch
-docs/CONTROL-RESEARCH.md           — Tank mix, RC input, loop patterns research
-live_plot.py                       — Real-time matplotlib monitor
-monitor.py                         — Simple serial monitor
+PROJECT-PLAN.md                          — Full technical specification
+OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V5.0 — Curvature Drive)
+sketches/rc_test/types.h                 — Shared structs (JoystickState, MixerOutput, etc.)
+sketches/xbus_master/xbus_master.ino     — X.BUS master protocol test sketch
+sketches/xbus_probe/xbus_probe.ino       — X.BUS passive probe (historical — used wrong protocol)
+sketches/xbus_poll_test/xbus_poll_test.ino — X.BUS active polling test (historical)
+docs/XBUS-PROTOCOL.md                   — Official XC X.BUS protocol reference (translated)
+docs/XBUS-INVESTIGATION.md              — X.BUS investigation timeline and lessons learned
+docs/CONTROL-RESEARCH.md                — Tank mix, RC input, loop patterns research
+docs/WIRING-GUIDE.md                    — Hardware wiring reference
+live_plot.py                             — Real-time matplotlib monitor
+monitor.py                              — Simple serial monitor
 ```
 
 ## Coding Rules
