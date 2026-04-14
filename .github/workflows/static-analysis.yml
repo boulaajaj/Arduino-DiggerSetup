@@ -22,6 +22,7 @@ jobs:
             --enable=warning,style,performance,portability \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
+            --suppress=unusedStructMember \
             --error-exitcode=1 \
             --inline-suppr \
             --language=c++

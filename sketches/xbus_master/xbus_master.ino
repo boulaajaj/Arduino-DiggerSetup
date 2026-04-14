@@ -134,7 +134,7 @@ void encodeThrottle(int16_t value, bool isBrake, uint8_t *out) {
 }
 
 // Send broadcast throttle command and request telemetry from targetESC
-void sendThrottleCommand(int16_t *values, uint8_t numESCs, uint8_t targetESC) {
+void sendThrottleCommand(const int16_t *values, uint8_t numESCs, uint8_t targetESC) {
   int dataLen = numESCs * 2;
   int frameLen = 6 + dataLen;  // header + SAdr + extra + func + len + data + checksum
 
@@ -240,7 +240,7 @@ bool receiveTelemetry(uint8_t expectedESC) {
   }
 
   // Parse telemetry data (starts at frame[5], little-endian)
-  uint8_t *d = &frame[5];
+  const uint8_t *d = &frame[5];
   ESCTelemetry *t = &telem[expectedESC];
 
   t->rpmHz            = (int16_t)(d[0]  | (d[1]  << 8));
