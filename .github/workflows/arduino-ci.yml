@@ -23,6 +23,7 @@ jobs:
           - telem_decode
           - usb_test
           - xbus_inverted_test
+          - xbus_master
           - xbus_poll_test
           - xbus_probe
     steps:
@@ -33,5 +34,6 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:renesas_uno
           arduino-cli lib install "Bolder Flight Systems SBUS"
+          arduino-cli lib install Servo
       - name: Compile ${{ matrix.sketch }}
         run: arduino-cli compile --fqbn arduino:renesas_uno:nanor4 sketches/${{ matrix.sketch }}

@@ -20,10 +20,10 @@ const uint8_t HW_V4_REQ[] = {0x9B, 0x03, 0x00, 0x00, 0x00, 0x9E};
 // Hobbywing V5 telemetry request
 const uint8_t HW_V5_REQ[] = {0x9B, 0x03, 0x00, 0x60, 0x00, 0xFE};
 
-unsigned long lastPoll = 0;
-unsigned long totalRx = 0;
-unsigned long totalPolls = 0;
-unsigned long pollInterval = 200;  // ms between polls
+uint32_t lastPoll = 0;
+uint32_t totalRx = 0;
+uint32_t totalPolls = 0;
+uint32_t pollInterval = 200;  // ms between polls
 bool useV5 = false;  // Alternate V4/V5 requests
 uint8_t rxBuf[32];
 int rxIdx = 0;
@@ -47,7 +47,7 @@ void loop() {
     totalRx++;
   }
 
-  unsigned long now = millis();
+  uint32_t now = millis();
 
   // Print response if we got any, then send next poll
   if (now - lastPoll >= pollInterval) {
@@ -58,7 +58,7 @@ void loop() {
       Serial.print("b): ");
       for (int i = 0; i < rxIdx; i++) {
         char hex[4];
-        sprintf(hex, "%02X ", rxBuf[i]);
+        snprintf(hex, sizeof(hex), "%02X ", rxBuf[i]);
         Serial.print(hex);
       }
       Serial.println();

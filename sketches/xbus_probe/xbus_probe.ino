@@ -60,7 +60,7 @@
 // -----------------------------------------------------------------------------
 // Baud rates to try (most likely first)
 // -----------------------------------------------------------------------------
-const long BAUD_RATES[] = {115200, 100000, 19200, 57600, 38400, 9600};
+const int32_t BAUD_RATES[] = {115200, 100000, 19200, 57600, 38400, 9600};
 const int  NUM_BAUDS    = sizeof(BAUD_RATES) / sizeof(BAUD_RATES[0]);
 
 // -----------------------------------------------------------------------------
@@ -89,19 +89,19 @@ int     rxLen = 0;
 // -----------------------------------------------------------------------------
 // Timing / stats
 // -----------------------------------------------------------------------------
-unsigned long lastPacketUs   = 0;
-unsigned long packetCount    = 0;
-unsigned long lastReportUs   = 0;
-unsigned long scanStartUs    = 0;
+uint32_t lastPacketUs   = 0;
+uint32_t packetCount    = 0;
+uint32_t lastReportUs   = 0;
+uint32_t scanStartUs    = 0;
 int           currentBaudIdx = 0;
 bool          baudLocked     = false;
-unsigned long bytesReceived  = 0;
+uint32_t bytesReceived  = 0;
 
 // How long to wait at each baud rate before moving to the next (ms)
-const unsigned long SCAN_DWELL_MS = 3000;
+const uint32_t SCAN_DWELL_MS = 3000;
 
 // Report interval (ms)
-const unsigned long REPORT_INTERVAL_MS = 1000;
+const uint32_t REPORT_INTERVAL_MS = 1000;
 
 // -----------------------------------------------------------------------------
 // Phase
@@ -110,8 +110,8 @@ enum Phase { PHASE_SCAN, PHASE_RAW_DUMP, PHASE_DECODE };
 Phase phase = PHASE_SCAN;
 
 // After locking baud, dump raw for this long before attempting decode
-const unsigned long RAW_DUMP_DURATION_MS = 5000;
-unsigned long rawDumpStartMs = 0;
+const uint32_t RAW_DUMP_DURATION_MS = 5000;
+uint32_t rawDumpStartMs = 0;
 
 // Packet pattern detection
 int consecutiveValidPackets = 0;
@@ -122,7 +122,7 @@ int detectedPacketLen = 0;
 // =============================================================================
 void setup() {
   DBG.begin(115200);
-  delay(1000); // Give serial time to initialize
+  delay(1000);  // Give serial time to initialize
 
   DBG.println();
   DBG.println("==============================================");
@@ -172,7 +172,7 @@ void tryNextBaud() {
     return;
   }
 
-  long baud = BAUD_RATES[currentBaudIdx];
+  int32_t baud = BAUD_RATES[currentBaudIdx];
   DBG.print("Trying baud rate: ");
   DBG.print(baud);
   DBG.println(" ...");
@@ -191,8 +191,8 @@ void tryNextBaud() {
 // Main Loop
 // =============================================================================
 void loop() {
-  unsigned long nowUs = micros();
-  unsigned long nowMs = millis();
+  uint32_t nowUs = micros();
+  uint32_t nowMs = millis();
 
   // --- Read all available bytes from X.BUS ---
   while (XBUS_SERIAL.available()) {
@@ -210,7 +210,7 @@ void loop() {
 
   // --- Phase: Baud scanning ---
   if (phase == PHASE_SCAN) {
-    unsigned long elapsed = (nowUs - scanStartUs) / 1000;
+    uint32_t elapsed = (nowUs - scanStartUs) / 1000;
     if (elapsed >= SCAN_DWELL_MS) {
       if (bytesReceived > 10) {
         // Got data at this baud rate!
@@ -299,14 +299,14 @@ void loop() {
 //   3. Fall back to timing-based packet detection (gaps between bursts)
 // =============================================================================
 
-unsigned long lastByteUs = 0;
-unsigned long gapSumUs   = 0;
+uint32_t lastByteUs = 0;
+uint32_t gapSumUs   = 0;
 int           gapCount   = 0;
 int           burstLen   = 0;
 int           burstLens[32];
 int           burstIdx   = 0;
 
-void tryDecodePackets(unsigned long nowUs) {
+void tryDecodePackets(uint32_t nowUs) {
   if (rxLen < 2) return;
 
   // --- Approach 1: Spektrum X-Bus ESC format ---
@@ -316,17 +316,21 @@ void tryDecodePackets(unsigned long nowUs) {
       // Possible Spektrum ESC packet starting at rxBuf[i]
       // Try to decode 16 bytes starting here
       XBusESCPacket pkt;
-      uint8_t *p = &rxBuf[i + 1]; // skip address byte
+      uint8_t *p = &rxBuf[i + 1];  // skip address byte
 
       // Spektrum uses big-endian
       pkt.rpm      = ((uint16_t)p[0] << 8) | p[1];
       pkt.voltage  = ((uint16_t)p[2] << 8) | p[3];
       pkt.fetTemp  = ((uint16_t)p[4] << 8) | p[5];
       pkt.current  = ((uint16_t)p[6] << 8) | p[7];
+      // cppcheck-suppress unreadVariable
       pkt.becTemp  = ((uint16_t)p[8] << 8) | p[9];
+      // cppcheck-suppress unreadVariable
       pkt.becCurrent = p[10];
+      // cppcheck-suppress unreadVariable
       pkt.becVoltage = p[11];
       pkt.throttle   = p[12];
+      // cppcheck-suppress unreadVariable
       pkt.powerOut   = p[13];
 
       // Sanity check: values should be in reasonable ranges
@@ -337,11 +341,11 @@ void tryDecodePackets(unsigned long nowUs) {
 
       bool plausible = (voltVal >= 0.0f && voltVal <= 60.0f)    // battery voltage
                     && (curVal >= 0.0f && curVal <= 300.0f)       // current
-                    && (fetTempVal >= -20.0f && fetTempVal <= 200.0f); // temperature
+                    && (fetTempVal >= -20.0f && fetTempVal <= 200.0f);  // temperature
 
       if (plausible) {
         packetCount++;
-        unsigned long gap = 0;
+        uint32_t gap = 0;
         if (lastPacketUs > 0) {
           gap = nowUs - lastPacketUs;
         }
@@ -409,7 +413,7 @@ void tryDecodePackets(unsigned long nowUs) {
 // =============================================================================
 // Periodic report
 // =============================================================================
-void printReport(unsigned long nowUs) {
+void printReport(uint32_t nowUs) {
   DBG.println();
   DBG.println("--- STATUS ---");
   DBG.print("Baud: ");

@@ -22,7 +22,7 @@ up to 16 addressed ESCs).
 ## Components List
 
 | # | Component | Qty | Purpose |
-|---|-----------|-----|---------|
+| --- | ----------- | ----- | --------- |
 | 1 | Arduino Nano R4 | 1 | Main controller |
 | 2 | OSOYOO Nano IO Shield | 1 | Pin breakout, 3-pin servo headers |
 | 3 | XC E10 140A ESC | 2 | Motor speed controllers (Left + Right) |
@@ -34,18 +34,18 @@ up to 16 addressed ESCs).
 ### Additional Parts Needed
 
 | # | Part | Qty | Purpose | Approx Cost |
-|---|------|-----|---------|-------------|
+| --- | ------ | ----- | --------- | ------------- |
 | 1 | 1N5819 Schottky diode | 2 | Diode-OR for shared X.BUS | $0.10 |
 | 2 | 4.7kΩ resistor | 1 | Pull-up for X.BUS shared bus | $0.05 |
 | 3 | Dupont jumper wires (M-M, M-F) | ~20 | Connections | $2 |
 
-**Total additional cost: ~$3**
+Total additional cost: **~$3**
 
 ---
 
 ## Power Architecture
 
-```
+```text
 Battery 1 ──> ESC Left  (BEC set to 6.0V) ──> Arduino VIN pin
 Battery 2 ──> ESC Right (BEC red wire DISCONNECTED)
 
@@ -59,6 +59,7 @@ Arduino VIN (6.0V) ──> Onboard regulator ──> 5V pin
 ```
 
 ### Power Rules
+
 1. **ESC Left BEC** → set to **6.0V** via XC-Link app → feeds Arduino **VIN**
 2. **ESC Right BEC** → **CUT or disconnect the RED wire** from its servo connector
    - Only signal (white/orange) and ground (black/brown) connect to Arduino
@@ -66,8 +67,9 @@ Arduino VIN (6.0V) ──> Onboard regulator ──> 5V pin
 3. **Ground** → all device grounds connect to Arduino GND (shared ground bus on shield)
 
 ### Power Budget
+
 | Device | Current |
-|--------|---------|
+| -------- | --------- |
 | Arduino Nano R4 | ~100mA |
 | RC Receiver | ~100mA |
 | Joystick (2 axes) | ~17mA |
@@ -79,7 +81,7 @@ ESC BEC capacity: 5A continuous. Load is <5% of capacity.
 
 ## Pin Assignments
 
-```
+```text
 Pin   Signal                  Direction   Level Shifting
 ────  ──────────────────────  ──────────  ──────────────────────────
 D0    X.BUS shared bus        ESC→Arduino Diode-OR, direct (5V tolerant)
@@ -116,7 +118,7 @@ Nano R4. D4 and D7 use non-blocking `PulseReader` polling for RC signal reading.
 
 Both ESCs share one bus. Diode-OR prevents bus contention.
 
-```
+```text
                                     5V
                                      │
                                    [4.7kΩ]  pull-up
@@ -150,7 +152,7 @@ bench debugging.
 
 The Nano R4 is 5V tolerant. RC receiver servo pulses connect directly.
 
-```
+```text
 RC Receiver CH1 signal ──→ Arduino D2  (left motor)   [attachInterrupt]
 RC Receiver CH4 signal ──→ Arduino D3  (control mode)  [attachInterrupt]
 RC Receiver CH2 signal ──→ Arduino D4  (right motor)   [non-blocking poll]
@@ -165,7 +167,7 @@ Use a spare IO shield header or direct jumper wires.
 The Genie 101174GT outputs 0-5V analog. Connects directly to Nano R4 ADC
 (5V tolerant, 5V reference, 14-bit resolution).
 
-```
+```text
 Joystick Y output ──→ Arduino A0
 Joystick X output ──→ Arduino A1
 Joystick 5V       ──→ Arduino 5V
@@ -179,7 +181,7 @@ Full range 0-5V maps directly to the 14-bit ADC (0-16383). Center position
 
 Arduino outputs 5V PWM. Direct connection to ESC servo input.
 
-```
+```text
 IO Shield D9  header signal pin ──→ ESC Left  servo signal wire
 IO Shield D10 header signal pin ──→ ESC Right servo signal wire
 ```
@@ -206,7 +208,7 @@ from D0 for debugging.
 
 ## OSOYOO Nano IO Shield Header Usage Map
 
-```
+```text
 DIGITAL SIDE:
   D0  ← X.BUS bus (via diode-OR)
   D1    (reserved for X.BUS TX)
@@ -237,7 +239,7 @@ ANALOG SIDE:
 ## Wire Labels (for label maker)
 
 | Label | Wire | From → To |
-|-------|------|-----------|
+| ------- | ------ | ----------- |
 | **XBUS-L** | ESC Left Yellow | ESC Left → Diode-OR → D0 |
 | **XBUS-R** | ESC Right Yellow | ESC Right → Diode-OR → D0 |
 | **XBUS-GND-L** | ESC Left Brown | ESC Left → Arduino GND |
@@ -257,7 +259,7 @@ ANALOG SIDE:
 ## ESC Configuration (via XC-Link Bluetooth app)
 
 | Setting | ESC Left | ESC Right |
-|---------|----------|-----------|
+| --------- | ---------- | ----------- |
 | BEC Voltage (Item 8) | **6.0V** | Any (BEC disconnected) |
 | X.BUS Address (Item 16) | **0** | **1** |
 | Communication BUS (Item 15) | X.BUS Protocol | X.BUS Protocol |

@@ -35,20 +35,20 @@ const int PIN_ESC_R  = 10;  // Right ESC servo output
 Servo escLeft, escRight;
 
 // ---- Timing ----
-unsigned long lastSummary = 0;
-const unsigned long SUMMARY_INTERVAL = 10000;
-unsigned long startTime = 0;
+uint32_t lastSummary = 0;
+const uint32_t SUMMARY_INTERVAL = 10000;
+uint32_t startTime = 0;
 
 // ---- Voltage Tracking ----
 int joyYMin = 16383, joyYMax = 0;
 int joyXMin = 16383, joyXMax = 0;
 
 // ---- RC pulse timeout (25ms = slightly more than one 50Hz frame) ----
-const unsigned long PULSE_TIMEOUT = 25000;  // microseconds
+const uint32_t PULSE_TIMEOUT = 25000;  // microseconds
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 3000);
+  while (!Serial && millis() < 3000) {}
   delay(500);
 
   Serial.println("# ==========================================");
@@ -81,10 +81,10 @@ void setup() {
 
 void loop() {
   // ---- Read RC channels via pulseIn ----
-  unsigned long pw1 = pulseIn(PIN_RC_CH1, HIGH, PULSE_TIMEOUT);
-  unsigned long pw2 = pulseIn(PIN_RC_CH2, HIGH, PULSE_TIMEOUT);
-  unsigned long pw4 = pulseIn(PIN_RC_CH4, HIGH, PULSE_TIMEOUT);
-  unsigned long pw5 = pulseIn(PIN_RC_CH5, HIGH, PULSE_TIMEOUT);
+  uint32_t pw1 = pulseIn(PIN_RC_CH1, HIGH, PULSE_TIMEOUT);
+  uint32_t pw2 = pulseIn(PIN_RC_CH2, HIGH, PULSE_TIMEOUT);
+  uint32_t pw4 = pulseIn(PIN_RC_CH4, HIGH, PULSE_TIMEOUT);
+  uint32_t pw5 = pulseIn(PIN_RC_CH5, HIGH, PULSE_TIMEOUT);
 
   // ---- Read joystick (double-read to avoid ADC channel crosstalk) ----
   // First read after channel switch picks up residual charge from previous channel.
@@ -112,7 +112,7 @@ void loop() {
   Serial.println(0);
 
   // ---- Summary every 10s ----
-  unsigned long now = millis();
+  uint32_t now = millis();
   if (now - lastSummary >= SUMMARY_INTERVAL) {
     lastSummary = now;
     float elapsed = (now - startTime) / 1000.0;
@@ -143,7 +143,7 @@ void loop() {
   }
 }
 
-void printRcSummary(const char* label, unsigned long pw) {
+void printRcSummary(const char* label, uint32_t pw) {
   Serial.print("#   ");
   Serial.print(label);
   Serial.print(": ");

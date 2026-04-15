@@ -26,8 +26,8 @@ void setup() {
 }
 
 void loop() {
-  static unsigned long lastPoll = 0;
-  static unsigned long lastPrint = 0;
+  static uint32_t lastPoll = 0;
+  static uint32_t lastPrint = 0;
   static int totalRx = 0;
 
   // Poll every 50ms
@@ -44,7 +44,7 @@ void loop() {
     // Print first 32 bytes as hex
     if (totalRx <= 32) {
       char hex[4];
-      sprintf(hex, "%02X ", b);
+      snprintf(hex, sizeof(hex), "%02X ", b);
       Serial.print(hex);
       if (totalRx % 16 == 0) Serial.println();
     }

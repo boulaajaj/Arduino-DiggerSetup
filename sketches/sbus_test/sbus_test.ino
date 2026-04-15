@@ -14,9 +14,9 @@
 
 bfs::SbusRx sbus(&Serial1);
 
-unsigned long lastPrint = 0;
-unsigned long frameCount = 0;
-unsigned long startTime = 0;
+uint32_t lastPrint = 0;
+uint32_t frameCount = 0;
+uint32_t startTime = 0;
 bool gotFirstFrame = false;
 
 void setup() {
@@ -44,7 +44,7 @@ void loop() {
       Serial.println("# *** S.BUS SIGNAL DETECTED ***");
     }
 
-    unsigned long now = millis();
+    uint32_t now = millis();
     if (now - lastPrint >= 100) {  // 10Hz output
       lastPrint = now;
 
@@ -53,7 +53,7 @@ void loop() {
       float hz = (elapsed > 0) ? frameCount / elapsed : 0;
 
       char buf[120];
-      sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%.0f",
+      snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%.0f",
               data.ch[0], data.ch[1], data.ch[2],
               data.ch[3], data.ch[4], data.ch[5],
               data.failsafe, data.lost_frame,

@@ -20,15 +20,15 @@ const uint8_t XBUS_RX_PIN = 2;  // D2 (freed by S.BUS migration)
 const uint8_t XBUS_TX_PIN = 3;  // D3 (not used for TX, but SoftwareSerial requires it)
 
 // Baud rates to scan — ordered by likelihood for ESC telemetry
-const long BAUDS[] = {115200, 19200, 9600, 38400, 57600, 100000, 250000};
+const int32_t BAUDS[] = {115200, 19200, 9600, 38400, 57600, 100000, 250000};
 const int BAUD_COUNT = 7;
 
 SoftwareSerial xbus(XBUS_RX_PIN, XBUS_TX_PIN);
 
 int currentBaud = 0;
-unsigned long baudStart = 0;
-unsigned long totalBytes = 0;
-unsigned long lastReport = 0;
+uint32_t baudStart = 0;
+uint32_t totalBytes = 0;
+uint32_t lastReport = 0;
 uint8_t rxBuf[64];
 int rxCount = 0;
 
@@ -70,13 +70,13 @@ void loop() {
     // Print first bytes as they arrive
     if (totalBytes <= 128) {
       char hex[4];
-      sprintf(hex, "%02X ", b);
+      snprintf(hex, sizeof(hex), "%02X ", b);
       Serial.print(hex);
       if (totalBytes % 16 == 0) Serial.println();
     }
   }
 
-  unsigned long now = millis();
+  uint32_t now = millis();
 
   // Report every 2 seconds (once per interval)
   if (totalBytes > 0 && (now - lastReport) >= 2000) {
@@ -103,7 +103,7 @@ void loop() {
       Serial.print("# First bytes: ");
       for (int i = 0; i < min(rxCount, 32); i++) {
         char hex[4];
-        sprintf(hex, "%02X ", rxBuf[i]);
+        snprintf(hex, sizeof(hex), "%02X ", rxBuf[i]);
         Serial.print(hex);
       }
       Serial.println();
