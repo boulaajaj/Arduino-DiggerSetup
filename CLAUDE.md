@@ -1,5 +1,19 @@
 # Excavator Track Controller — Project Memory
 
+## Mission — read this first
+
+**Smoothness of the throttle command is the top priority, above
+responsiveness, efficiency, and closed-loop accuracy.** The Arduino must
+send a continuous, slew-limited throttle stream that passes through
+every percentage value in sequence. Never skip any part of the range —
+not even a "dead zone" where the current motor happens not to respond.
+Plant characteristics belong in the feed-forward mapping, never in the
+output layer.
+
+Full rationale, priority order, and examples of past misalignment:
+[docs/MISSION.md](docs/MISSION.md). Read that document before
+designing or reviewing any throttle-output change.
+
 ## What This Is
 
 Arduino Nano R4-based tank-style track controller for a ride-on excavator.

@@ -89,16 +89,17 @@ const float EXPO_CUBIC  = 0.65f;
 
 // ─── Controller constants (see docs/PLANT-CHARACTERIZATION.md) ───────────
 // Layer 1 — stick → target: target below MIN_TARGET_RPM → snap to zero.
-const int16_t MIN_TARGET_RPM      = 500;
+// Kept small so a light stick deflection produces motion. Anything above
+// zero gets mapped to the minimum viable throttle (first FF table point).
+const int16_t MIN_TARGET_RPM      = 300;
 
 // Layer 2 — feed-forward table: measured RPM vs throttle on tracks-only load.
-// Keyed on TARGET RPM; table returns throttle (x0.1%, 0..1000). Separate
-// tables per ESC because ESC1 reads 5–15% higher RPM at the same throttle.
-// Table points are the mean-of-5-runs numbers from staircase_5runs.csv.
-// 15% throttle is the first reliable region (below that is dead-zone edge).
+// One table used for BOTH motors. Any real per-side asymmetry (track
+// friction, wiring, motor variance) is detected and compensated by the
+// trim layer — we do not assume it in the FF.
 struct FFPoint { int16_t rpm; int16_t throttle; };
 
-const FFPoint FF_TABLE_L[] = {
+const FFPoint FF_TABLE[] = {
   {    0,   0},
   { 2774, 150},  // 15%
   { 4154, 200},  // 20%
@@ -109,34 +110,22 @@ const FFPoint FF_TABLE_L[] = {
   { 9554, 450},  // 45%
   {10377, 500},  // 50%
 };
-const uint8_t FF_TABLE_L_N = sizeof(FF_TABLE_L) / sizeof(FF_TABLE_L[0]);
+const uint8_t FF_TABLE_N = sizeof(FF_TABLE) / sizeof(FF_TABLE[0]);
 
-// ESC1 reaches more RPM per throttle unit, so its FF table has larger RPM
-// values at each throttle row (derived from same 5-run test, right motor).
-const FFPoint FF_TABLE_R[] = {
-  {    0,   0},
-  { 2700, 150},  // 15% — approximated; refine on next capture
-  { 4400, 200},  // 20%
-  { 6100, 250},  // 25%
-  { 7200, 300},  // 30%
-  { 8400, 350},  // 35%
-  { 9300, 400},  // 40%
-  { 9900, 450},  // 45%
-  {10800, 500},  // 50%
-};
-const uint8_t FF_TABLE_R_N = sizeof(FF_TABLE_R) / sizeof(FF_TABLE_R[0]);
+// Layer 3 — trim loop (per-cycle, small step).
+// Updated every control cycle (100 Hz) with a step of 1. Same net
+// convergence rate as a 10 Hz / step-10 integrator, but the trim changes
+// are so small that no discrete "click" is ever visible — trim unwinding
+// when the stick is released looks like a perfectly smooth decay rather
+// than a step reset. Decays toward 0 automatically when target is zero.
+const int16_t  TRIM_DEADBAND_RPM  = 200;   // |error| below this = no change
+const int16_t  TRIM_STEP          = 1;     // per-cycle adjustment (x0.1%)
+const int16_t  TRIM_CLAMP         = 200;   // absolute cap on accumulated trim (20%)
+int16_t trimL = 0, trimR = 0;              // accumulated trim per ESC (signed)
 
-// Layer 3 — slow trim
-const uint32_t TRIM_UPDATE_MS     = 1000;  // 1 Hz correction
-const int16_t  TRIM_DEADBAND_RPM  = 500;   // |error| below this = no change
-const int16_t  TRIM_STEP          = 10;    // per-update adjustment (x0.1% throttle)
-const int16_t  TRIM_CLAMP         = 50;    // absolute cap on accumulated trim (5%)
-int16_t trimL = 0, trimR = 0;              // accumulated trim per ESC
-uint32_t lastTrimMs = 0;
-
-// Output safety
+// Output safety — see docs/MISSION.md. The ONLY job of the output layer
+// is to be smooth. No dead-zone skip, no jumps, no optimization.
 const int16_t MAX_THROTTLE_DELTA  = 10;    // 1% slew limit per 10ms cycle
-const int16_t DEAD_ZONE_MAX       = 60;    // 0..60 in output = always zero (below 6% dead zone)
 const int16_t OUTPUT_CAP          = 500;   // bench cap on FINAL throttle output (50%)
 
 // Drive-feel tuning
@@ -659,12 +648,16 @@ void setup() {
 
 // Feed-forward lookup: target RPM → throttle (linear interp over table).
 // Handles signed targets — table is for positive RPM; negate both sides for reverse.
+// Smoothness rule (docs/MISSION.md): interpolation from {0,0} through every
+// point must be continuous. Do NOT skip the low-RPM range; the Arduino
+// sends every throttle value in order, even values where the current motor
+// does not respond — that is the motor's concern, not ours.
 int16_t feedForward(int16_t targetRpm, const FFPoint *tbl, uint8_t n) {
+  if (targetRpm == 0) return 0;
   int16_t sign = (targetRpm < 0) ? -1 : 1;
   int16_t rpm  = targetRpm * sign;
 
-  if (rpm <= tbl[0].rpm) return 0;
-  if (rpm >= tbl[n - 1].rpm) return tbl[n - 1].throttle * sign;
+  if (rpm >= tbl[n - 1].rpm)  return tbl[n - 1].throttle * sign;
 
   for (uint8_t i = 1; i < n; i++) {
     if (rpm < tbl[i].rpm) {
@@ -679,26 +672,18 @@ int16_t feedForward(int16_t targetRpm, const FFPoint *tbl, uint8_t n) {
   return 0;  // unreachable
 }
 
-// Apply final-output safety: slew limit and dead-zone skip. `desired` is
-// what the controller wants; `current` is what we last sent. Returns the
-// new throttle value to command, honoring ≤1% change per cycle and the
-// 0..60 dead-zone skip.
+// Apply final-output safety: cap and slew limit. NOTHING else.
+// Per docs/MISSION.md: the output layer is deliberately stupid. It must
+// produce a smooth, monotonic stream that passes through every value
+// between current and desired at ≤MAX_THROTTLE_DELTA per cycle. Do NOT
+// skip any throttle range, even if the motor does not respond there.
 int16_t applyFinalOutput(int16_t desired, int16_t current) {
-  // Cap the target to the bench output cap
   desired = constrain(desired, -OUTPUT_CAP, OUTPUT_CAP);
 
-  // Slew limit: max MAX_THROTTLE_DELTA change per cycle
   int16_t delta = desired - current;
   if (delta >  MAX_THROTTLE_DELTA) delta =  MAX_THROTTLE_DELTA;
   if (delta < -MAX_THROTTLE_DELTA) delta = -MAX_THROTTLE_DELTA;
-  int16_t out = current + delta;
-
-  // Dead-zone skip: if we would command a small non-zero value, send 0 instead.
-  // This keeps us from wasting throttle in the 1..6% band where nothing happens.
-  if (out > 0 && out <= DEAD_ZONE_MAX) out = 0;
-  if (out < 0 && out >= -DEAD_ZONE_MAX) out = 0;
-
-  return out;
+  return current + delta;
 }
 
 
@@ -842,50 +827,40 @@ void loop() {
       if (abs(rpmTargetL) < MIN_TARGET_RPM) rpmTargetL = 0;
       if (abs(rpmTargetR) < MIN_TARGET_RPM) rpmTargetR = 0;
 
-      // Reset trim on direction reversal — the error would otherwise be huge
-      // and wrong-signed during the zero-crossing, saturating the trim.
-      static int16_t prevSignL = 0, prevSignR = 0;
-      int16_t signL = (rpmTargetL > 0) - (rpmTargetL < 0);
-      int16_t signR = (rpmTargetR > 0) - (rpmTargetR < 0);
-      if (signL != prevSignL) trimL = 0;
-      if (signR != prevSignR) trimR = 0;
-      prevSignL = signL;
-      prevSignR = signR;
-
       // ── Layer 2: feed-forward ───────────────────────────────────────
-      int16_t ffL = feedForward(rpmTargetL, FF_TABLE_L, FF_TABLE_L_N);
-      int16_t ffR = feedForward(rpmTargetR, FF_TABLE_R, FF_TABLE_R_N);
+      int16_t ffL = feedForward(rpmTargetL, FF_TABLE, FF_TABLE_N);
+      int16_t ffR = feedForward(rpmTargetR, FF_TABLE, FF_TABLE_N);
 
-      // ── Layer 3: slow trim update (1 Hz, separate from 100 Hz control) ──
-      if ((now - lastTrimMs) >= TRIM_UPDATE_MS) {
-        lastTrimMs = now;
+      // ── Layer 3: trim update (every cycle, small step) ──────────────
+      // Per-cycle with step 1 = 100 units/sec growth = 2 s to fully wind up.
+      // When target is zero, trim decays toward 0 at the same rate so the
+      // "release stick" behavior is perfectly smooth.
+      int32_t actualL = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
+      int32_t actualR = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
 
-        int32_t actualL = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
-        int32_t actualR = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
-
-        // Only trim when we're actually commanding motion — below the
-        // target-RPM threshold, leave trim at 0 so rest-state is clean.
-        if (rpmTargetL == 0) {
-          trimL = 0;
-        } else {
-          int32_t errL = (int32_t)rpmTargetL - actualL;
-          if      (errL >  TRIM_DEADBAND_RPM) trimL += TRIM_STEP;
-          else if (errL < -TRIM_DEADBAND_RPM) trimL -= TRIM_STEP;
-          trimL = constrain(trimL, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
-        }
-        if (rpmTargetR == 0) {
-          trimR = 0;
-        } else {
-          int32_t errR = (int32_t)rpmTargetR - actualR;
-          if      (errR >  TRIM_DEADBAND_RPM) trimR += TRIM_STEP;
-          else if (errR < -TRIM_DEADBAND_RPM) trimR -= TRIM_STEP;
-          trimR = constrain(trimR, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
-        }
+      if (rpmTargetL == 0) {
+        if (trimL > 0) trimL -= TRIM_STEP;
+        else if (trimL < 0) trimL += TRIM_STEP;
+      } else {
+        int32_t errL = (int32_t)rpmTargetL - actualL;
+        if      (errL >  TRIM_DEADBAND_RPM) trimL += TRIM_STEP;
+        else if (errL < -TRIM_DEADBAND_RPM) trimL -= TRIM_STEP;
+        trimL = constrain(trimL, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
+      }
+      if (rpmTargetR == 0) {
+        if (trimR > 0) trimR -= TRIM_STEP;
+        else if (trimR < 0) trimR += TRIM_STEP;
+      } else {
+        int32_t errR = (int32_t)rpmTargetR - actualR;
+        if      (errR >  TRIM_DEADBAND_RPM) trimR += TRIM_STEP;
+        else if (errR < -TRIM_DEADBAND_RPM) trimR -= TRIM_STEP;
+        trimR = constrain(trimR, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
       }
 
-      // ── Combine FF + trim → desired, then apply slew + dead-zone skip ──
-      int16_t desiredL = (rpmTargetL == 0) ? 0 : ffL + trimL * signL;
-      int16_t desiredR = (rpmTargetR == 0) ? 0 : ffR + trimR * signR;
+      // ── Combine: desired = ff + trim. (No sign multiplication — trim
+      // is already accumulated with the right sign from the error term.)
+      int16_t desiredL = ffL + trimL;
+      int16_t desiredR = ffR + trimR;
       throttle[0] = applyFinalOutput(desiredL, throttle[0]);
       throttle[1] = applyFinalOutput(desiredR, throttle[1]);
 
