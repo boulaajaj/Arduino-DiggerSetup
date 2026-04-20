@@ -64,7 +64,6 @@ const int ADC_MAX          = 16383;     // 2^14 - 1
 const int ADC_CENTER       = 8192;      // ADC mid-scale (~2.5V)
 const int ADC_DEADBAND     = 400;       // ±400 counts = small dead zone around center
 const int16_t THROTTLE_MAX = 200;       // Cap at 20% for bench safety (out of 1000)
-const int16_t STEER_MAX    = 150;       // Steering authority (x0.1%) — not used with curvatureDrive
 const int  STEER_INVERT    = 0;         // set to 1 if steering feels reversed
 
 // curvatureDrive tuning (same values as rc_test.ino V5.0)
@@ -89,6 +88,16 @@ const float EXPO_CUBIC  = 0.65f;        // cubic term weight (more = softer cent
 // Think of this as "how long to reach 63% of the new target".
 const float TAU_ACCEL = 0.30f;          // seconds to ramp UP
 const float TAU_DECEL = 0.50f;          // seconds to ramp DOWN (gentler)
+
+// Drive-feel tuning
+const float STRAIGHT_LINE_THRESHOLD = 0.05f;  // |zRotation| below this = "going straight" — applies reverse limiter
+
+// BUS_MODE watchdog (XC flowchart: resend Restart if an ESC drops out of BUS_MODE)
+const uint32_t BUS_MODE_TIMEOUT_MS      = 2000;  // No ESC reported BUS_MODE for this long → trigger restart
+const uint32_t BUS_MODE_RESTART_RATE_MS = 3000;  // Minimum spacing between Restart broadcasts
+
+// Non-blocking read-register ('r' debug command) timing
+const uint32_t READ_REG_TIMEOUT_US = 10000;  // 10 ms per spec + margin
 
 // Step response test state
 bool     stepActive   = false;
@@ -124,10 +133,13 @@ const uint8_t FUNC_RESTART     = 0xA0;
 const uint8_t FUNC_CLEAR_FLAGS = 0xA1;
 
 // Telemetry response length (fixed for func 0x50)
-// Observed: ESC sends DataLen=0x11 (17) in header but actual frame is 22 bytes.
-// Interpretation: DataLen counts 16 data bytes + 1 checksum.
-const uint8_t TELEM_DATA_LEN = 17;
-const uint8_t TELEM_FRAME_LEN = 22;
+// Observed: ESC sends DataLen=0x11 (17) in header; actual on-wire frame is 22 bytes.
+// 5 header bytes (0xF0 + SAdr + Extra + Func + Len) + 16 data bytes + 1 checksum = 22.
+// DataLen=17 in the header counts 16 real data bytes + the trailing checksum.
+// So we parse only 16 data bytes; byte 17 is the checksum (verified separately).
+const uint8_t TELEM_DATA_LEN      = 17;  // as reported by the ESC in the Length field
+const uint8_t TELEM_PAYLOAD_BYTES = 16;  // actual telemetry payload bytes (d[0..15])
+const uint8_t TELEM_FRAME_LEN     = 22;  // total on-wire bytes (header + payload + checksum)
 
 // Telemetry data structure
 struct ESCTelemetry {
@@ -139,7 +151,6 @@ struct ESCTelemetry {
   int16_t  outputThrottle;  // x0.1%
   int16_t  busVoltage;      // x0.1V
   int16_t  escTempRaw;      // Actual = raw - 40 degC
-  uint8_t  motorTemp;       // Spare/reserved
   bool     valid;           // True if successfully parsed
   uint32_t timestamp;  // micros() when received
 };
@@ -257,9 +268,14 @@ bool receiveTelemetry(uint8_t expectedESC) {
       rxBuf[rxLen++] = Serial1.read();
     }
 
+    // Check full header signature (0xF0 + 0xFF SAdr + 0x50 Func), not just 0xF0.
+    // Half-duplex RX sees our TX echo first, and the encoded throttle high byte
+    // can be 0xF0 for values near -1000 — matching 0xF0 alone would false-trigger.
     bool haveFullFrame = false;
     for (int i = 0; i + TELEM_FRAME_LEN <= rxLen; i++) {
-      if (rxBuf[i] == HEADER_SLAVE) {
+      if (rxBuf[i]     == HEADER_SLAVE   &&
+          rxBuf[i + 1] == ADDR_BROADCAST &&
+          rxBuf[i + 3] == FUNC_THROTTLE) {
         haveFullFrame = true;
         break;
       }
@@ -267,11 +283,13 @@ bool receiveTelemetry(uint8_t expectedESC) {
     if (haveFullFrame) break;
   }
 
-  // Skip our own TX echo (half-duplex: we'll see our transmitted bytes)
-  // Look for the slave header (0xF0) in the received data
+  // Skip our own TX echo (half-duplex). Match full header signature to avoid
+  // false-triggering on an echoed 0xF0 that happens to appear inside a TX byte.
   int frameStart = -1;
-  for (int i = 0; i < rxLen; i++) {
-    if (rxBuf[i] == HEADER_SLAVE) {
+  for (int i = 0; i + TELEM_FRAME_LEN <= rxLen; i++) {
+    if (rxBuf[i]     == HEADER_SLAVE   &&
+        rxBuf[i + 1] == ADDR_BROADCAST &&
+        rxBuf[i + 3] == FUNC_THROTTLE) {
       frameStart = i;
       break;
     }
@@ -302,6 +320,8 @@ bool receiveTelemetry(uint8_t expectedESC) {
   const uint8_t *d = &frame[5];
   ESCTelemetry *t = &telem[expectedESC];
 
+  // Parse 16 payload bytes (d[0..15]). Byte d[16] / frame[21] is the checksum,
+  // already verified above — do not read it as data.
   t->rpmHz            = (int16_t)(d[0]  | (d[1]  << 8));
   t->busCurrent       = (int16_t)(d[2]  | (d[3]  << 8));
   t->phaseCurrent     = (int16_t)(d[4]  | (d[5]  << 8));
@@ -310,7 +330,6 @@ bool receiveTelemetry(uint8_t expectedESC) {
   t->outputThrottle   = (int16_t)(d[10] | (d[11] << 8));
   t->busVoltage       = (int16_t)(d[12] | (d[13] << 8));
   t->escTempRaw       = (int16_t)(d[14] | (d[15] << 8));
-  t->motorTemp        = d[16];
   t->valid            = true;
   t->timestamp        = micros();
 
@@ -348,12 +367,15 @@ void printStatus(uint16_t status) {
 
 void printTelemetry() {
   uint32_t now = millis();
-  if ((now - lastPrintMs) < PRINT_INTERVAL_MS) return;
+  uint32_t elapsedMs = now - lastPrintMs;
+  if (elapsedMs < PRINT_INTERVAL_MS) return;
   lastPrintMs = now;
 
-  uint32_t avgCycleUs   = cycleTimeN ? (cycleTimeSumUs / cycleTimeN) : 0;
-  uint32_t maxCycleUs   = cycleTimeMaxUs;
-  float    effectiveHz  = (cycleTimeN * 1000.0f) / (float)PRINT_INTERVAL_MS;
+  // Use the actual elapsed wall time — loop slip or serial backpressure can
+  // stretch the print interval, and a constant divisor would misreport Hz.
+  uint32_t avgCycleUs  = cycleTimeN ? (cycleTimeSumUs / cycleTimeN) : 0;
+  uint32_t maxCycleUs  = cycleTimeMaxUs;
+  float    effectiveHz = elapsedMs ? ((float)cycleTimeN * 1000.0f / (float)elapsedMs) : 0.0f;
   cycleTimeSumUs = 0; cycleTimeN = 0; cycleTimeMaxUs = 0;
 
   Serial.print("# Polls:");
@@ -447,6 +469,10 @@ uint32_t lastBusModeMs = 0;   // last time we saw BUS_MODE=1 on any ESC
 uint32_t lastRestartMs = 0;   // last time we broadcast Restart
 bool firstReport = true;
 
+// Non-blocking 'r' command state (register read)
+bool     readRegPending  = false;
+uint32_t readRegStartUs  = 0;
+
 // Exponential stick curve — preserves sign, soft near zero, steep at ±1.
 // x in [-1..+1], y in [-1..+1]. Same shape as rc_test.ino.
 float expoCurve(float x) {
@@ -466,16 +492,8 @@ int16_t scaleAxis(int raw, int16_t maxOut) {
   return (int16_t)constrain(scaled, -maxOut, maxOut);
 }
 
-int16_t readJoystickThrottle() {
-  rawJoyY = analogRead(JOYSTICK_Y_PIN);
-  return scaleAxis(rawJoyY, THROTTLE_MAX);
-}
-
-int16_t readJoystickSteer() {
-  rawJoyX = analogRead(JOYSTICK_X_PIN);
-  int16_t s = scaleAxis(rawJoyX, STEER_MAX);
-  return STEER_INVERT ? -s : s;
-}
+// Joystick sampling is done directly in the control loop (single authoritative
+// path: analogRead() → scaleAxis() → expoCurve() → curvatureDrive).
 
 // ─── curvatureDrive (WPILib DifferentialDrive.curvatureDriveIK) ───
 // At speed: steering ONLY slows the inner track, outer holds throttle.
@@ -532,11 +550,12 @@ void setup() {
   Serial.println("#   Pull-up: 3K-10K to 5V on bus");
   Serial.println("#   ESC Brown -> GND, Red -> NOT CONNECTED");
   Serial.println("#");
-  Serial.println("# NOTE: USB Serial is shared with D0/D1.");
-  Serial.println("# Debug output may be garbled when X.BUS is connected.");
-  Serial.println("# Disconnect X.BUS Yellow from D0 to read this output.");
+  Serial.println("# NOTE: Nano R4 USB Serial (`Serial`) is independent of D0/D1.");
+  Serial.println("# X.BUS runs on `Serial1` (D0 RX / D1 TX) and does NOT share");
+  Serial.println("# the USB connection, so the Serial Monitor stays readable");
+  Serial.println("# while the bus is live — commands below are fully usable.");
   Serial.println("#");
-  Serial.println("# Commands via Serial Monitor:");
+  Serial.println("# Commands via Serial Monitor (work while X.BUS is connected):");
   Serial.println("#   t0 <val>  — set ESC0 throttle (-1000 to 1000)");
   Serial.println("#   t1 <val>  — set ESC1 throttle (-1000 to 1000)");
   Serial.println("#   s  <val>  — step response: slam both ESCs to val for 500ms");
@@ -564,8 +583,25 @@ void setup() {
 void loop() {
   uint32_t now = millis();
 
-  // === Control loop at fixed period ===
-  if ((now - lastControlMs) >= CONTROL_PERIOD_MS) {
+  // === Non-blocking 'r' register read completion ===
+  // Debug-only path: we collect the register response across loop iterations
+  // instead of delay()ing. While pending, we suppress the control-loop branch
+  // below (not the whole loop()) so serial commands and prints still flow.
+  // At 10 ms timeout this skips at most one control cycle — well inside the
+  // ESC's own THR_LOST grace window.
+  if (readRegPending) {
+    while (Serial1.available() && rxLen < (int)sizeof(rxBuf)) {
+      rxBuf[rxLen++] = Serial1.read();
+    }
+    if ((micros() - readRegStartUs) >= READ_REG_TIMEOUT_US) {
+      printRawRX();
+      readRegPending = false;
+      lastControlMs = now;  // resync so the next control cycle fires on schedule
+    }
+  }
+
+  // === Control loop at fixed period (skipped while register read is pending) ===
+  if (!readRegPending && (now - lastControlMs) >= CONTROL_PERIOD_MS) {
     uint32_t cycleStartUs = micros();
     lastControlMs = now;
     totalPolls++;
@@ -580,7 +616,7 @@ void loop() {
     float zRotation = expoCurve(STEER_INVERT ? normX : -normX);
 
     // Reverse limit (only when going straight)
-    if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
+    if (fabsf(zRotation) < STRAIGHT_LINE_THRESHOLD && xSpeed < -REVERSE_LIMIT) {
       xSpeed = -REVERSE_LIMIT;
     }
 
@@ -670,7 +706,8 @@ void loop() {
     // === BUS_MODE watchdog ===
     // If we haven't seen any ESC report BUS_MODE=1 for 2s, resend Restart.
     // Rate-limit to once every 3s so we don't spam.
-    if ((now - lastBusModeMs) > 2000 && (now - lastRestartMs) > 3000) {
+    if ((now - lastBusModeMs) > BUS_MODE_TIMEOUT_MS &&
+        (now - lastRestartMs) > BUS_MODE_RESTART_RATE_MS) {
       Serial.println("# BUS_MODE lost — broadcasting Restart (0xA0)...");
       sendRestart(0xFF);
       lastRestartMs = now;
@@ -696,8 +733,9 @@ void loop() {
     } else if (cmd == "r") {
       Serial.println("# Reading register 0x04 (ProtocolType) from ESC 0...");
       sendReadRegister(0, 0x04);
-      delay(15);  // 10ms timeout per spec + margin
-      printRawRX();
+      readRegPending = true;
+      readRegStartUs = micros();
+      rxLen = 0;  // start fresh so the poll collects only the register response
     } else if (cmd == "x") {
       Serial.println("# Restarting all ESCs...");
       sendRestart(0xFF);
