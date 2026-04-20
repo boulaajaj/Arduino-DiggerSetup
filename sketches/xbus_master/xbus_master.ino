@@ -63,7 +63,6 @@ const int ADC_RESOLUTION   = 14;        // Nano R4 14-bit ADC
 const int ADC_MAX          = 16383;     // 2^14 - 1
 const int ADC_CENTER       = 8192;      // ADC mid-scale (~2.5V)
 const int ADC_DEADBAND     = 400;       // ±400 counts = small dead zone around center
-const int16_t THROTTLE_MAX = 200;       // Cap at 20% for bench safety (out of 1000)
 const int  STEER_INVERT    = 0;         // set to 1 if steering feels reversed
 
 // curvatureDrive tuning (same values as rc_test.ino V5.0)
@@ -71,23 +70,74 @@ const float PIVOT_THRESHOLD = 0.10f;    // Below 10% throttle: allow pivot turns
 const float PIVOT_SPEED_CAP = 0.45f;    // Max track speed during pivot (45%)
 const float REVERSE_LIMIT   = 0.35f;    // Max reverse (straight-line only)
 
+// Plant characterization test — set to true to replace joystick input with a
+// scripted throttle schedule for measuring step response. Normally false.
+const bool AUTOMATED_TEST = false;
+
 // Closed-loop RPM mode — ON by default (no RC switch available)
 bool     rpmMode = true;
-int16_t  rpmTargetL = 0;                // smoothed target RPM (what PID chases)
+int16_t  rpmTargetL = 0;                // target RPM per track
 int16_t  rpmTargetR = 0;
-const int16_t RPM_MAX = 27000;          // motor no-load max (~2500KV × 11V)
-const float   KP_RPM  = 0.02f;          // proportional gain (throttle units per RPM err)
+// Bench safety cap on commanded RPM target — raise once vehicle is loaded.
+// 10,000 mech RPM is reached at about 45% throttle based on measured data.
+const int16_t RPM_TARGET_CAP = 10000;
 
 // Stick → RPM shaping
 // Expo curve: soft near center (fine control), aggressive toward full stick.
-// y = EXPO_LINEAR * x + EXPO_CUBIC * x^3   with EXPO_LINEAR + EXPO_CUBIC = 1
-const float EXPO_LINEAR = 0.35f;        // linear term weight
-const float EXPO_CUBIC  = 0.65f;        // cubic term weight (more = softer center)
+const float EXPO_LINEAR = 0.35f;
+const float EXPO_CUBIC  = 0.65f;
 
-// First-order lag on target RPM — instant stick response with smooth ramp.
-// Think of this as "how long to reach 63% of the new target".
-const float TAU_ACCEL = 0.30f;          // seconds to ramp UP
-const float TAU_DECEL = 0.50f;          // seconds to ramp DOWN (gentler)
+// ─── Controller constants (see docs/PLANT-CHARACTERIZATION.md) ───────────
+// Layer 1 — stick → target: target below MIN_TARGET_RPM → snap to zero.
+const int16_t MIN_TARGET_RPM      = 500;
+
+// Layer 2 — feed-forward table: measured RPM vs throttle on tracks-only load.
+// Keyed on TARGET RPM; table returns throttle (x0.1%, 0..1000). Separate
+// tables per ESC because ESC1 reads 5–15% higher RPM at the same throttle.
+// Table points are the mean-of-5-runs numbers from staircase_5runs.csv.
+// 15% throttle is the first reliable region (below that is dead-zone edge).
+struct FFPoint { int16_t rpm; int16_t throttle; };
+
+const FFPoint FF_TABLE_L[] = {
+  {    0,   0},
+  { 2774, 150},  // 15%
+  { 4154, 200},  // 20%
+  { 5714, 250},  // 25%
+  { 6827, 300},  // 30%
+  { 8120, 350},  // 35%
+  { 9003, 400},  // 40%
+  { 9554, 450},  // 45%
+  {10377, 500},  // 50%
+};
+const uint8_t FF_TABLE_L_N = sizeof(FF_TABLE_L) / sizeof(FF_TABLE_L[0]);
+
+// ESC1 reaches more RPM per throttle unit, so its FF table has larger RPM
+// values at each throttle row (derived from same 5-run test, right motor).
+const FFPoint FF_TABLE_R[] = {
+  {    0,   0},
+  { 2700, 150},  // 15% — approximated; refine on next capture
+  { 4400, 200},  // 20%
+  { 6100, 250},  // 25%
+  { 7200, 300},  // 30%
+  { 8400, 350},  // 35%
+  { 9300, 400},  // 40%
+  { 9900, 450},  // 45%
+  {10800, 500},  // 50%
+};
+const uint8_t FF_TABLE_R_N = sizeof(FF_TABLE_R) / sizeof(FF_TABLE_R[0]);
+
+// Layer 3 — slow trim
+const uint32_t TRIM_UPDATE_MS     = 1000;  // 1 Hz correction
+const int16_t  TRIM_DEADBAND_RPM  = 500;   // |error| below this = no change
+const int16_t  TRIM_STEP          = 10;    // per-update adjustment (x0.1% throttle)
+const int16_t  TRIM_CLAMP         = 50;    // absolute cap on accumulated trim (5%)
+int16_t trimL = 0, trimR = 0;              // accumulated trim per ESC
+uint32_t lastTrimMs = 0;
+
+// Output safety
+const int16_t MAX_THROTTLE_DELTA  = 10;    // 1% slew limit per 10ms cycle
+const int16_t DEAD_ZONE_MAX       = 60;    // 0..60 in output = always zero (below 6% dead zone)
+const int16_t OUTPUT_CAP          = 500;   // bench cap on FINAL throttle output (50%)
 
 // Drive-feel tuning
 const float STRAIGHT_LINE_THRESHOLD = 0.05f;  // |zRotation| below this = "going straight" — applies reverse limiter
@@ -242,6 +292,20 @@ void sendRestart(uint8_t target) {
   txBuf[2] = target;         // Extra: target ESC or 0xFF for all
   txBuf[3] = FUNC_RESTART;
   txBuf[4] = 0;              // Length: 0
+  txBuf[5] = checksumFull(txBuf, 6);
+
+  Serial1.write(txBuf, 6);
+  Serial1.flush();
+}
+
+// Send clear-flags command (broadcast) — clears latched safety flags
+// like THR_NOTZERO so the ESC will accept throttle commands.
+void sendClearFlags(uint8_t target) {
+  txBuf[0] = HEADER_MASTER;
+  txBuf[1] = ADDR_BROADCAST;
+  txBuf[2] = target;
+  txBuf[3] = FUNC_CLEAR_FLAGS;
+  txBuf[4] = 0;
   txBuf[5] = checksumFull(txBuf, 6);
 
   Serial1.write(txBuf, 6);
@@ -576,10 +640,67 @@ void setup() {
   Serial.println("# Sending Restart (0xA0) broadcast to activate BUS_MODE...");
   while (Serial1.available()) Serial1.read();
   sendRestart(0xFF);
-  delay(200);  // ESC reboots and comes back in BUS mode
+  delay(1000);  // ESC reboots and comes back in BUS mode — give it a full second
+
+  // Clear any latched safety flags (e.g. THR_NOTZERO) before the test starts.
+  // Sent twice with a small gap — reliable even if the first one races the reboot.
+  Serial.println("# Clearing safety flags (0xA1) broadcast...");
+  sendClearFlags(0xFF);
+  delay(100);
+  sendClearFlags(0xFF);
+  delay(100);
 
   lastControlMs = millis();
 }
+
+// ═══════════════════════════════════════════════════════════════
+// [CONTROLLER] — FF + slow trim + slew limit (see docs/PLANT-CHARACTERIZATION.md)
+// ═══════════════════════════════════════════════════════════════
+
+// Feed-forward lookup: target RPM → throttle (linear interp over table).
+// Handles signed targets — table is for positive RPM; negate both sides for reverse.
+int16_t feedForward(int16_t targetRpm, const FFPoint *tbl, uint8_t n) {
+  int16_t sign = (targetRpm < 0) ? -1 : 1;
+  int16_t rpm  = targetRpm * sign;
+
+  if (rpm <= tbl[0].rpm) return 0;
+  if (rpm >= tbl[n - 1].rpm) return tbl[n - 1].throttle * sign;
+
+  for (uint8_t i = 1; i < n; i++) {
+    if (rpm < tbl[i].rpm) {
+      int16_t rpm_lo = tbl[i - 1].rpm;
+      int16_t rpm_hi = tbl[i].rpm;
+      int16_t thr_lo = tbl[i - 1].throttle;
+      int16_t thr_hi = tbl[i].throttle;
+      int32_t interp = thr_lo + (int32_t)(thr_hi - thr_lo) * (rpm - rpm_lo) / (rpm_hi - rpm_lo);
+      return (int16_t)(interp * sign);
+    }
+  }
+  return 0;  // unreachable
+}
+
+// Apply final-output safety: slew limit and dead-zone skip. `desired` is
+// what the controller wants; `current` is what we last sent. Returns the
+// new throttle value to command, honoring ≤1% change per cycle and the
+// 0..60 dead-zone skip.
+int16_t applyFinalOutput(int16_t desired, int16_t current) {
+  // Cap the target to the bench output cap
+  desired = constrain(desired, -OUTPUT_CAP, OUTPUT_CAP);
+
+  // Slew limit: max MAX_THROTTLE_DELTA change per cycle
+  int16_t delta = desired - current;
+  if (delta >  MAX_THROTTLE_DELTA) delta =  MAX_THROTTLE_DELTA;
+  if (delta < -MAX_THROTTLE_DELTA) delta = -MAX_THROTTLE_DELTA;
+  int16_t out = current + delta;
+
+  // Dead-zone skip: if we would command a small non-zero value, send 0 instead.
+  // This keeps us from wasting throttle in the 1..6% band where nothing happens.
+  if (out > 0 && out <= DEAD_ZONE_MAX) out = 0;
+  if (out < 0 && out >= -DEAD_ZONE_MAX) out = 0;
+
+  return out;
+}
+
 
 void loop() {
   uint32_t now = millis();
@@ -607,6 +728,88 @@ void loop() {
     lastControlMs = now;
     totalPolls++;
 
+    // --- AUTOMATED TEST: scripted throttle schedule for plant characterization.
+    // Ignores joystick. Both ESCs receive the same throttle. CSV log captures
+    // every cycle so we can measure step response (how long until RPM reaches
+    // steady state and what steady-state RPM each throttle produces).
+    if (AUTOMATED_TEST) {
+      static uint32_t testStartMs = 0;
+      if (testStartMs == 0) testStartMs = now;
+      uint32_t tMs = now - testStartMs;
+
+      // Dead-zone verification test — hold each low throttle for 3s with 2s rest.
+      // Runs 3%, 4%, 5%, 6%, 7%, 8%. Twice for consistency.
+      // 5-second zero baseline up front so ESCs fully arm.
+      const uint32_t BASELINE_MS = 5000;
+      const uint32_t HOLD_MS     = 3000;
+      const uint32_t REST_MS     = 2000;
+      const uint32_t SLOT_MS     = HOLD_MS + REST_MS;  // 5000 ms per throttle level
+      // throttle values tested (x0.1%) — 3% to 8% in 1% increments
+      const int16_t LEVELS[] = {30, 40, 50, 60, 70, 80};
+      const uint32_t N_LEVELS = sizeof(LEVELS) / sizeof(LEVELS[0]);
+      const uint32_t N_RUNS   = 2;  // repeat the full 3%→8% sweep
+
+      int16_t schedThrottle;
+      if (tMs < BASELINE_MS) {
+        schedThrottle = 0;
+      } else {
+        uint32_t off      = tMs - BASELINE_MS;
+        uint32_t totalRun = SLOT_MS * N_LEVELS;
+        uint32_t runIdx   = off / totalRun;
+        if (runIdx >= N_RUNS) {
+          schedThrottle = 0;
+        } else {
+          uint32_t within  = off % totalRun;
+          uint32_t slot    = within / SLOT_MS;       // which level 0..5
+          uint32_t slotOff = within % SLOT_MS;
+          if (slotOff < HOLD_MS) {
+            schedThrottle = LEVELS[slot];
+          } else {
+            schedThrottle = 0;  // rest between levels
+          }
+        }
+      }
+
+      throttle[0] = schedThrottle;
+      throttle[1] = schedThrottle;
+      rpmTargetL  = schedThrottle;  // logged in CSV so we can see the command
+      rpmTargetR  = schedThrottle;
+      rawJoyY     = 0;
+      rawJoyX     = 0;
+
+      sendThrottleCommand(throttle, NUM_ESCS, telemetryTarget);
+      bool gotT = receiveTelemetry(telemetryTarget);
+      if (gotT) goodFrames++; else badFrames++;
+
+      // Cycle timing
+      uint32_t cycleUs = micros() - cycleStartUs;
+      cycleTimeSumUs += cycleUs;
+      cycleTimeN++;
+      if (cycleUs > cycleTimeMaxUs) cycleTimeMaxUs = cycleUs;
+
+      // CSV log (same format as live run)
+      uint32_t tNowUs2 = micros();
+      int32_t actL_c = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
+      int32_t actR_c = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
+      uint32_t ageL_c = telem[0].valid ? (tNowUs2 - telem[0].timestamp) / 1000 : 9999;
+      uint32_t ageR_c = telem[1].valid ? (tNowUs2 - telem[1].timestamp) / 1000 : 9999;
+      Serial.print("CSV,");
+      Serial.print(now); Serial.print(',');
+      Serial.print(rawJoyY); Serial.print(',');
+      Serial.print(rawJoyX); Serial.print(',');
+      Serial.print(rpmTargetL); Serial.print(',');
+      Serial.print(actL_c); Serial.print(',');
+      Serial.print(throttle[0]); Serial.print(',');
+      Serial.print(ageL_c); Serial.print(',');
+      Serial.print(rpmTargetR); Serial.print(',');
+      Serial.print(actR_c); Serial.print(',');
+      Serial.print(throttle[1]); Serial.print(',');
+      Serial.println(ageR_c);
+
+      telemetryTarget = (telemetryTarget + 1) % NUM_ESCS;
+      return;  // Skip the normal joystick/closed-loop path entirely
+    }
+
     // --- Compute throttle commands ---
     // Stage 1: Read axes, normalize to -1..+1, apply expo for feel
     rawJoyY = analogRead(JOYSTICK_Y_PIN);
@@ -633,30 +836,65 @@ void loop() {
         Serial.println("# step response complete");
       }
     } else if (rpmMode) {
-      // Stage 3: wheel speeds → static RPM target → smoothed RPM target
-      float rpmStaticL = ws.left  * RPM_MAX;
-      float rpmStaticR = ws.right * RPM_MAX;
+      // ── Layer 1: wheel speeds → target RPM ──────────────────────────
+      rpmTargetL = (int16_t)(ws.left  * RPM_TARGET_CAP);
+      rpmTargetR = (int16_t)(ws.right * RPM_TARGET_CAP);
+      if (abs(rpmTargetL) < MIN_TARGET_RPM) rpmTargetL = 0;
+      if (abs(rpmTargetR) < MIN_TARGET_RPM) rpmTargetR = 0;
 
-      static float rpmSmoothL = 0.0f, rpmSmoothR = 0.0f;
-      const float dts = CONTROL_PERIOD_MS / 1000.0f;
-      bool  accelL = fabsf(rpmStaticL) > fabsf(rpmSmoothL);
-      bool  accelR = fabsf(rpmStaticR) > fabsf(rpmSmoothR);
-      float alphaL = dts / (dts + (accelL ? TAU_ACCEL : TAU_DECEL));
-      float alphaR = dts / (dts + (accelR ? TAU_ACCEL : TAU_DECEL));
-      rpmSmoothL += (rpmStaticL - rpmSmoothL) * alphaL;
-      rpmSmoothR += (rpmStaticR - rpmSmoothR) * alphaR;
-      rpmTargetL = (int16_t)rpmSmoothL;
-      rpmTargetR = (int16_t)rpmSmoothR;
+      // Reset trim on direction reversal — the error would otherwise be huge
+      // and wrong-signed during the zero-crossing, saturating the trim.
+      static int16_t prevSignL = 0, prevSignR = 0;
+      int16_t signL = (rpmTargetL > 0) - (rpmTargetL < 0);
+      int16_t signR = (rpmTargetR > 0) - (rpmTargetR < 0);
+      if (signL != prevSignL) trimL = 0;
+      if (signR != prevSignR) trimR = 0;
+      prevSignL = signL;
+      prevSignR = signR;
 
-      // Stage 4: P controller — throttle driven by RPM error
-      int32_t actualL = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
-      int32_t actualR = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
-      throttle[0] = constrain((int32_t)((rpmTargetL - actualL) * KP_RPM), -THROTTLE_MAX, THROTTLE_MAX);
-      throttle[1] = constrain((int32_t)((rpmTargetR - actualR) * KP_RPM), -THROTTLE_MAX, THROTTLE_MAX);
+      // ── Layer 2: feed-forward ───────────────────────────────────────
+      int16_t ffL = feedForward(rpmTargetL, FF_TABLE_L, FF_TABLE_L_N);
+      int16_t ffR = feedForward(rpmTargetR, FF_TABLE_R, FF_TABLE_R_N);
+
+      // ── Layer 3: slow trim update (1 Hz, separate from 100 Hz control) ──
+      if ((now - lastTrimMs) >= TRIM_UPDATE_MS) {
+        lastTrimMs = now;
+
+        int32_t actualL = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
+        int32_t actualR = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
+
+        // Only trim when we're actually commanding motion — below the
+        // target-RPM threshold, leave trim at 0 so rest-state is clean.
+        if (rpmTargetL == 0) {
+          trimL = 0;
+        } else {
+          int32_t errL = (int32_t)rpmTargetL - actualL;
+          if      (errL >  TRIM_DEADBAND_RPM) trimL += TRIM_STEP;
+          else if (errL < -TRIM_DEADBAND_RPM) trimL -= TRIM_STEP;
+          trimL = constrain(trimL, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
+        }
+        if (rpmTargetR == 0) {
+          trimR = 0;
+        } else {
+          int32_t errR = (int32_t)rpmTargetR - actualR;
+          if      (errR >  TRIM_DEADBAND_RPM) trimR += TRIM_STEP;
+          else if (errR < -TRIM_DEADBAND_RPM) trimR -= TRIM_STEP;
+          trimR = constrain(trimR, (int16_t)-TRIM_CLAMP, (int16_t)TRIM_CLAMP);
+        }
+      }
+
+      // ── Combine FF + trim → desired, then apply slew + dead-zone skip ──
+      int16_t desiredL = (rpmTargetL == 0) ? 0 : ffL + trimL * signL;
+      int16_t desiredR = (rpmTargetR == 0) ? 0 : ffR + trimR * signR;
+      throttle[0] = applyFinalOutput(desiredL, throttle[0]);
+      throttle[1] = applyFinalOutput(desiredR, throttle[1]);
+
     } else {
       // Open-loop: wheel speeds → scaled throttle directly (no RPM target)
-      throttle[0] = constrain((int16_t)(ws.left  * THROTTLE_MAX), -THROTTLE_MAX, THROTTLE_MAX);
-      throttle[1] = constrain((int16_t)(ws.right * THROTTLE_MAX), -THROTTLE_MAX, THROTTLE_MAX);
+      int16_t desiredL = (int16_t)(ws.left  * OUTPUT_CAP);
+      int16_t desiredR = (int16_t)(ws.right * OUTPUT_CAP);
+      throttle[0] = applyFinalOutput(desiredL, throttle[0]);
+      throttle[1] = applyFinalOutput(desiredR, throttle[1]);
     }
 
     // Send throttle to all ESCs, request telemetry from one
@@ -701,6 +939,28 @@ void loop() {
       Serial.println(telem[telemetryTarget].outputThrottle * 0.1f, 1);
     }
 
+    // Per-cycle CSV log — one row every 10 ms (100 Hz).
+    // Columns: t_ms, joyY, joyX, tgtL, actL, thrL, ageL_ms, tgtR, actR, thrR, ageR_ms
+    // "age" is how old the last valid telemetry for that ESC is — tells you
+    // when a row reflects stale data vs. a fresh reading.
+    uint32_t tNowUs = micros();
+    int32_t actL_csv = telem[0].valid ? (int32_t)telem[0].rpmHz * 30 : 0;
+    int32_t actR_csv = telem[1].valid ? (int32_t)telem[1].rpmHz * 30 : 0;
+    uint32_t ageL_csv = telem[0].valid ? (tNowUs - telem[0].timestamp) / 1000 : 9999;
+    uint32_t ageR_csv = telem[1].valid ? (tNowUs - telem[1].timestamp) / 1000 : 9999;
+    Serial.print("CSV,");
+    Serial.print(now); Serial.print(',');
+    Serial.print(rawJoyY); Serial.print(',');
+    Serial.print(rawJoyX); Serial.print(',');
+    Serial.print(rpmTargetL); Serial.print(',');
+    Serial.print(actL_csv); Serial.print(',');
+    Serial.print(throttle[0]); Serial.print(',');
+    Serial.print(ageL_csv); Serial.print(',');
+    Serial.print(rpmTargetR); Serial.print(',');
+    Serial.print(actR_csv); Serial.print(',');
+    Serial.print(throttle[1]); Serial.print(',');
+    Serial.println(ageR_csv);
+
     // Alternate telemetry target between ESCs each cycle
     telemetryTarget = (telemetryTarget + 1) % NUM_ESCS;
 
@@ -742,7 +1002,7 @@ void loop() {
       sendRestart(0xFF);
     } else if (cmd.startsWith("s ")) {
       // Step response test: "s 150" slams throttle to +150 for STEP_DURATION_MS
-      stepValue = constrain(cmd.substring(2).toInt(), -THROTTLE_MAX, THROTTLE_MAX);
+      stepValue = constrain(cmd.substring(2).toInt(), -OUTPUT_CAP, OUTPUT_CAP);
       stepStartUs = micros();
       stepActive = true;
       Serial.print("# STEP RESPONSE: throttle=");
