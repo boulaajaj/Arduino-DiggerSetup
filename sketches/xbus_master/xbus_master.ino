@@ -373,9 +373,10 @@ void printTelemetry() {
 
   // Use the actual elapsed wall time — loop slip or serial backpressure can
   // stretch the print interval, and a constant divisor would misreport Hz.
+  // elapsedMs is guaranteed >= PRINT_INTERVAL_MS by the gate above, so no /0 guard needed.
   uint32_t avgCycleUs  = cycleTimeN ? (cycleTimeSumUs / cycleTimeN) : 0;
   uint32_t maxCycleUs  = cycleTimeMaxUs;
-  float    effectiveHz = elapsedMs ? ((float)cycleTimeN * 1000.0f / (float)elapsedMs) : 0.0f;
+  float    effectiveHz = (float)cycleTimeN * 1000.0f / (float)elapsedMs;
   cycleTimeSumUs = 0; cycleTimeN = 0; cycleTimeMaxUs = 0;
 
   Serial.print("# Polls:");
