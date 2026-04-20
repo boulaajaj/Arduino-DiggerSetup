@@ -259,7 +259,10 @@ bool receiveTelemetry(uint8_t expectedESC) {
 
     bool haveFullFrame = false;
     for (int i = 0; i + TELEM_FRAME_LEN <= rxLen; i++) {
-      if (rxBuf[i] == HEADER_SLAVE) { haveFullFrame = true; break; }
+      if (rxBuf[i] == HEADER_SLAVE) {
+        haveFullFrame = true;
+        break;
+      }
     }
     if (haveFullFrame) break;
   }
@@ -459,7 +462,7 @@ int16_t scaleAxis(int raw, int16_t maxOut) {
   if (deflection > 0) deflection -= ADC_DEADBAND;
   else                deflection += ADC_DEADBAND;
   const int usable = ADC_CENTER - ADC_DEADBAND;
-  long scaled = (long)deflection * maxOut / usable;
+  int32_t scaled = (int32_t)deflection * maxOut / usable;
   return (int16_t)constrain(scaled, -maxOut, maxOut);
 }
 
@@ -496,7 +499,10 @@ WS curvatureDrive(float xSpeed, float zRotation) {
 
   // Desaturate: scale down proportionally if either exceeds ±1
   float m = max(fabsf(left), fabsf(right));
-  if (m > 1.0f) { left /= m; right /= m; }
+  if (m > 1.0f) {
+    left /= m;
+    right /= m;
+  }
   return {left, right};
 }
 
