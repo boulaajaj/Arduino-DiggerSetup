@@ -1,45 +1,59 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V5.0 — Curvature Drive
+// Digger Control V7.0 — GL10 FOC + Speed-Adaptive Steering
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input controller for ride-on excavator (~50 lbs).
 // RC operator (Jason) and joystick rider (Malaki) share control
 // via 3-position override switch.
 //
-// Both RC and joystick send raw throttle + steering (no pre-mix).
-// Arduino applies curvatureDrive() — at speed, turning only slows
-// the inner track (outer holds speed). At standstill, full pivot.
+// Hardware shift (2026-04-25): swapped from E10/E3665 to GL10 ESC
+// + GL540L motor. The GL10's FOC handles motor acceleration
+// compensation and smoothness internally — Arduino's job shrinks
+// to: input mixing, override switch, soft limits, beeper alerts.
+// Telemetry (X.BUS Read Register) is scaffolded in types.h but
+// not polled — Serial2 is now used by S.BUS.
 //
 // Signal flow:
 //   RC (S.BUS) ──► curvatureDrive ──┐
 //                                   ├─► Mixer ─► Soft Limit
-//   Joystick ──► curvatureDrive ───┘          ─► Inertia ─► ESC
+//   Joystick ──► curvatureDrive ───┘          ─► Inertia ─► PWM
 //
 // Modules (search "[NAME]" to jump):
 //   [CONFIG]     All tunable constants
 //   [DRIVE]      curvatureDrive — proven FRC algorithm (WPILib)
-//   [RC]         S.BUS input — raw throttle + steering via Serial1
+//   [RC]         S.BUS input — raw throttle + steering via Serial2
 //   [JOYSTICK]   ADC input — deadband, expo curve
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [DYNAMICS]   Soft power cap, inertia
+//   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
 //   [DEBUG]      10 Hz serial CSV telemetry
 //
 // Pin map:
-//   D0  ← S.BUS (all RC channels, Serial1 RX via NPN inverter)
-//   A0  ← Joystick Y (throttle)     [14-bit ADC]
-//   A1  ← Joystick X (steering)     [14-bit ADC]
-//   D9  → Left ESC                   [Servo PWM]
-//   D10 → Right ESC                  [Servo PWM]
+//   A0  ← Joystick Y (throttle)        [14-bit ADC]
+//   A1  ← Joystick X (steering)        [14-bit ADC]
+//   A4  (unused — Serial2 TX, S.BUS is RX-only)
+//   A5  ← S.BUS RX (Serial2 via NPN inverter)
+//   D8  → Beeper (active buzzer, direct GPIO)
+//   D9  → Left ESC                      [Servo PWM]
+//   D10 → Right ESC                     [Servo PWM]
+//   D0/D1 → USB Serial (debug)
 //
-// S.BUS wiring:
+// S.BUS wiring (unchanged inverter circuit, now lands on A5):
 //   R7FG S.BUS signal ──[1K]──► NPN base
 //   NPN emitter ──► GND
-//   5V ──[10K]──┬──► NPN collector ──► D0 (Serial1 RX)
+//   5V ──[10K]──┬──► NPN collector ──► A5 (Serial2 RX)
 
+#include <Arduino.h>
 #include <Servo.h>
 #include "sbus.h"
 #include "types.h"
+
+
+// Second hardware UART on A4=TX(pin 18) / A5=RX(pin 19) via SCI0.
+// S.BUS only needs RX; TX is unused. Named `sbusUart` (not Serial2)
+// to avoid the macro collision with the core's pre-declared _UART2_.
+UART sbusUart(18, 19);
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -49,20 +63,21 @@
 // Pins
 const uint8_t PIN_JOY_Y  = A0;  // Throttle
 const uint8_t PIN_JOY_X  = A1;  // Steering
-const uint8_t PIN_ESC_L  = 9;   // Left ESC
-const uint8_t PIN_ESC_R  = 10;  // Right ESC
+const uint8_t PIN_BEEPER = 8;   // Active buzzer (HIGH = on)
+const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
+const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
 
 // S.BUS channel mapping (0-indexed, RC6GS V3 with no transmitter mix)
 const uint8_t SBUS_CH_THR   = 1;  // CH2 = throttle (forward/back)
 const uint8_t SBUS_CH_STEER = 0;  // CH1 = steering (left/right)
-const uint8_t SBUS_CH_MODE  = 3;  // CH4 = control mode (3-pos switch)
+const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch — reserved for V7.1)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
 
 // S.BUS value range (raw 172-1811, center ~992)
 const int SBUS_MIN = 172;
 const int SBUS_MAX = 1811;
 
-// Servo PWM range
+// Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
 const int SVMIN = 1000;  // Full reverse
 const int SVMAX = 2000;  // Full forward
@@ -79,23 +94,27 @@ const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
 // Expo curve blend weights — smooth low-end, no ESC deadband jump
-const float EXPO_LINEAR = 0.4f;   // Linear component (low-end response)
-const float EXPO_CUBIC  = 0.6f;   // Cubic component (high-end precision)
+const float EXPO_LINEAR = 0.4f;
+const float EXPO_CUBIC  = 0.6f;
 
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
 
 // Inertia — asymmetric exponential filter
-// Tuned for ~50 lb machine, 4-5 ft long. Smooth but nimble.
-const float TAU_ACCEL = 0.3f;  // Accel (s) — 63% in 0.3s, 95% in ~0.9s
-const float TAU_DECEL = 0.5f;  // Decel/coast (s) — 63% in 0.5s, 95% in ~1.5s
+const float TAU_ACCEL = 0.3f;
+const float TAU_DECEL = 0.5f;
 
 // Curvature drive — pivot threshold
-const float PIVOT_THRESHOLD = 0.10f;  // Below 10% throttle: allow pivot turns
-const float PIVOT_SPEED_CAP = 0.45f;  // Max track speed during pivot (45%)
+const float PIVOT_THRESHOLD = 0.10f;
+const float PIVOT_SPEED_CAP = 0.45f;
 
 // Reverse speed limit — percentage of forward max (straight-line only)
-const float REVERSE_LIMIT = 0.35f;  // 35% max reverse
+const float REVERSE_LIMIT = 0.35f;
+
+// Reverse-beep trigger: how far below center the output must be
+// before BEEP_REVERSE engages. 50 us = ~12.5% reverse — past deadband
+// and clear of small drift.
+const int   REVERSE_BEEP_US = 50;
 
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
@@ -104,25 +123,6 @@ const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 // ═══════════════════════════════════════════════════════════════
 // [DRIVE] — curvatureDrive: proven FRC algorithm (WPILib)
 // ═══════════════════════════════════════════════════════════════
-//
-// Inputs:  xSpeed (-1 to 1, throttle), zRotation (-1 to 1, steering)
-// Returns: left/right wheel speeds (-1 to 1)
-//
-// At speed: rotation is proportional to |throttle|. The outer track
-//   NEVER exceeds throttle — mathematically impossible. Inner track
-//   only slows down.
-// At standstill: allowTurnInPlace enables arcade-style counter-rotation
-//   for pivot turns.
-// Desaturation: if either wheel exceeds ±1, both scale down
-//   proportionally — preserves turn ratio without clipping.
-//
-// Reference: WPILib DifferentialDrive.curvatureDriveIK()
-//   https://github.com/wpilibsuite/allwpilib
-
-struct WheelSpeeds {
-  float left;
-  float right;
-};
 
 WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   xSpeed    = constrain(xSpeed, -1.0f, 1.0f);
@@ -131,33 +131,25 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   bool allowTurnInPlace = (fabsf(xSpeed) < PIVOT_THRESHOLD);
 
   float leftSpeed, rightSpeed;
-
   if (allowTurnInPlace) {
-    // Pivot mode: arcade-style, capped for safety
     float cappedRotation = constrain(zRotation, -PIVOT_SPEED_CAP, PIVOT_SPEED_CAP);
     leftSpeed  = xSpeed - cappedRotation;
     rightSpeed = xSpeed + cappedRotation;
   } else {
-    // Curvature mode: rotation scaled by |speed|
-    // Outer track = xSpeed, inner track = xSpeed - |xSpeed|*rotation
-    // Outer NEVER exceeds xSpeed. Inner only slows.
     leftSpeed  = xSpeed - fabsf(xSpeed) * zRotation;
     rightSpeed = xSpeed + fabsf(xSpeed) * zRotation;
   }
 
-  // Desaturate: scale both down proportionally if either exceeds ±1
   float maxMag = max(fabsf(leftSpeed), fabsf(rightSpeed));
   if (maxMag > 1.0f) {
     leftSpeed  /= maxMag;
     rightSpeed /= maxMag;
   }
-
   return {leftSpeed, rightSpeed};
 }
 
-// Convert normalized wheel speeds (-1..1) to servo microseconds
-MixerOutput wheelSpeedsToServo(WheelSpeeds ws) {
-  MixerOutput out;
+ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
+  ServoOutput out;
   out.left  = SVC + (int)(ws.left  * SOFT_RANGE);
   out.right = SVC + (int)(ws.right * SOFT_RANGE);
   out.left  = constrain(out.left,  SVMIN, SVMAX);
@@ -167,15 +159,10 @@ MixerOutput wheelSpeedsToServo(WheelSpeeds ws) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [RC] — S.BUS input: raw throttle + steering on D0 via Serial1
+// [RC] — S.BUS input on Serial2 (A5 RX, NPN inverter)
 // ═══════════════════════════════════════════════════════════════
-//
-// RC6GS V3 sends raw throttle on CH2 and raw steering on CH1
-// (no transmitter tank mix — Arduino handles all mixing).
-// S.BUS delivers all 16 channels + failsafe + frame-lost flags
-// over a single wire at 143Hz via NPN inverter on D0.
 
-bfs::SbusRx sbusRx(&Serial1);
+bfs::SbusRx sbusRx(&sbusUart);
 bfs::SbusData sbusData;
 bool sbusValid = false;
 uint32_t sbusLastFrame = 0;
@@ -193,27 +180,20 @@ int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH
 int rcSteering() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_STEER])) : SVC; }
 int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SVMIN; }
 
-// RC → curvatureDrive → servo values
-MixerOutput rcDrive() {
+ServoOutput rcDrive() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
-
-  // Apply reverse limit for straight-line reverse
   if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
     xSpeed = -REVERSE_LIMIT;
   }
-
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
   return wheelSpeedsToServo(ws);
 }
 
 
 // ═══════════════════════════════════════════════════════════════
-// [JOYSTICK] — ADC, deadband, expo curve → curvatureDrive
+// [JOYSTICK] — ADC, deadband, expo curve
 // ═══════════════════════════════════════════════════════════════
-//
-// 14-bit ADC. Double-read clears mux crosstalk between channels.
-// Expo gives fine control at low stick, full range at high stick.
 
 float expoCurve(float x) {
   float a = fabsf(x);
@@ -224,9 +204,9 @@ int joyDeadband(int adc) {
   return (abs(adc - ADC_CENTER) <= JOY_DEADBAND) ? ADC_CENTER : adc;
 }
 
-// Cached joystick state — updated at ADC_INTERVAL, not every loop.
-JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, SVC, SVC};
-uint32_t lastAdcTime = 0;
+JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};
+ServoOutput   cachedJoyOut = {SVC, SVC};
+uint32_t      lastAdcTime = 0;
 const uint32_t ADC_INTERVAL = 10000UL;  // 10ms = 100Hz
 
 void updateJoystick(uint32_t now) {
@@ -238,37 +218,29 @@ void updateJoystick(uint32_t now) {
   analogRead(PIN_JOY_X); delayMicroseconds(100);
   cachedJoy.rawX = analogRead(PIN_JOY_X);
 
-  // Normalize joystick to -1..1 with expo curve
   float normY = constrain((float)(joyDeadband(cachedJoy.rawY) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
   float normX = constrain((float)(joyDeadband(cachedJoy.rawX) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
-  float xSpeed    = signY * expoCurve(normY);
-  float zRotation = -(signX * expoCurve(normX));  // Invert: joystick left = turn left
+  cachedJoy.xSpeed    = signY * expoCurve(normY);
+  cachedJoy.zRotation = -(signX * expoCurve(normX));  // joystick left = turn left
 
-  // Apply reverse limit for straight-line reverse
+  float xSpeed = cachedJoy.xSpeed;
+  float zRotation = cachedJoy.zRotation;
   if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
     xSpeed = -REVERSE_LIMIT;
   }
-
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
-  MixerOutput out = wheelSpeedsToServo(ws);
-  cachedJoy.left  = out.left;
-  cachedJoy.right = out.right;
+  cachedJoyOut = wheelSpeedsToServo(ws);
 }
 
 
 // ═══════════════════════════════════════════════════════════════
 // [MIXER] — Override switch selects authority
 // ═══════════════════════════════════════════════════════════════
-//
-// RC ALWAYS has control. The switch controls joystick authority:
-//   CH5 LOW  → RC only (joystick disabled)
-//   CH5 MID  → Both active, RC overrides joystick when RC non-neutral
-//   CH5 HIGH → 50/50 blend (RC + joystick averaged)
 
-MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
-  MixerOutput out;
+ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
+  ServoOutput out;
   if (ovr < OVR_LO) {
     out.left = rcL;  out.right = rcR;
   } else if (ovr > OVR_HI) {
@@ -276,13 +248,8 @@ MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
     out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
   } else {
     bool rcActive = (rcL != SVC) || (rcR != SVC);
-    if (rcActive) {
-      out.left = rcL;
-      out.right = rcR;
-    } else {
-      out.left = joyL;
-      out.right = joyR;
-    }
+    if (rcActive) { out.left = rcL; out.right = rcR; }
+    else          { out.left = joyL; out.right = joyR; }
   }
   return out;
 }
@@ -291,9 +258,6 @@ MixerOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
 // ═══════════════════════════════════════════════════════════════
 // [DYNAMICS] — Soft limit, inertia
 // ═══════════════════════════════════════════════════════════════
-//
-// curvatureDrive handles all steering dynamics. This section only
-// applies output saturation and inertia smoothing.
 
 float posL = 0, posR = 0;
 
@@ -316,6 +280,96 @@ void applyInertia(float targetL, float targetR, float dts) {
   posR += (targetR - posR) * alphaR;
   if (fabsf(targetL) < 1.0f && fabsf(posL) < 3.0f) posL = 0;
   if (fabsf(targetR) < 1.0f && fabsf(posR) < 3.0f) posR = 0;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [BEEPER] — Priority-driven audible alert on D8
+// ═══════════════════════════════════════════════════════════════
+//
+// Active buzzer driven directly from GPIO (HIGH = sounding).
+// Patterns are non-blocking, evaluated each loop pass against millis().
+// Pattern priority is encoded in the BeepPattern enum value (higher
+// = louder/more critical). Caller sets target each loop; if multiple
+// conditions fire, the highest pattern wins. BATTERY/OVERTEMP are
+// scaffolded but never set yet — telemetry isn't polled this build.
+
+struct BeepStep { uint16_t onMs; uint16_t offMs; };
+struct BeepProgram { uint8_t steps; uint16_t restMs; const BeepStep* seq; };
+
+// Step sequences. Each entry is (on_ms, off_ms). After all steps,
+// the program rests for restMs before repeating.
+const BeepStep PAT_REVERSE[]  = {{1000, 0}};
+const BeepStep PAT_BAT30[]    = {{200,  0}};
+const BeepStep PAT_BAT20[]    = {{200,  200}, {200, 0}};
+const BeepStep PAT_OVERTEMP[] = {{100,  100}, {100, 0}};
+
+const BeepProgram BEEP_PROGRAMS[] = {
+  {0, 0,    nullptr},        // BEEP_SILENT
+  {1, 1000, PAT_REVERSE},    // BEEP_REVERSE: 1s on, 1s off — backup-alarm style
+  {1, 9800, PAT_BAT30},      // BEEP_BATTERY_30: chirp every ~10s
+  {2, 600,  PAT_BAT20},      // BEEP_BATTERY_20: double chirp every ~1s
+  {2, 300,  PAT_OVERTEMP},   // BEEP_OVERTEMP: rapid double chirp
+};
+
+BeepPattern currentBeep = BEEP_SILENT;
+uint8_t     beepStepIdx = 0;
+uint32_t    beepStateStart = 0;
+bool        beepOn = false;
+
+void beeperInit() {
+  pinMode(PIN_BEEPER, OUTPUT);
+  digitalWrite(PIN_BEEPER, LOW);
+}
+
+void setBeepPattern(BeepPattern p, uint32_t nowMs) {
+  if (p == currentBeep) return;
+  currentBeep = p;
+  beepStepIdx = 0;
+  beepStateStart = nowMs;
+  beepOn = false;
+  digitalWrite(PIN_BEEPER, LOW);
+}
+
+void beeperUpdate(uint32_t nowMs) {
+  const BeepProgram& prog = BEEP_PROGRAMS[currentBeep];
+  if (prog.steps == 0) {
+    if (beepOn) { digitalWrite(PIN_BEEPER, LOW); beepOn = false; }
+    return;
+  }
+
+  uint32_t elapsed = nowMs - beepStateStart;
+  const BeepStep& step = prog.seq[beepStepIdx];
+
+  if (beepOn) {
+    if (elapsed >= step.onMs) {
+      digitalWrite(PIN_BEEPER, LOW);
+      beepOn = false;
+      beepStateStart = nowMs;
+    }
+  } else {
+    bool isLastStep = (beepStepIdx == prog.steps - 1);
+    uint32_t gap = isLastStep ? prog.restMs : step.offMs;
+    if (elapsed >= gap) {
+      if (isLastStep) beepStepIdx = 0;
+      else            beepStepIdx++;
+      const BeepStep& next = prog.seq[beepStepIdx];
+      if (next.onMs > 0) {
+        digitalWrite(PIN_BEEPER, HIGH);
+        beepOn = true;
+      }
+      beepStateStart = nowMs;
+    }
+  }
+}
+
+// Decide which pattern to play based on current state. Returns the
+// highest-priority pattern that applies. Battery/temp are placeholders
+// until X.BUS telemetry is wired back in.
+BeepPattern selectBeepPattern(int outL, int outR) {
+  bool reversing = (outL < SVC - REVERSE_BEEP_US) || (outR < SVC - REVERSE_BEEP_US);
+  if (reversing) return BEEP_REVERSE;
+  return BEEP_SILENT;
 }
 
 
@@ -344,8 +398,7 @@ void outputWrite() {
 // ═══════════════════════════════════════════════════════════════
 // [DEBUG] — 10 Hz serial CSV telemetry
 // ═══════════════════════════════════════════════════════════════
-//
-// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost
+// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Beep,FS,Lost
 
 uint32_t prevPrint = 0;
 
@@ -353,12 +406,12 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V5.0 — Curvature Drive ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,FS,Lost");
+    Serial.println("# === Digger V7.0 — GL10 FOC + S.BUS Serial2 + Beeper D8 ===");
+    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Beep,FS,Lost");
   }
 }
 
-void debugPrint(uint32_t now, const JoystickState &js) {
+void debugPrint(uint32_t now) {
   if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
 
@@ -367,11 +420,12 @@ void debugPrint(uint32_t now, const JoystickState &js) {
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
-  char buf[100];
-  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-          rcT, rcS, rc4, rc5,
-          js.rawY, js.rawX, outL, outR,
-          sbusData.failsafe, sbusData.lost_frame);
+  char buf[110];
+  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+           rcT, rcS, rc4, rc5,
+           cachedJoy.rawY, cachedJoy.rawX,
+           outL, outR, (int)currentBeep,
+           sbusData.failsafe, sbusData.lost_frame);
   Serial.println(buf);
 }
 
@@ -386,12 +440,14 @@ void setup() {
   analogReadResolution(14);
   sbusRx.Begin();
   outputInit();
+  beeperInit();
   debugInit();
   prevUs = micros();
 }
 
 void loop() {
   uint32_t now = micros();
+  uint32_t nowMs = now / 1000UL;
   float dts = (float)(now - prevUs) * 1e-6f;
   if (dts <= 0) return;
   prevUs = now;
@@ -406,17 +462,17 @@ void loop() {
   updateJoystick(now);
 
   // 2. RC lockout — no RC signal means immediate stop
-  MixerOutput mix;
+  ServoOutput mix;
   if (!sbusValid) {
     mix.left = SVC;  mix.right = SVC;
     posL = 0;  posR = 0;
   } else {
-    MixerOutput rc = rcDrive();
+    ServoOutput rc = rcDrive();
     mix = mixInputs(rc.left, rc.right, rcOverride(),
-                    cachedJoy.left, cachedJoy.right);
+                    cachedJoyOut.left, cachedJoyOut.right);
   }
 
-  // 3. Dynamics — soft limit + inertia only (curvatureDrive handles steering)
+  // 3. Dynamics — soft limit + inertia
   int scL = softLimit((float)(mix.left  - SVC));
   int scR = softLimit((float)(mix.right - SVC));
   applyInertia((float)(scL - SVC), (float)(scR - SVC), dts);
@@ -424,6 +480,10 @@ void loop() {
   // 4. Output
   outputWrite();
 
-  // 5. Debug
-  debugPrint(now, cachedJoy);
+  // 5. Beeper — evaluate against current output, then advance pattern
+  setBeepPattern(selectBeepPattern(outL, outR), nowMs);
+  beeperUpdate(nowMs);
+
+  // 6. Debug
+  debugPrint(now);
 }
