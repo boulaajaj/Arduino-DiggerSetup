@@ -99,8 +99,8 @@ const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 const float EXPO_LINEAR = 0.4f;
 const float EXPO_CUBIC  = 0.6f;
 
-// Power range
-const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
+// Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
+const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
 // Gear scaling — RC CH4 selects speed cap. 3-position switch:
 //   LOW  → 50% wheel speed cap   (training / tight spaces)
