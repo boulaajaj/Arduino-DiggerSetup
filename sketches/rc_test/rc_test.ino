@@ -119,8 +119,11 @@ const float TAU_DECEL = 0.5f;
 const float PIVOT_THRESHOLD = 0.10f;
 const float PIVOT_SPEED_CAP = 0.45f;
 
-// Reverse speed limit — percentage of forward max (straight-line only)
-const float REVERSE_LIMIT = 0.35f;
+// Reverse speed limit — percentage of forward max (straight-line only).
+// 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
+// cap was for the older E10/E3665 hardware; GL10 + GL540L can take
+// full reverse without trouble.
+const float REVERSE_LIMIT = 1.00f;
 
 // Master beeper enable. When false: the boot self-test is skipped,
 // the runtime reverse-alert is muted, and D8 stays LOW. Flip to true
@@ -161,11 +164,13 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
     rightSpeed = xSpeed + fabsf(xSpeed) * zRotation;
   }
 
-  float maxMag = max(fabsf(leftSpeed), fabsf(rightSpeed));
-  if (maxMag > 1.0f) {
-    leftSpeed  /= maxMag;
-    rightSpeed /= maxMag;
-  }
+  // Tank-style clip (NOT rescale): outer wheel caps at ±1.0, inner
+  // keeps the full reduction the steering math produced. This way
+  // straight-line throttle is never reduced when the operator turns —
+  // a tank should be fastest going straight and slower while turning,
+  // not the other way around.
+  leftSpeed  = constrain(leftSpeed,  -1.0f, 1.0f);
+  rightSpeed = constrain(rightSpeed, -1.0f, 1.0f);
   return {leftSpeed, rightSpeed};
 }
 
