@@ -315,20 +315,16 @@ ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [DYNAMICS] — Soft limit, inertia
+// [DYNAMICS] — Inertia smoothing
 // ═══════════════════════════════════════════════════════════════
+//
+// curvatureDrive + applyGear already bound wheel speeds to ±1.0 and
+// the gear cap. wheelSpeedsToServo and outputWrite then constrain to
+// SVMIN/SVMAX. The previous softLimit/fastTanh stage was redundant
+// and severely attenuated full-stick authority (~44% at gear HIGH),
+// so it was removed in V7.1. Inertia smoothing remains.
 
 float posL = 0, posR = 0;
-
-float fastTanh(float x) {
-  float a = fabsf(x);
-  return constrain(x / (1.0f + a + 0.28f * a * a), -1.0f, 1.0f);
-}
-
-int softLimit(float deviation) {
-  float val = SOFT_RANGE * fastTanh(deviation / SOFT_RANGE);
-  return SVC + (int)(val >= 0.0f ? val + 0.5f : val - 0.5f);
-}
 
 void applyInertia(float targetL, float targetR, float dts) {
   bool accelL = fabsf(targetL) > fabsf(posL) + 1.0f;
