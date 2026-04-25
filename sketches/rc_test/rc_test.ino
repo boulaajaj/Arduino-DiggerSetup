@@ -117,7 +117,14 @@ const float TAU_DECEL = 0.5f;
 
 // Curvature drive — pivot threshold
 const float PIVOT_THRESHOLD = 0.10f;
-const float PIVOT_SPEED_CAP = 0.45f;
+const float PIVOT_SPEED_CAP = 0.20f;  // 20% counter-rotate at standstill (was 0.45 — too aggressive)
+
+// Input gains — compensate for the operator's transmitter throw and
+// rebalance the feel. Trigger is boosted so a normal pull reaches full
+// throttle; the wheel is dampened so it produces a gentle turn instead
+// of slamming the tracks against each other.
+const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse authority
+const float RC_STEERING_GAIN = 0.50f;  // reduce wheel sensitivity
 
 // Reverse speed limit — percentage of forward max (straight-line only).
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
@@ -214,6 +221,10 @@ int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SV
 ServoOutput rcDrive() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
+  // Boost throttle (trigger doesn't reach full physical travel) and
+  // dampen steering (wheel was dominating). Clamp to ±1.0 after.
+  xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
+  zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
     xSpeed = -REVERSE_LIMIT;
   }
