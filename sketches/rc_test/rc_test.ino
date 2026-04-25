@@ -24,7 +24,7 @@
 //   [RC]         S.BUS input — raw throttle + steering via Serial2
 //   [JOYSTICK]   ADC input — deadband, expo curve
 //   [MIXER]      Override switch — selects RC vs joystick
-//   [DYNAMICS]   Soft power cap, inertia
+//   [DYNAMICS]   Inertia smoothing (soft cap removed in V7.1)
 //   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
 //   [DEBUG]      10 Hz serial CSV telemetry
@@ -593,10 +593,8 @@ void loop() {
                     cachedJoyOut.left, cachedJoyOut.right);
   }
 
-  // 3. Dynamics — soft limit + inertia
-  int scL = softLimit((float)(mix.left  - SVC));
-  int scR = softLimit((float)(mix.right - SVC));
-  applyInertia((float)(scL - SVC), (float)(scR - SVC), dts);
+  // 3. Inertia smoothing — gear + curvature already cap the output
+  applyInertia((float)(mix.left - SVC), (float)(mix.right - SVC), dts);
 
   // 4. Output
   outputWrite();
