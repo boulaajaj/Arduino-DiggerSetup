@@ -67,12 +67,11 @@ const uint8_t PIN_BEEPER = 8;   // Active buzzer (HIGH = on)
 const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
 const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
 
-// S.BUS channel mapping (0-indexed). Reverted 2026-04-25 after the
-// boost/dampen amplified the wrong stick: trigger is on index 1,
-// wheel on index 0 (matches standard RC6GS V3). The earlier swap
-// was based on a misread of the symptoms.
-const uint8_t SBUS_CH_THR   = 1;  // trigger → throttle (forward/back)
-const uint8_t SBUS_CH_STEER = 0;  // wheel   → steering (left/right)
+// S.BUS channel mapping (0-indexed). After bench testing on this
+// transmitter: trigger lands on index 0, wheel on index 1. Previous
+// flip back to RC6GS V3 standard had it backwards for this radio.
+const uint8_t SBUS_CH_THR   = 0;  // trigger → throttle (forward/back)
+const uint8_t SBUS_CH_STEER = 1;  // wheel   → steering (left/right)
 const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
 
@@ -118,14 +117,14 @@ const float TAU_DECEL = 0.5f;
 
 // Curvature drive — pivot threshold
 const float PIVOT_THRESHOLD = 0.10f;
-const float PIVOT_SPEED_CAP = 0.20f;  // 20% counter-rotate at standstill (was 0.45 — too aggressive)
+const float PIVOT_SPEED_CAP = 0.10f;  // 10% counter-rotate (very gentle in-place turn)
 
-// Input gains — compensate for the operator's transmitter throw and
-// rebalance the feel. Trigger is boosted so a normal pull reaches full
-// throttle; the wheel is dampened so it produces a gentle turn instead
-// of slamming the tracks against each other.
-const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse authority
-const float RC_STEERING_GAIN = 0.50f;  // reduce wheel sensitivity
+// Input gains. Trigger is boosted so a normal pull reaches full
+// throttle authority despite limited stick travel. Wheel is heavily
+// dampened so counter-rotation is always much slower than straight-
+// line forward/reverse.
+const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse
+const float RC_STEERING_GAIN = 0.30f;  // wheel produces only 30% of rotation
 
 // Reverse speed limit — percentage of forward max (straight-line only).
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
