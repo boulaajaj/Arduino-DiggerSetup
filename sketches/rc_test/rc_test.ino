@@ -100,6 +100,15 @@ const float EXPO_CUBIC  = 0.6f;
 // Power range
 const float SOFT_RANGE = 400.0f;  // Max servo offset from center (us)
 
+// Gear scaling — RC CH4 selects speed cap. 3-position switch:
+//   LOW  → 50% wheel speed cap   (training / tight spaces)
+//   MID  → 70% wheel speed cap   (normal driving)
+//   HIGH → 100% wheel speed cap  (full throttle authority)
+// Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
+const float GEAR_LOW_SCALE  = 0.50f;
+const float GEAR_MID_SCALE  = 0.70f;
+const float GEAR_HIGH_SCALE = 1.00f;
+
 // Inertia — asymmetric exponential filter
 const float TAU_ACCEL = 0.3f;
 const float TAU_DECEL = 0.5f;
@@ -192,7 +201,44 @@ ServoOutput rcDrive() {
     xSpeed = -REVERSE_LIMIT;
   }
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
+  ws = applyGear(ws);
   return wheelSpeedsToServo(ws);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [GEAR] — RC CH4 → speed cap (50% / 70% / 100%)
+// ═══════════════════════════════════════════════════════════════
+//
+// Defined here (after [RC]) so updateGear() can read sbusValid/sbusData
+// directly. Both rcDrive() above and updateJoystick() below call
+// applyGear() — Arduino's auto-prototype makes that legal regardless
+// of file order.
+
+float gearScale  = GEAR_LOW_SCALE;
+Gear  currentGear = GEAR_LOW;
+
+void updateGear() {
+  if (!sbusValid) {
+    gearScale = GEAR_LOW_SCALE;
+    currentGear = GEAR_LOW;
+    return;
+  }
+  int rc4 = sbusToServo(sbusData.ch[SBUS_CH_MODE]);
+  if (rc4 < OVR_LO) {
+    gearScale = GEAR_LOW_SCALE;
+    currentGear = GEAR_LOW;
+  } else if (rc4 > OVR_HI) {
+    gearScale = GEAR_HIGH_SCALE;
+    currentGear = GEAR_HIGH;
+  } else {
+    gearScale = GEAR_MID_SCALE;
+    currentGear = GEAR_MID;
+  }
+}
+
+WheelSpeeds applyGear(WheelSpeeds ws) {
+  return {ws.left * gearScale, ws.right * gearScale};
 }
 
 
@@ -236,6 +282,7 @@ void updateJoystick(uint32_t now) {
     xSpeed = -REVERSE_LIMIT;
   }
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
+  ws = applyGear(ws);
   cachedJoyOut = wheelSpeedsToServo(ws);
 }
 
@@ -461,7 +508,7 @@ void outputWrite() {
 // ═══════════════════════════════════════════════════════════════
 // [DEBUG] — 10 Hz serial CSV telemetry
 // ═══════════════════════════════════════════════════════════════
-// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Beep,FS,Lost
+// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost
 
 uint32_t prevPrint = 0;
 
@@ -469,8 +516,8 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.0 — GL10 FOC + S.BUS Serial2 + Beeper D8 ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Beep,FS,Lost");
+    Serial.println("# === Digger V7.1 — GL10 FOC + S.BUS Serial2 + Beeper D8 + Gear ===");
+    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost");
   }
 }
 
@@ -483,11 +530,11 @@ void debugPrint(uint32_t now) {
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
-  char buf[110];
-  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  char buf[120];
+  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
            rcT, rcS, rc4, rc5,
            cachedJoy.rawY, cachedJoy.rawX,
-           outL, outR, (int)currentBeep,
+           outL, outR, (int)currentGear, (int)currentBeep,
            sbusData.failsafe, sbusData.lost_frame);
   Serial.println(buf);
 }
@@ -523,6 +570,7 @@ void loop() {
     sbusValid = !sbusData.failsafe;
   }
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
+  updateGear();
   updateJoystick(now);
 
   // 2. RC lockout — no RC signal means immediate stop
