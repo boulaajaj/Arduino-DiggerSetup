@@ -67,10 +67,12 @@ const uint8_t PIN_BEEPER = 8;   // Active buzzer (HIGH = on)
 const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
 const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
 
-// S.BUS channel mapping (0-indexed, RC6GS V3 with no transmitter mix)
-const uint8_t SBUS_CH_THR   = 1;  // CH2 = throttle (forward/back)
-const uint8_t SBUS_CH_STEER = 0;  // CH1 = steering (left/right)
-const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch — reserved for V7.1)
+// S.BUS channel mapping (0-indexed). Swapped 2026-04-25 after bench
+// test: trigger maps to S.BUS index 0, wheel to index 1 on this
+// transmitter, opposite of the standard RC6GS V3 docs.
+const uint8_t SBUS_CH_THR   = 0;  // throttle (forward/back)
+const uint8_t SBUS_CH_STEER = 1;  // steering (left/right)
+const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
 
 // S.BUS value range (raw 172-1811, center ~992)
