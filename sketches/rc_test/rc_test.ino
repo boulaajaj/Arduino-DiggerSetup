@@ -116,6 +116,11 @@ const float REVERSE_LIMIT = 0.35f;
 // and clear of small drift.
 const int   REVERSE_BEEP_US = 50;
 
+// How long BEEP_REVERSE keeps playing after the last reverse-throttle
+// sample. Gives a 2-second tail so a quick stab into reverse still
+// gives a clear audible warning.
+const uint32_t REVERSE_BEEP_HOLD_MS = 2000;
+
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
@@ -322,13 +327,59 @@ void beeperInit() {
   digitalWrite(PIN_BEEPER, LOW);
 }
 
+// One-shot loudness self-test. Plays each drive style for 500 ms with
+// a 250 ms gap, prints a label to Serial so the operator can correlate
+// what they hear. Active buzzers (with internal oscillator) will be
+// loudest on DC HIGH and quieter (or silent) on tone(). Passive piezos
+// will be loudest on tone() near their resonant frequency (~2-4 kHz).
+void beeperSelfTest() {
+  if (Serial) Serial.println("# === Beeper loudness self-test (5 styles) ===");
+
+  struct TestStep {
+    const char* label;
+    uint16_t    toneHz;   // 0 = DC HIGH (digitalWrite)
+  };
+  const TestStep steps[] = {
+    {"# 1/5: DC HIGH (digitalWrite, full 5V duty)", 0},
+    {"# 2/5: tone 2.0 kHz",                         2000},
+    {"# 3/5: tone 2.7 kHz (typical piezo resonance)", 2700},
+    {"# 4/5: tone 3.5 kHz",                         3500},
+    {"# 5/5: tone 4.5 kHz",                         4500},
+  };
+  const size_t n = sizeof(steps) / sizeof(steps[0]);
+
+  for (size_t i = 0; i < n; i++) {
+    if (Serial) Serial.println(steps[i].label);
+    if (steps[i].toneHz == 0) {
+      digitalWrite(PIN_BEEPER, HIGH);
+    } else {
+      tone(PIN_BEEPER, steps[i].toneHz);
+    }
+    delay(500);
+    if (steps[i].toneHz == 0) digitalWrite(PIN_BEEPER, LOW);
+    else                      noTone(PIN_BEEPER);
+    delay(250);
+  }
+
+  if (Serial) Serial.println("# Self-test complete. Tell me which step was loudest.");
+}
+
 void setBeepPattern(BeepPattern p, uint32_t nowMs) {
   if (p == currentBeep) return;
   currentBeep = p;
   beepStepIdx = 0;
   beepStateStart = nowMs;
-  beepOn = false;
-  digitalWrite(PIN_BEEPER, LOW);
+
+  // If the new pattern starts with an ON step, fire it immediately —
+  // no leading silence. Avoids a 1-second wait before the first chirp.
+  const BeepProgram& prog = BEEP_PROGRAMS[currentBeep];
+  if (prog.steps > 0 && prog.seq[0].onMs > 0) {
+    digitalWrite(PIN_BEEPER, HIGH);
+    beepOn = true;
+  } else {
+    digitalWrite(PIN_BEEPER, LOW);
+    beepOn = false;
+  }
 }
 
 void beeperUpdate(uint32_t nowMs) {
@@ -363,12 +414,24 @@ void beeperUpdate(uint32_t nowMs) {
   }
 }
 
+// Reverse-hold latch: BEEP_REVERSE stays active for REVERSE_BEEP_HOLD_MS
+// after the last reverse-throttle sample. Gives a 2-second tail so a
+// quick stab into reverse still produces a clearly audible warning.
+bool     inReverseHold     = false;
+uint32_t reverseHoldStartMs = 0;
+
 // Decide which pattern to play based on current state. Returns the
 // highest-priority pattern that applies. Battery/temp are placeholders
 // until X.BUS telemetry is wired back in.
-BeepPattern selectBeepPattern(int outL, int outR) {
-  bool reversing = (outL < SVC - REVERSE_BEEP_US) || (outR < SVC - REVERSE_BEEP_US);
-  if (reversing) return BEEP_REVERSE;
+BeepPattern selectBeepPattern(int outL, int outR, uint32_t nowMs) {
+  bool reversingNow = (outL < SVC - REVERSE_BEEP_US) || (outR < SVC - REVERSE_BEEP_US);
+  if (reversingNow) {
+    inReverseHold = true;
+    reverseHoldStartMs = nowMs;
+  } else if (inReverseHold && (nowMs - reverseHoldStartMs) >= REVERSE_BEEP_HOLD_MS) {
+    inReverseHold = false;
+  }
+  if (inReverseHold) return BEEP_REVERSE;
   return BEEP_SILENT;
 }
 
@@ -442,6 +505,7 @@ void setup() {
   outputInit();
   beeperInit();
   debugInit();
+  beeperSelfTest();
   prevUs = micros();
 }
 
@@ -481,7 +545,7 @@ void loop() {
   outputWrite();
 
   // 5. Beeper — evaluate against current output, then advance pattern
-  setBeepPattern(selectBeepPattern(outL, outR), nowMs);
+  setBeepPattern(selectBeepPattern(outL, outR, nowMs), nowMs);
   beeperUpdate(nowMs);
 
   // 6. Debug
