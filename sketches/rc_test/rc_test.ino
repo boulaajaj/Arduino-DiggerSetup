@@ -156,21 +156,26 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
 
   float leftSpeed, rightSpeed;
   if (allowTurnInPlace) {
+    // Pivot mode (below throttle threshold): counter-rotate, capped.
     float cappedRotation = constrain(zRotation, -PIVOT_SPEED_CAP, PIVOT_SPEED_CAP);
     leftSpeed  = xSpeed - cappedRotation;
     rightSpeed = xSpeed + cappedRotation;
   } else {
-    leftSpeed  = xSpeed - fabsf(xSpeed) * zRotation;
-    rightSpeed = xSpeed + fabsf(xSpeed) * zRotation;
+    // Curvature mode (real tank behavior): outer wheel preserved at
+    // exactly xSpeed (NEVER boosted beyond throttle-stick value),
+    // inner wheel slows from xSpeed down to 0 as |zRotation| → 1.
+    // Result: fastest going straight, always slower while turning.
+    // For sharper turns the operator releases throttle and the pivot
+    // branch above takes over.
+    float innerScale = 1.0f - fabsf(zRotation);  // 1 at center, 0 at full lock
+    if (zRotation > 0) {
+      leftSpeed  = xSpeed * innerScale;  // turn LEFT: left is inner
+      rightSpeed = xSpeed;
+    } else {
+      leftSpeed  = xSpeed;
+      rightSpeed = xSpeed * innerScale;  // turn RIGHT: right is inner
+    }
   }
-
-  // Tank-style clip (NOT rescale): outer wheel caps at ±1.0, inner
-  // keeps the full reduction the steering math produced. This way
-  // straight-line throttle is never reduced when the operator turns —
-  // a tank should be fastest going straight and slower while turning,
-  // not the other way around.
-  leftSpeed  = constrain(leftSpeed,  -1.0f, 1.0f);
-  rightSpeed = constrain(rightSpeed, -1.0f, 1.0f);
   return {leftSpeed, rightSpeed};
 }
 
