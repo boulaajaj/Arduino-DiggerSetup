@@ -120,6 +120,11 @@ const float PIVOT_SPEED_CAP = 0.45f;
 // Reverse speed limit — percentage of forward max (straight-line only)
 const float REVERSE_LIMIT = 0.35f;
 
+// Master beeper enable. When false: the boot self-test is skipped,
+// the runtime reverse-alert is muted, and D8 stays LOW. Flip to true
+// to re-enable both.
+const bool  BEEPER_ENABLED = false;
+
 // Reverse-beep trigger: how far below center the output must be
 // before BEEP_REVERSE engages. 50 us = ~12.5% reverse — past deadband
 // and clear of small drift.
@@ -380,6 +385,7 @@ void beeperInit() {
 // loudest on DC HIGH and quieter (or silent) on tone(). Passive piezos
 // will be loudest on tone() near their resonant frequency (~2-4 kHz).
 void beeperSelfTest() {
+  if (!BEEPER_ENABLED) return;
   if (Serial) Serial.println("# === Beeper loudness self-test (5 styles) ===");
 
   struct TestStep {
@@ -471,6 +477,7 @@ uint32_t reverseHoldStartMs = 0;
 // highest-priority pattern that applies. Battery/temp are placeholders
 // until X.BUS telemetry is wired back in.
 BeepPattern selectBeepPattern(int outL, int outR, uint32_t nowMs) {
+  if (!BEEPER_ENABLED) return BEEP_SILENT;
   bool reversingNow = (outL < SVC - REVERSE_BEEP_US) || (outR < SVC - REVERSE_BEEP_US);
   if (reversingNow) {
     inReverseHold = true;
