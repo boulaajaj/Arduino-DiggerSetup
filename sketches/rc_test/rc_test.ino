@@ -15,8 +15,8 @@
 //
 // Signal flow:
 //   RC (S.BUS) ──► curvatureDrive ──┐
-//                                   ├─► Mixer ─► Soft Limit
-//   Joystick ──► curvatureDrive ───┘          ─► Inertia ─► PWM
+//                                   ├─► Mixer ─► PWM
+//   Joystick ──► curvatureDrive ───┘
 //
 // Modules (search "[NAME]" to jump):
 //   [CONFIG]     All tunable constants
@@ -24,7 +24,6 @@
 //   [RC]         S.BUS input — raw throttle + steering via Serial2
 //   [JOYSTICK]   ADC input — deadband, expo curve
 //   [MIXER]      Override switch — selects RC vs joystick
-//   [DYNAMICS]   Inertia smoothing (soft cap removed in V7.1)
 //   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
 //   [DEBUG]      10 Hz serial CSV telemetry
@@ -110,15 +109,6 @@ const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 const float GEAR_LOW_SCALE  = 0.60f;
 const float GEAR_MID_SCALE  = 0.70f;
 const float GEAR_HIGH_SCALE = 1.00f;
-
-// Inertia — asymmetric exponential filter on the wheel command stream.
-// TAU_ACCEL: smoothing on power-up (gentle starts).
-// TAU_DECEL: smoothing on power-down. Kept short for safety — the
-//   operator must be able to stop quickly when releasing the stick —
-//   but non-zero so the stop still feels like a glide rather than a
-//   slam.
-const float TAU_ACCEL = 0.3f;
-const float TAU_DECEL = 0.25f;
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -357,31 +347,6 @@ ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [DYNAMICS] — Inertia smoothing
-// ═══════════════════════════════════════════════════════════════
-//
-// curvatureDrive + applyGear already bound wheel speeds to ±1.0 and
-// the gear cap. wheelSpeedsToServo and outputWrite then constrain to
-// SVMIN/SVMAX. The previous softLimit/fastTanh stage was redundant
-// and severely attenuated full-stick authority (~44% at gear HIGH),
-// so it was removed in V7.1. Inertia smoothing remains.
-
-float posL = 0, posR = 0;
-
-void applyInertia(float targetL, float targetR, float dts) {
-  bool accelL = fabsf(targetL) > fabsf(posL) + 1.0f;
-  bool accelR = fabsf(targetR) > fabsf(posR) + 1.0f;
-  float alphaL = dts / (dts + (accelL ? TAU_ACCEL : TAU_DECEL));
-  float alphaR = dts / (dts + (accelR ? TAU_ACCEL : TAU_DECEL));
-  posL += (targetL - posL) * alphaL;
-  posR += (targetR - posR) * alphaR;
-  // No snap-to-zero: the exponential approaches zero asymptotically,
-  // and any earlier "if close enough, force to zero" forced a step
-  // discontinuity the operator could feel as an abrupt cutoff.
-}
-
-
-// ═══════════════════════════════════════════════════════════════
 // [BEEPER] — Priority-driven audible alert on D8
 // ═══════════════════════════════════════════════════════════════
 //
@@ -545,9 +510,9 @@ void outputInit() {
   escR.writeMicroseconds(SVC);
 }
 
-void outputWrite() {
-  outL = constrain(SVC + (int)(posL >= 0.0f ? posL + 0.5f : posL - 0.5f), SVMIN, SVMAX);
-  outR = constrain(SVC + (int)(posR >= 0.0f ? posR + 0.5f : posR - 0.5f), SVMIN, SVMAX);
+void outputWrite(int left, int right) {
+  outL = constrain(left,  SVMIN, SVMAX);
+  outR = constrain(right, SVMIN, SVMAX);
   escL.writeMicroseconds(outL);
   escR.writeMicroseconds(outR);
 }
@@ -592,8 +557,6 @@ void debugPrint(uint32_t now) {
 // MAIN
 // ═══════════════════════════════════════════════════════════════
 
-uint32_t prevUs = 0;
-
 void setup() {
   analogReadResolution(14);
   sbusRx.Begin();
@@ -601,15 +564,11 @@ void setup() {
   beeperInit();
   debugInit();
   beeperSelfTest();
-  prevUs = micros();
 }
 
 void loop() {
   uint32_t now = micros();
   uint32_t nowMs = now / 1000UL;
-  float dts = (float)(now - prevUs) * 1e-6f;
-  if (dts <= 0) return;
-  prevUs = now;
 
   // 1. Read inputs
   if (sbusRx.Read()) {
@@ -625,23 +584,21 @@ void loop() {
   ServoOutput mix;
   if (!sbusValid) {
     mix.left = SVC;  mix.right = SVC;
-    posL = 0;  posR = 0;
   } else {
     ServoOutput rc = rcDrive();
     mix = mixInputs(rc.left, rc.right, rcOverride(),
                     cachedJoyOut.left, cachedJoyOut.right);
   }
 
-  // 3. Inertia smoothing — gear + curvature already cap the output
-  applyInertia((float)(mix.left - SVC), (float)(mix.right - SVC), dts);
+  // 3. Output — GL10 FOC handles command smoothing internally via its
+  // Acceleration + Drag Force settings, so the Arduino sends the mixed
+  // command straight through.
+  outputWrite(mix.left, mix.right);
 
-  // 4. Output
-  outputWrite();
-
-  // 5. Beeper — evaluate against current output, then advance pattern
+  // 4. Beeper — evaluate against current output, then advance pattern
   setBeepPattern(selectBeepPattern(outL, outR, nowMs), nowMs);
   beeperUpdate(nowMs);
 
-  // 6. Debug
+  // 5. Debug
   debugPrint(now);
 }

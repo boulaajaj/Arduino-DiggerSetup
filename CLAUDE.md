@@ -108,12 +108,11 @@ Signal pipeline:
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
 5. Reverse speed limiter (35% of forward max, straight-line only)
 6. Soft power scaling (tanh saturation)
-7. Inertia simulation (asymmetric exponential: 0.3s accel, 0.5s decel)
-8. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us)
-9. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
+7. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us)
+8. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
 
 Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
-[JOYSTICK], [MIXER], [DYNAMICS], [BEEPER], [OUTPUT], [DEBUG]. Search
+[JOYSTICK], [MIXER], [BEEPER], [OUTPUT], [DEBUG]. Search
 `[NAME]` to jump.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
