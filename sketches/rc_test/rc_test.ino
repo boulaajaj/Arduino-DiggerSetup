@@ -157,6 +157,11 @@ const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   xSpeed    = constrain(xSpeed, -1.0f, 1.0f);
   zRotation = constrain(zRotation, -1.0f, 1.0f);
+  // One ESC was reflashed with reversed CW/CCW to fix throttle response.
+  // That flip also inverted the physical steering convention; this
+  // single negation re-aligns the algorithm's "left/right" with the
+  // vehicle's actual response. Affects every input path (RC, joystick).
+  zRotation = -zRotation;
 
   bool allowTurnInPlace = (fabsf(xSpeed) < PIVOT_THRESHOLD);
 
@@ -301,7 +306,7 @@ void updateJoystick(uint32_t now) {
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
   cachedJoy.xSpeed    = signY * expoCurve(normY);
-  cachedJoy.zRotation = -(signX * expoCurve(normX));  // joystick left = turn left
+  cachedJoy.zRotation = signX * expoCurve(normX);  // curvatureDrive owns the steering-direction inversion
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;
