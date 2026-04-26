@@ -111,9 +111,14 @@ const float GEAR_LOW_SCALE  = 0.60f;
 const float GEAR_MID_SCALE  = 0.70f;
 const float GEAR_HIGH_SCALE = 1.00f;
 
-// Inertia — asymmetric exponential filter
+// Inertia — asymmetric exponential filter on the wheel command stream.
+// TAU_ACCEL: smoothing on power-up (gentle starts).
+// TAU_DECEL: smoothing on power-down. Kept short for safety — the
+//   operator must be able to stop quickly when releasing the stick —
+//   but non-zero so the stop still feels like a glide rather than a
+//   slam.
 const float TAU_ACCEL = 0.3f;
-const float TAU_DECEL = 0.5f;
+const float TAU_DECEL = 0.25f;
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -370,8 +375,9 @@ void applyInertia(float targetL, float targetR, float dts) {
   float alphaR = dts / (dts + (accelR ? TAU_ACCEL : TAU_DECEL));
   posL += (targetL - posL) * alphaL;
   posR += (targetR - posR) * alphaR;
-  if (fabsf(targetL) < 1.0f && fabsf(posL) < 3.0f) posL = 0;
-  if (fabsf(targetR) < 1.0f && fabsf(posR) < 3.0f) posR = 0;
+  // No snap-to-zero: the exponential approaches zero asymptotically,
+  // and any earlier "if close enough, force to zero" forced a step
+  // discontinuity the operator could feel as an abrupt cutoff.
 }
 
 
