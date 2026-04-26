@@ -207,6 +207,33 @@ monitor.py                               — Simple serial monitor
 - Comment each `[MODULE]` section header with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 
+### ESC / motor configuration changes
+
+Every ESC parameter (XC-Link Bluetooth app, X.BUS register, programming
+card) must be evaluated against **what PWM commands the Arduino code
+actually sends** before recommending a value. Per-direction caps,
+asymmetric scalings, and brake limits can silently clip legitimate
+commands and break features.
+
+Concrete example: `curvatureDrive` in pivot mode commands one track
+forward and the other in reverse (e.g. left = +55%, right = -55%) at
+high gear. The GL10's factory default `Max Reverse Force = 50%` would
+deliver only -27.5% on the reverse track, collapsing the pivot
+differential. Setting it to 100% lets pivot work as designed.
+
+Before any XC-Link parameter change:
+
+1. List every command path that drives each motor (RC throttle, RC
+   pivot/curvature, joystick equivalents, gear scaling, override mixer).
+2. Identify the per-direction min/max each path can produce.
+3. Verify the proposed setting does not clip, scale, or distort any of
+   those commands in a way that breaks an intended behavior.
+4. Call out cross-impacts explicitly with the specific feature affected
+   — never just hand over a value.
+
+See `docs/GL10-PARAMETERS.md` for the full GL10 parameter list with
+per-parameter code-context analysis.
+
 ## Build & Upload
 
 - Board: Arduino Nano R4
