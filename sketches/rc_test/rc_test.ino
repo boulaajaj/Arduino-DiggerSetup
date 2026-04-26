@@ -115,9 +115,14 @@ const float GEAR_HIGH_SCALE = 1.00f;
 const float TAU_ACCEL = 0.3f;
 const float TAU_DECEL = 0.5f;
 
-// Curvature drive — pivot threshold
-const float PIVOT_THRESHOLD = 0.10f;
-const float PIVOT_SPEED_CAP = 0.55f;  // pivot rotation cap (~55% wheel power)
+// Curvature drive — pivot/curvature blend band.
+// |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
+// |xSpeed| >= END:   pure curvature (outer holds xSpeed, inner slows)
+// Between: smoothstep blend so the operator doesn't feel a mode jump
+// when transitioning from rolling-turn into pivot-in-place.
+const float PIVOT_BLEND_START = 0.05f;
+const float PIVOT_BLEND_END   = 0.30f;
+const float PIVOT_SPEED_CAP   = 0.55f;  // pivot rotation cap (~55% wheel power)
 
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
 // maps directly to curvatureDrive, which already handles inner-track
@@ -165,31 +170,37 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   // vehicle's actual response. Affects every input path (RC, joystick).
   zRotation = -zRotation;
 
-  bool allowTurnInPlace = (fabsf(xSpeed) < PIVOT_THRESHOLD);
+  // Pivot output: counter-rotate the tracks, capped to PIVOT_SPEED_CAP.
+  // Used when the operator is essentially stationary and wants to spin.
+  float cappedRotation = constrain(zRotation, -PIVOT_SPEED_CAP, PIVOT_SPEED_CAP);
+  float pivotL = xSpeed - cappedRotation;
+  float pivotR = xSpeed + cappedRotation;
 
-  float leftSpeed, rightSpeed;
-  if (allowTurnInPlace) {
-    // Pivot mode (below throttle threshold): counter-rotate, capped.
-    float cappedRotation = constrain(zRotation, -PIVOT_SPEED_CAP, PIVOT_SPEED_CAP);
-    leftSpeed  = xSpeed - cappedRotation;
-    rightSpeed = xSpeed + cappedRotation;
+  // Curvature output: outer track holds xSpeed (never boosted), inner
+  // track slows from xSpeed to 0 as |zRotation| → 1. Real tank feel:
+  // fastest going straight, gradually slower while turning.
+  float innerScale = 1.0f - fabsf(zRotation);
+  float curvL, curvR;
+  if (zRotation > 0) {
+    curvL = xSpeed * innerScale;  // turn LEFT: left is inner
+    curvR = xSpeed;
   } else {
-    // Curvature mode (real tank behavior): outer wheel preserved at
-    // exactly xSpeed (NEVER boosted beyond throttle-stick value),
-    // inner wheel slows from xSpeed down to 0 as |zRotation| → 1.
-    // Result: fastest going straight, always slower while turning.
-    // For sharper turns the operator releases throttle and the pivot
-    // branch above takes over.
-    float innerScale = 1.0f - fabsf(zRotation);  // 1 at center, 0 at full lock
-    if (zRotation > 0) {
-      leftSpeed  = xSpeed * innerScale;  // turn LEFT: left is inner
-      rightSpeed = xSpeed;
-    } else {
-      leftSpeed  = xSpeed;
-      rightSpeed = xSpeed * innerScale;  // turn RIGHT: right is inner
-    }
+    curvL = xSpeed;
+    curvR = xSpeed * innerScale;  // turn RIGHT: right is inner
   }
-  return {leftSpeed, rightSpeed};
+
+  // Smoothstep blend from pivot → curvature as |xSpeed| grows. Zero
+  // slope at both endpoints means the operator never feels a mode
+  // boundary — the rolling-turn smoothly becomes a pivot when they
+  // back off the throttle, and vice versa.
+  float t = (fabsf(xSpeed) - PIVOT_BLEND_START) / (PIVOT_BLEND_END - PIVOT_BLEND_START);
+  t = constrain(t, 0.0f, 1.0f);
+  t = t * t * (3.0f - 2.0f * t);
+
+  return {
+    pivotL * (1.0f - t) + curvL * t,
+    pivotR * (1.0f - t) + curvR * t
+  };
 }
 
 ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
