@@ -119,11 +119,13 @@ const float TAU_DECEL = 0.5f;
 const float PIVOT_THRESHOLD = 0.10f;
 const float PIVOT_SPEED_CAP = 0.05f;  // 5% counter-rotate cap — operator confirmed turning was way too fast
 
-// Input gains. Forward direction is correct and full speed is already
-// reached; the only adjustment needed was to make steering slower than
-// forward by a wide margin.
-const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse to full authority
-const float RC_STEERING_GAIN = 0.20f;  // wheel produces only 20% of rotation input
+// RC input gains — neutral baseline (1.0 = no scaling). Stick travel
+// maps directly to curvatureDrive, which already handles inner-track
+// slowdown and pivot/curvature blend. Earlier non-unity values were
+// band-aids compensating for the flipped-ESC steering bug; with the
+// root cause fixed, the gains return to neutral.
+const float RC_THROTTLE_GAIN = 1.00f;
+const float RC_STEERING_GAIN = 1.00f;
 
 // Reverse speed limit — percentage of forward max (straight-line only).
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
@@ -225,8 +227,7 @@ int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SV
 ServoOutput rcDrive() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
-  // Boost throttle (trigger doesn't reach full physical travel) and
-  // dampen steering (wheel was dominating). Clamp to ±1.0 after.
+  // Apply tunable input gains, then clamp to the curvatureDrive domain.
   xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
