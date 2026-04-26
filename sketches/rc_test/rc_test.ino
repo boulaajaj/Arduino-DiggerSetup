@@ -117,7 +117,7 @@ const float TAU_DECEL = 0.5f;
 
 // Curvature drive — pivot threshold
 const float PIVOT_THRESHOLD = 0.10f;
-const float PIVOT_SPEED_CAP = 0.05f;  // 5% counter-rotate cap — operator confirmed turning was way too fast
+const float PIVOT_SPEED_CAP = 0.55f;  // pivot rotation cap (~55% wheel power)
 
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
 // maps directly to curvatureDrive, which already handles inner-track
