@@ -117,14 +117,13 @@ const float TAU_DECEL = 0.5f;
 
 // Curvature drive — pivot threshold
 const float PIVOT_THRESHOLD = 0.10f;
-const float PIVOT_SPEED_CAP = 0.10f;  // 10% counter-rotate (very gentle in-place turn)
+const float PIVOT_SPEED_CAP = 0.05f;  // 5% counter-rotate cap — operator confirmed turning was way too fast
 
-// Input gains. Trigger is boosted so a normal pull reaches full
-// throttle authority despite limited stick travel. Wheel is heavily
-// dampened so counter-rotation is always much slower than straight-
-// line forward/reverse.
-const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse
-const float RC_STEERING_GAIN = 0.30f;  // wheel produces only 30% of rotation
+// Input gains. Forward direction is correct and full speed is already
+// reached; the only adjustment needed was to make steering slower than
+// forward by a wide margin.
+const float RC_THROTTLE_GAIN = 1.50f;  // boost forward/reverse to full authority
+const float RC_STEERING_GAIN = 0.20f;  // wheel produces only 20% of rotation input
 
 // Reverse speed limit — percentage of forward max (straight-line only).
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
