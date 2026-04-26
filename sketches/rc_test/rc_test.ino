@@ -103,11 +103,11 @@ const float EXPO_CUBIC  = 0.6f;
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
 // Gear scaling — RC CH4 selects speed cap. 3-position switch:
-//   LOW  → 50% wheel speed cap   (training / tight spaces)
+//   LOW  → 60% wheel speed cap   (training / tight spaces)
 //   MID  → 70% wheel speed cap   (normal driving)
 //   HIGH → 100% wheel speed cap  (full throttle authority)
 // Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
-const float GEAR_LOW_SCALE  = 0.50f;
+const float GEAR_LOW_SCALE  = 0.60f;
 const float GEAR_MID_SCALE  = 0.70f;
 const float GEAR_HIGH_SCALE = 1.00f;
 
@@ -240,7 +240,7 @@ ServoOutput rcDrive() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [GEAR] — RC CH4 → speed cap (50% / 70% / 100%)
+// [GEAR] — RC CH4 → speed cap (60% / 70% / 100%)
 // ═══════════════════════════════════════════════════════════════
 //
 // Defined here (after [RC]) so updateGear() can read sbusValid/sbusData
