@@ -67,11 +67,11 @@ const uint8_t PIN_BEEPER = 8;   // Active buzzer (HIGH = on)
 const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
 const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
 
-// S.BUS channel mapping (0-indexed). After bench testing on this
-// transmitter: trigger lands on index 0, wheel on index 1. Previous
-// flip back to RC6GS V3 standard had it backwards for this radio.
-const uint8_t SBUS_CH_THR   = 0;  // trigger → throttle (forward/back)
-const uint8_t SBUS_CH_STEER = 1;  // wheel   → steering (left/right)
+// S.BUS channel mapping (0-indexed). Confirmed by live capture while
+// the operator moved each control independently on the RC6GS V3:
+// trigger → ch 1, wheel → ch 0.
+const uint8_t SBUS_CH_THR   = 1;  // trigger → throttle (forward/back)
+const uint8_t SBUS_CH_STEER = 0;  // wheel   → steering (left/right)
 const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
 
