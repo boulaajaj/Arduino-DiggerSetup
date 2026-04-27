@@ -94,9 +94,15 @@ const int JOY_DEADBAND = 480;  // Joystick ADC (~5.9% of travel)
 const int OVR_LO = 1400;  // Below → RC only
 const int OVR_HI = 1600;  // Above → 50/50 blend (RC + joystick)
 
-// Expo curve blend weights — smooth low-end, no ESC deadband jump
-const float EXPO_LINEAR = 0.4f;
-const float EXPO_CUBIC  = 0.6f;
+// Expo curve blend weights — output = LINEAR*|x| + CUBIC*|x|^3.
+// Throttle keeps the smoother (more cubic) curve so launch feel is gentle.
+// Steering uses a more linear curve so partial joystick deflection
+// produces real turn authority — operator feedback was that the joystick
+// pivot felt underpowered before reaching full lock.
+const float EXPO_THROTTLE_LINEAR = 0.4f;
+const float EXPO_THROTTLE_CUBIC  = 0.6f;
+const float EXPO_STEER_LINEAR    = 0.7f;
+const float EXPO_STEER_CUBIC     = 0.3f;
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
@@ -300,9 +306,9 @@ WheelSpeeds applyGear(WheelSpeeds ws) {
 // [JOYSTICK] — ADC, deadband, expo curve
 // ═══════════════════════════════════════════════════════════════
 
-float expoCurve(float x) {
+float expoCurve(float x, float linearW, float cubicW) {
   float a = fabsf(x);
-  return EXPO_LINEAR * a + EXPO_CUBIC * a * a * a;
+  return linearW * a + cubicW * a * a * a;
 }
 
 int joyDeadband(int adc) {
@@ -327,8 +333,8 @@ void updateJoystick(uint32_t now) {
   float normX = constrain((float)(joyDeadband(cachedJoy.rawX) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
-  cachedJoy.xSpeed    = signY * expoCurve(normY);
-  cachedJoy.zRotation = signX * expoCurve(normX);  // curvatureDrive owns the steering-direction inversion
+  cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
+  cachedJoy.zRotation = signX * expoCurve(normX, EXPO_STEER_LINEAR,    EXPO_STEER_CUBIC);  // curvatureDrive owns the steering-direction inversion
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;
