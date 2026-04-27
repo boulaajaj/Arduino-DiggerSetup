@@ -171,17 +171,32 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   float pivotL = xSpeed - cappedRotation;
   float pivotR = xSpeed + cappedRotation;
 
-  // Curvature output: outer track holds xSpeed (never boosted), inner
-  // track slows from xSpeed to 0 as |zRotation| → 1. Real tank feel:
-  // fastest going straight, gradually slower while turning.
-  float innerScale = 1.0f - fabsf(zRotation);
+  // Curvature output: symmetric add — whatever we subtract from the
+  // inner track we add to the outer. Average wheel speed stays at
+  // xSpeed through the turn, so the vehicle does not slow down.
+  //
+  //   inner = xSpeed * (1 - |z|)   ← slows
+  //   outer = xSpeed * (1 + |z|)   ← speeds up by the same delta
+  //
+  // When the outer would exceed ±1.0 (high throttle + sharp turn),
+  // desaturate by scaling BOTH wheels equally so the differential
+  // ratio is preserved and only the average is trimmed. This is the
+  // same pattern WPILib's ArcadeDrive uses with desaturateOutputs=true.
+  float boost = 1.0f + fabsf(zRotation);
+  float slow  = 1.0f - fabsf(zRotation);
   float curvL, curvR;
   if (zRotation > 0) {
-    curvL = xSpeed * innerScale;  // turn LEFT: left is inner
-    curvR = xSpeed;
+    curvL = xSpeed * slow;   // turn LEFT: left is inner (subtract)
+    curvR = xSpeed * boost;  // and outer gets the matching add
   } else {
-    curvL = xSpeed;
-    curvR = xSpeed * innerScale;  // turn RIGHT: right is inner
+    curvL = xSpeed * boost;
+    curvR = xSpeed * slow;   // turn RIGHT: right is inner (subtract)
+  }
+  float peak = fmaxf(fabsf(curvL), fabsf(curvR));
+  if (peak > 1.0f) {
+    float k = 1.0f / peak;
+    curvL *= k;
+    curvR *= k;
   }
 
   // Smoothstep blend from pivot → curvature as |xSpeed| grows. Zero
