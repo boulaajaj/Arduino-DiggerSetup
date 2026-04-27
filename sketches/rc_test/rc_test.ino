@@ -117,7 +117,7 @@ const float GEAR_HIGH_SCALE = 1.00f;
 // when transitioning from rolling-turn into pivot-in-place.
 const float PIVOT_BLEND_START = 0.05f;
 const float PIVOT_BLEND_END   = 0.30f;
-const float PIVOT_SPEED_CAP   = 0.55f;  // pivot rotation cap (~55% wheel power)
+const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
 // maps directly to curvatureDrive, which already handles inner-track
