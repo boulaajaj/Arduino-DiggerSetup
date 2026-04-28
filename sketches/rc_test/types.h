@@ -45,9 +45,11 @@ enum BeepPattern : uint8_t {
   BEEP_OVERTEMP    = 4,  // double chirp twice per second
 };
 
-// CH4 gear position
+// CH4 gear position. Caps the post-curvatureDrive wheel speeds; the
+// actual scale factors live in the [CONFIG] section of rc_test.ino as
+// GEAR_{LOW,MID,HIGH}_SCALE so they're tunable in one place.
 enum Gear : uint8_t {
-  GEAR_LOW  = 0,   // 50% cap
-  GEAR_MID  = 1,   // 70% cap
-  GEAR_HIGH = 2,   // 100% cap (RC retains its 120% transmitter headroom)
+  GEAR_LOW  = 0,   // ~60% cap (training / tight spaces)
+  GEAR_MID  = 1,   // ~70% cap (normal driving)
+  GEAR_HIGH = 2,   // 100% cap (full throttle authority)
 };

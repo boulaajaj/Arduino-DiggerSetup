@@ -41,7 +41,7 @@ programming card or DIP switches — Bluetooth only).
 
 ## Code-context analysis
 
-This is the **rule from `feedback_esc_params_in_code_context.md`** applied
+This is the **"ESC / motor configuration changes" rule from `CLAUDE.md`** applied
 to each setting: list every command path the Arduino code can drive a
 motor through, and check whether the ESC parameter clips, scales, or
 distorts a legitimate command.
@@ -75,7 +75,7 @@ that down to 33% in low gear and 38% in mid gear.
 | Acceleration = 6 | Throttle response rate at the ESC. Affects launch feel. | Keep at 6 unless launch feels jerky (lower) or sluggish (higher). |
 | Torque Compensation = 6 | Output max torque on obstacles. Crawler-tuned default. | Keep. |
 | BEC Voltage = 6.0V | Powers Arduino VIN per `WIRING-GUIDE.md`. | Keep. Do not change. |
-| Motor Rotation | One ESC was reflashed CW/CCW to fix throttle direction (see `feedback_esc_direction_flip.md` once recorded). | Already set per-track; the steering inversion in `curvatureDrive` compensates. |
+| Motor Rotation | One ESC was reflashed CW/CCW to fix throttle direction during the V7.1 shakedown (commit `6bfe536`). | Already set per-track; the steering inversion in `curvatureDrive` compensates. |
 | X-BUS ID | ESC Left = 0, ESC Right = 1 per `WIRING-GUIDE.md`. | Keep. |
 
 ### Recommended XC-Link configuration (apply to BOTH ESCs)
@@ -95,9 +95,10 @@ that down to 33% in low gear and 38% in mid gear.
 | LiPo Cells | Auto Identify (or 3S explicit) | Per current battery (3S). |
 | Cutoff Voltage | 3.2V | Default. Protects 3S LiPos. |
 
-After applying, **the Arduino-side inertia filter (`applyInertia` /
-`TAU_DECEL`) becomes redundant** and should be removed in a follow-up
-commit. The ESC's Drag Force + Acceleration take over the smoothing job.
+The Arduino-side inertia filter that this doc originally recommended
+removing was retired in V7.2 (commit `431e267`). The ESC's
+Acceleration + MaxDragForce now own command smoothing end-to-end —
+configuring those XC-Link values is the only smoothing knob left.
 
 ## Reconciliation with `XBUS-PROTOCOL.md`
 

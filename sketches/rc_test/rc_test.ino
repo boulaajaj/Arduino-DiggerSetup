@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Digger Control V7.0 — GL10 FOC + Speed-Adaptive Steering
+// Digger Control V7 — GL10 FOC + Speed-Adaptive Steering
 // ═══════════════════════════════════════════════════════════════
 //
 // Dual-input controller for ride-on excavator (~50 lbs).
@@ -9,20 +9,23 @@
 // Hardware shift (2026-04-25): swapped from E10/E3665 to GL10 ESC
 // + GL540L motor. The GL10's FOC handles motor acceleration
 // compensation and smoothness internally — Arduino's job shrinks
-// to: input mixing, override switch, soft limits, beeper alerts.
+// to: input mixing, override switch, gear caps, beeper alerts.
+// V7.2 removed the Arduino-side inertia filter; the ESC's own
+// Acceleration + MaxDragForce settings own command smoothing now.
 // Telemetry (X.BUS Read Register) is scaffolded in types.h but
-// not polled — Serial2 is now used by S.BUS.
+// not polled — sbusUart (SCI0) is consumed by S.BUS.
 //
 // Signal flow:
 //   RC (S.BUS) ──► curvatureDrive ──┐
-//                                   ├─► Mixer ─► PWM
+//                                   ├─► Mixer ─► gear cap ─► PWM
 //   Joystick ──► curvatureDrive ───┘
 //
 // Modules (search "[NAME]" to jump):
 //   [CONFIG]     All tunable constants
-//   [DRIVE]      curvatureDrive — proven FRC algorithm (WPILib)
-//   [RC]         S.BUS input — raw throttle + steering via Serial2
-//   [JOYSTICK]   ADC input — deadband, expo curve
+//   [DRIVE]      curvatureDrive — symmetric add + desaturate, smoothstep blend into pivot
+//   [RC]         S.BUS input — raw throttle + steering via sbusUart (SCI0)
+//   [JOYSTICK]   ADC input — deadband, per-axis expo curve
+//   [GEAR]       RC CH4 → 60% / 70% / 100% wheel-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
@@ -31,17 +34,18 @@
 // Pin map:
 //   A0  ← Joystick Y (throttle)        [14-bit ADC]
 //   A1  ← Joystick X (steering)        [14-bit ADC]
-//   A4  (unused — Serial2 TX, S.BUS is RX-only)
-//   A5  ← S.BUS RX (Serial2 via NPN inverter)
+//   A4  (unused — sbusUart TX on SCI0, S.BUS is RX-only)
+//   A5  ← S.BUS RX (sbusUart on SCI0 via NPN inverter)
 //   D8  → Beeper (active buzzer, direct GPIO)
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
-//   D0/D1 → USB Serial (debug)
+//   D0/D1 → Serial1 hardware UART (currently unused)
+//   USB-C → USB CDC Serial (debug + firmware upload)
 //
 // S.BUS wiring (unchanged inverter circuit, now lands on A5):
 //   R7FG S.BUS signal ──[1K]──► NPN base
 //   NPN emitter ──► GND
-//   5V ──[10K]──┬──► NPN collector ──► A5 (Serial2 RX)
+//   5V ──[10K]──┬──► NPN collector ──► A5 (sbusUart RX)
 
 #include <Arduino.h>
 #include <Servo.h>
@@ -230,7 +234,7 @@ ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [RC] — S.BUS input on Serial2 (A5 RX, NPN inverter)
+// [RC] — S.BUS input on sbusUart / SCI0 (A5 RX, NPN inverter)
 // ═══════════════════════════════════════════════════════════════
 
 bfs::SbusRx sbusRx(&sbusUart);
@@ -550,7 +554,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.1 — GL10 FOC + S.BUS Serial2 + Beeper D8 + Gear ===");
+    Serial.println("# === Digger V7.3 — GL10 FOC + S.BUS sbusUart + Beeper D8 + Gear ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost");
   }
 }

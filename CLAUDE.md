@@ -38,12 +38,13 @@ below for what's deferred.
 ```text
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
-A4     (Serial2 TX, currently unused)
-A5  <- S.BUS RX (Serial2 via NPN inverter) [All RC channels at 100k 8E2]
+A4     (sbusUart TX on SCI0, currently unused)
+A5  <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
 D8  -> Beeper (active buzzer, direct GPIO) [HIGH = sounding]
 D9  -> Left Track ESC                       [Servo PWM, 50 Hz, 1000-2000 us]
 D10 -> Right Track ESC                      [Servo PWM]
-D0/D1 — USB Serial (debug, free now that S.BUS moved off Serial1)
+D0/D1 — Serial1 hardware UART (currently unused; S.BUS moved off it)
+USB-C — USB CDC Serial for debug + firmware upload
 5V  -> RC Receiver + Joystick VCC + S.BUS inverter
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
@@ -100,16 +101,15 @@ Sketch: `sketches/rc_test/rc_test.ino` (V7.0 — GL10 FOC) + `types.h`
 
 Signal pipeline:
 
-1. RC inputs: S.BUS on Serial2 (A5 RX via NPN inverter), all 16 channels
-2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve
-3. Both inputs → curvatureDrive() (WPILib algorithm):
-   - At speed: steering slows inner track only, outer holds speed
-   - At standstill: arcade-style pivot turns (45% cap)
+1. RC inputs: S.BUS on `sbusUart` (A5 RX via NPN inverter), all 16 channels
+2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve (separate throttle/steering coefficients)
+3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
+   - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
+   - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Reverse speed limiter (35% of forward max, straight-line only)
-6. Soft power scaling (tanh saturation)
-7. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us)
-8. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
+5. Gear cap (RC CH4): 60% / 70% / 100% wheel-speed cap
+6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
+7. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
 
 Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
 [JOYSTICK], [MIXER], [BEEPER], [OUTPUT], [DEBUG]. Search
@@ -143,9 +143,13 @@ moves into the ESC. Arduino code keeps:
 
 - Input shaping (expo, deadband, curvatureDrive)
 - Mixing (override switch)
-- Soft limits + inertia simulation (drive feel only — the ESC still gets
-  a smooth command)
+- Gear caps (60% / 70% / 100% via RC CH4)
 - Beeper alerts
+
+V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
+the GL10's own Acceleration + MaxDragForce settings now own command
+smoothing end-to-end, and the Arduino-side filter was double-smoothing
+the stream (operator felt "vehicle keeps coasting after stick release").
 
 The earlier feedforward tables (V7.0 on `claude/ff-trim-controller`)
 were built from plant characterization of the E10/E3665 combo. They
