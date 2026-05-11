@@ -25,7 +25,7 @@
 //   [DRIVE]      curvatureDrive — symmetric add + desaturate, smoothstep blend into pivot
 //   [RC]         S.BUS input — raw throttle + steering via sbusUart (SCI0)
 //   [JOYSTICK]   ADC input — deadband, per-axis expo curve
-//   [GEAR]       RC CH4 → 60% / 70% / 100% wheel-speed cap
+//   [GEAR]       RC CH4 → Eco 40% / Normal 65% / Turbo 100% wheel-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
@@ -116,9 +116,9 @@ const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 //   MID  → 70% wheel speed cap   (normal driving)
 //   HIGH → 100% wheel speed cap  (full throttle authority)
 // Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
-const float GEAR_LOW_SCALE  = 0.60f;
-const float GEAR_MID_SCALE  = 0.70f;
-const float GEAR_HIGH_SCALE = 1.00f;
+const float GEAR_LOW_SCALE  = 0.40f;  // Eco
+const float GEAR_MID_SCALE  = 0.65f;  // Normal
+const float GEAR_HIGH_SCALE = 1.00f;  // Turbo
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -141,7 +141,7 @@ const float RC_STEERING_GAIN = 1.00f;
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
 // cap was for the older E10/E3665 hardware; GL10 + GL540L can take
 // full reverse without trouble.
-const float REVERSE_LIMIT = 1.00f;
+const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 
 // Master beeper enable. When false: the boot self-test is skipped,
 // the runtime reverse-alert is muted, and D8 stays LOW. Flip to true
@@ -169,11 +169,6 @@ const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   xSpeed    = constrain(xSpeed, -1.0f, 1.0f);
   zRotation = constrain(zRotation, -1.0f, 1.0f);
-  // One ESC was reflashed with reversed CW/CCW to fix throttle response.
-  // That flip also inverted the physical steering convention; this
-  // single negation re-aligns the algorithm's "left/right" with the
-  // vehicle's actual response. Affects every input path (RC, joystick).
-  zRotation = -zRotation;
 
   // Pivot output: counter-rotate the tracks, capped to PIVOT_SPEED_CAP.
   // Used when the operator is essentially stationary and wants to spin.
@@ -261,9 +256,7 @@ ServoOutput rcDrive() {
   // Apply tunable input gains, then clamp to the curvatureDrive domain.
   xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
-  if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
-    xSpeed = -REVERSE_LIMIT;
-  }
+  if (xSpeed < -REVERSE_LIMIT) xSpeed = -REVERSE_LIMIT;
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
   ws = applyGear(ws);
   return wheelSpeedsToServo(ws);
@@ -271,7 +264,7 @@ ServoOutput rcDrive() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [GEAR] — RC CH4 → speed cap (60% / 70% / 100%)
+// [GEAR] — RC CH4 → speed cap (Eco 40% / Normal 65% / Turbo 100%)
 // ═══════════════════════════════════════════════════════════════
 //
 // Defined here (after [RC]) so updateGear() can read sbusValid/sbusData
@@ -338,13 +331,11 @@ void updateJoystick(uint32_t now) {
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
-  cachedJoy.zRotation = signX * expoCurve(normX, EXPO_STEER_LINEAR,    EXPO_STEER_CUBIC);  // curvatureDrive owns the steering-direction inversion
+  cachedJoy.zRotation = signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;
-  if (fabsf(zRotation) < 0.05f && xSpeed < -REVERSE_LIMIT) {
-    xSpeed = -REVERSE_LIMIT;
-  }
+  if (xSpeed < -REVERSE_LIMIT) xSpeed = -REVERSE_LIMIT;
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
   ws = applyGear(ws);
   cachedJoyOut = wheelSpeedsToServo(ws);
