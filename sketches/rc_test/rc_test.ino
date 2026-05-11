@@ -364,8 +364,13 @@ ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
     out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
   } else {
     bool rcActive = (rcL != SVC) || (rcR != SVC);
-    if (rcActive) { out.left = rcL; out.right = rcR; }
-    else          { out.left = joyL; out.right = joyR; }
+    if (rcActive) {
+      out.left = rcL;
+      out.right = rcR;
+    } else {
+      out.left = joyL;
+      out.right = joyR;
+    }
   }
   return out;
 }
@@ -469,7 +474,10 @@ void setBeepPattern(BeepPattern p, uint32_t nowMs) {
 void beeperUpdate(uint32_t nowMs) {
   const BeepProgram& prog = BEEP_PROGRAMS[currentBeep];
   if (prog.steps == 0) {
-    if (beepOn) { digitalWrite(PIN_BEEPER, LOW); beepOn = false; }
+    if (beepOn) {
+      digitalWrite(PIN_BEEPER, LOW);
+      beepOn = false;
+    }
     return;
   }
 

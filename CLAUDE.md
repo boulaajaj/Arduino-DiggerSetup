@@ -65,8 +65,8 @@ bfs::SbusRx sbusRx(&sbusUart);
 
 | Port | Hardware | Pin | Function |
 | --- | --- | --- | --- |
-| Serial   | USB CDC | (USB-C) | Debug telemetry / firmware upload |
-| Serial1  | UART (SCI2) | D0 (RX) / D1 (TX) | Currently unused |
+| Serial | USB CDC | (USB-C) | Debug telemetry / firmware upload |
+| Serial1 | UART (SCI2) | D0 (RX) / D1 (TX) | Currently unused |
 | sbusUart | UART (SCI0) | A4 (TX) / A5 (RX) | S.BUS RX from R7FG via inverter |
 
 S.BUS is electrically inverted at idle. A small NPN-based inverter
@@ -125,10 +125,10 @@ applies; `beeperUpdate()` plays it non-blocking against `millis()`.
 
 | Pattern | Trigger | Cadence |
 | --- | --- | --- |
-| BEEP_REVERSE   | Either ESC output < (SVC − 50us) | 1s on, 1s off (backup-alarm) |
-| BEEP_BATTERY_30 | (deferred — needs telemetry)    | 200ms chirp every 10s |
-| BEEP_BATTERY_20 | (deferred — needs telemetry)    | Double chirp every 1s |
-| BEEP_OVERTEMP   | (deferred — needs telemetry)    | Rapid double chirp |
+| BEEP_REVERSE | Either ESC output < (SVC − 50us) | 1s on, 1s off (backup-alarm) |
+| BEEP_BATTERY_30 | (deferred — needs telemetry) | 200ms chirp every 10s |
+| BEEP_BATTERY_20 | (deferred — needs telemetry) | Double chirp every 1s |
+| BEEP_OVERTEMP | (deferred — needs telemetry) | Rapid double chirp |
 
 Only `BEEP_REVERSE` is wired in V7.0. The others are scaffolded for when
 telemetry comes back online.
