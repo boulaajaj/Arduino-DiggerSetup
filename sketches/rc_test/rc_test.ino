@@ -11,7 +11,7 @@
 // compensation and smoothness internally — Arduino's job shrinks
 // to: input mixing, override switch, gear caps, beeper alerts.
 // V7.2 removed the Arduino-side inertia filter; the ESC's own
-// Acceleration + MaxDragForce settings own command smoothing now.
+// Acceleration + Drag Force settings own command smoothing now.
 // Telemetry (X.BUS Read Register) is scaffolded in types.h but
 // not polled — sbusUart (SCI0) is consumed by S.BUS.
 //
@@ -159,7 +159,7 @@ const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 // Master beeper enable. When false: the boot self-test is skipped,
 // the runtime reverse-alert is muted, and D8 stays LOW. Flip to true
 // to re-enable both.
-const bool  BEEPER_ENABLED = false;
+const bool  BEEPER_ENABLED = true;
 
 // Reverse-beep trigger: how far below center the output must be
 // before BEEP_REVERSE engages. 50 us = ~12.5% reverse — past deadband
@@ -328,7 +328,7 @@ int joyDeadband(int adc) {
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};
 ServoOutput   cachedJoyOut = {SVC, SVC};
 uint32_t      lastAdcTime = 0;
-const uint32_t ADC_INTERVAL = 10000UL;  // 10ms = 100Hz
+const uint32_t ADC_INTERVAL = 10000UL;  // 10 ms = 100 Hz
 
 void updateJoystick(uint32_t now) {
   if ((now - lastAdcTime) < ADC_INTERVAL) return;

@@ -104,7 +104,7 @@ Sketch: `sketches/rc_test/rc_test.ino` (V7.5 — GL10 FOC) + `types.h`
 Signal pipeline:
 
 1. RC inputs: S.BUS on `sbusUart` (A5 RX via NPN inverter), all 16 channels
-2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve (separate throttle/steering coefficients)
+2. Joystick via 14-bit ADC (A0, A1, cached at 100 Hz) → deadband → expo curve (separate throttle/steering coefficients)
 3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
    - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
    - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
@@ -151,7 +151,7 @@ moves into the ESC. Arduino code keeps:
 - Beeper alerts
 
 V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
-the GL10's own Acceleration + MaxDragForce settings now own command
+the GL10's own Acceleration + Drag Force settings now own command
 smoothing end-to-end, and the Arduino-side filter was double-smoothing
 the stream (operator felt "vehicle keeps coasting after stick release").
 

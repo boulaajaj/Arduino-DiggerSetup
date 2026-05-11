@@ -97,7 +97,7 @@ that down to 33% in low gear and 38% in mid gear.
 
 The Arduino-side inertia filter that this doc originally recommended
 removing was retired in V7.2 (commit `431e267`). The ESC's
-Acceleration + MaxDragForce now own command smoothing end-to-end —
+Acceleration + Drag Force now own command smoothing end-to-end —
 configuring those XC-Link values is the only smoothing knob left.
 
 ## Reconciliation with `XBUS-PROTOCOL.md`
