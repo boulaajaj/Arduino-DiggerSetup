@@ -75,7 +75,7 @@ const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
 // trigger → ch 1, wheel → ch 0.
 const uint8_t SBUS_CH_THR   = 1;  // trigger → throttle (forward/back)
 const uint8_t SBUS_CH_STEER = 0;  // wheel   → steering (left/right)
-const uint8_t SBUS_CH_MODE  = 3;  // CH4 = gear (3-pos switch)
+const uint8_t SBUS_CH_GEAR  = 3;  // CH4 = gear selector (3-pos switch)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
 
 // S.BUS value range (raw 172-1811, center ~992)
@@ -294,7 +294,7 @@ void updateGear() {
     currentGear = GEAR_LOW;
     return;
   }
-  int rc4 = sbusToServo(sbusData.ch[SBUS_CH_MODE]);
+  int rc4 = sbusToServo(sbusData.ch[SBUS_CH_GEAR]);
   if (rc4 < OVR_LO) {
     gearScale = GEAR_LOW_SCALE;
     currentGear = GEAR_LOW;
@@ -567,7 +567,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.3 — GL10 FOC + S.BUS sbusUart + Beeper D8 + Gear ===");
+    Serial.println("# === Digger V7.5 — GL10 FOC + S.BUS sbusUart + Beeper D8 + Gear ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost");
   }
 }
@@ -578,7 +578,7 @@ void debugPrint(uint32_t now) {
 
   int rcT = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_THR])   : SVC;
   int rcS = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_STEER]) : SVC;
-  int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_MODE])  : SVC;
+  int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
   char buf[120];

@@ -75,7 +75,7 @@ that down to 33% in low gear and 38% in mid gear.
 | Acceleration = 6 | Throttle response rate at the ESC. Affects launch feel. | Keep at 6 unless launch feels jerky (lower) or sluggish (higher). |
 | Torque Compensation = 6 | Output max torque on obstacles. Crawler-tuned default. | Keep. |
 | BEC Voltage = 6.0V | Powers Arduino VIN per `WIRING-GUIDE.md`. | Keep. Do not change. |
-| Motor Rotation | One ESC was reflashed CW/CCW to fix throttle direction during the V7.1 shakedown (commit `6bfe536`). | Already set per-track; the steering inversion in `curvatureDrive` compensates. |
+| Motor Rotation | Set per-track via XC-Link so the two tracks rotate in opposite physical directions (one CW, one CCW) for forward motion. The V7.1 steering inversion in `curvatureDrive` (commit `6bfe536`) was retired in V7.4 (commit `431bf95`) after the motor/ESC replacement made the in-software flip over-correct. | Keep per-track; no software compensation needed. |
 | X-BUS ID | ESC Left = 0, ESC Right = 1 per `WIRING-GUIDE.md`. | Keep. |
 
 ### Recommended XC-Link configuration (apply to BOTH ESCs)

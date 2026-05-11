@@ -1,4 +1,4 @@
-// types.h — Shared data structures for Digger Control V7.0
+// types.h — Shared data structures for Digger Control V7.5
 #pragma once
 #include <Arduino.h>
 
@@ -11,8 +11,8 @@ struct JoystickState {
 
 // Normalized command pair (one per input source) before mixing
 struct DriveCommand {
-  float xSpeed;         // -1..+1.2 (RC can exceed ±1 by 20%; joystick clamped at ±1)
-  float zRotation;      // -1..+1.2
+  float xSpeed;         // -1..+1 (post-constrain on both RC and joystick paths)
+  float zRotation;      // -1..+1
 };
 
 // Mixer output after override switch + gear
@@ -49,7 +49,7 @@ enum BeepPattern : uint8_t {
 // actual scale factors live in the [CONFIG] section of rc_test.ino as
 // GEAR_{LOW,MID,HIGH}_SCALE so they're tunable in one place.
 enum Gear : uint8_t {
-  GEAR_LOW  = 0,   // ~60% cap (training / tight spaces)
-  GEAR_MID  = 1,   // ~70% cap (normal driving)
-  GEAR_HIGH = 2,   // 100% cap (full throttle authority)
+  GEAR_LOW  = 0,   // 40% cap — Eco (training / tight spaces)
+  GEAR_MID  = 1,   // 65% cap — Normal driving
+  GEAR_HIGH = 2,   // 100% cap — Turbo (full throttle authority)
 };

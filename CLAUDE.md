@@ -70,7 +70,7 @@ bfs::SbusRx sbusRx(&sbusUart);
 | sbusUart | UART (SCI0) | A4 (TX) / A5 (RX) | S.BUS RX from R7FG via inverter |
 
 S.BUS is electrically inverted at idle. A small NPN-based inverter
-circuit on the receiver wire flips the signal so Serial2 sees standard
+circuit on the receiver wire flips the signal so `sbusUart` sees standard
 UART polarity (idle HIGH). Same inverter circuit that was on D0 in
 V5.0/V6.0 — just relocated to A5. Library config is unchanged
 (100000 baud, 8E2, courtesy of `bfs::SbusRx`).
@@ -79,8 +79,9 @@ V5.0/V6.0 — just relocated to A5. Library config is unchanged
 
 `types.h` defines `EscTelem { voltage, motorTempC, escTempC, lastGoodMs, valid }`
 and `BeepPattern { BAT_30, BAT_20, OVERTEMP, ... }`, but no telemetry is
-polled in V7.0. With S.BUS occupying Serial2, no hardware UART remains
-for X.BUS, and the standing rule is "never SoftwareSerial for telemetry".
+polled in V7. With S.BUS occupying `sbusUart` on SCI0, the only remaining
+hardware UART (`Serial1` on D0/D1, SCI2) is available but unused, and the
+standing rule is "never SoftwareSerial for telemetry".
 The plan when telemetry comes back online:
 
 - **Use X.BUS Read Register (func 0x10), NOT Throttle (0x50).** Throttle
@@ -92,12 +93,13 @@ The plan when telemetry comes back online:
   EMA filter with 10 s time constant. After 5 s with no good frame the
   reading is marked stale → battery/temp beeps suppressed (no false
   alarms), reverse beep still works.
-- **Hardware path TBD** — requires either a third UART solution, an
-  external bridge, or relocating S.BUS off Serial2.
+- **Hardware path TBD** — `Serial1` (D0/D1) is free, so X.BUS telemetry
+  can land there if the wiring is feasible. Alternative is to relocate
+  S.BUS off `sbusUart` and reuse SCI0.
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.0 — GL10 FOC) + `types.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.5 — GL10 FOC) + `types.h`
 
 Signal pipeline:
 
@@ -107,7 +109,9 @@ Signal pipeline:
    - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
    - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Gear cap (RC CH4): 60% / 70% / 100% wheel-speed cap
+5. Gear cap (RC CH4): Eco 40% / Normal 65% / Turbo 100% wheel-speed cap.
+   In Eco the pivot and reverse caps get a +5pp boost so the operator
+   keeps usable maneuvering authority.
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
 7. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
 
@@ -130,7 +134,7 @@ applies; `beeperUpdate()` plays it non-blocking against `millis()`.
 | BEEP_BATTERY_20 | (deferred — needs telemetry) | Double chirp every 1s |
 | BEEP_OVERTEMP | (deferred — needs telemetry) | Rapid double chirp |
 
-Only `BEEP_REVERSE` is wired in V7.0. The others are scaffolded for when
+Only `BEEP_REVERSE` is wired in V7. The others are scaffolded for when
 telemetry comes back online.
 
 ## Key Design Decisions
@@ -143,7 +147,7 @@ moves into the ESC. Arduino code keeps:
 
 - Input shaping (expo, deadband, curvatureDrive)
 - Mixing (override switch)
-- Gear caps (60% / 70% / 100% via RC CH4)
+- Gear caps (Eco 40% / Normal 65% / Turbo 100% via RC CH4)
 - Beeper alerts
 
 V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
@@ -160,24 +164,35 @@ don't apply to GL10/GL540L and are not used.
 - [x] V5.0 sketch: curvatureDrive, S.BUS, expo, inertia, soft limits
 - [x] V6.0 (main): X.BUS closed-loop RPM with curvatureDrive (E10/E3665 era)
 - [x] GL10 + GL540L hardware swap (2026-04-25)
-- [x] V7.0 sketch: S.BUS on Serial2/A5, beeper on D8, GL10 PWM control
-- [ ] **V7.0 first upload + bench test** ← NEXT
-- [ ] Field test at reduced power
-- [ ] Decide on telemetry path (third UART / bridge / relocate S.BUS)
+- [x] V7.0 sketch: S.BUS on `sbusUart`/A5, beeper on D8, GL10 PWM control
+- [x] V7.1 tuning: tank-style curvature, pivot authority, expo split
+- [x] V7.2: removed Arduino-side inertia filter (ESC owns smoothing)
+- [x] V7.3: symmetric-add + desaturate in curvatureDrive (hold speed through turns)
+- [x] V7.4: steering polarity fix + reverse cap + Eco/Normal/Turbo gear spread
+- [x] V7.5: Eco-gear +5pp boost on reverse and pivot caps
+- [x] Field test at reduced power
+- [ ] X.BUS telemetry on `Serial1` (D0/D1) — voltage / temp / RPM (see issue #36)
+- [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
+- [ ] Migrate to UNO R4 WiFi for wireless telemetry (issue #6)
 
 ## File Map
 
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.0 — GL10 FOC)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.5 — GL10 FOC)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, BeepPattern, EscTelem, ...)
-sketches/serial2_test/serial2_test.ino   — Confirms Serial2 on A4/A5 via SCI0 works
+sketches/serial2_test/serial2_test.ino   — Confirms second UART on A4/A5 via SCI0 works
 sketches/xbus_master/xbus_master.ino     — X.BUS master test sketch (deferred — kept for reference)
+docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
+docs/GL10-PARAMETERS.md                  — Configurable parameter reference + code-context analysis
+docs/GL10-OPERATION.md                   — Startup, throttle calibration, factory reset, LED/beep reference
 docs/XBUS-PROTOCOL.md                    — Official XC X.BUS protocol reference (translated)
 docs/XBUS-INVESTIGATION.md               — X.BUS investigation timeline and lessons learned
 docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
 docs/WIRING-GUIDE.md                     — Hardware wiring reference
+docs/MISSION.md                          — Project design philosophy (smoothness above all)
+docs/PLANT-CHARACTERIZATION.md           — Measured plant response (E10/E3665 era, kept for reference)
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor
 ```
