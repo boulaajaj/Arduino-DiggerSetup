@@ -120,6 +120,19 @@ const float GEAR_LOW_SCALE  = 0.40f;  // Eco
 const float GEAR_MID_SCALE  = 0.65f;  // Normal
 const float GEAR_HIGH_SCALE = 1.00f;  // Turbo
 
+// Eco gets +5pp authority on reverse and pivot caps so the operator can
+// still maneuver in tight spaces. Forward stays at GEAR_LOW_SCALE (40%).
+//   reverse:  0.625 × 0.40 = 0.25 effective (vs 0.20 unboosted)
+//   pivot:    0.725 × 0.40 = 0.29 effective (vs 0.24 unboosted)
+const float REVERSE_LIMIT_LOW   = 0.625f;
+const float PIVOT_SPEED_CAP_LOW = 0.725f;
+
+// Gear state — declared here so curvatureDrive() and rcDrive() can read
+// it for the Eco-only conditional caps above. updateGear() in [GEAR]
+// owns the writes.
+float gearScale  = GEAR_LOW_SCALE;
+Gear  currentGear = GEAR_LOW;
+
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
 // |xSpeed| >= END:   pure curvature (outer holds xSpeed, inner slows)
@@ -171,8 +184,10 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
   zRotation = constrain(zRotation, -1.0f, 1.0f);
 
   // Pivot output: counter-rotate the tracks, capped to PIVOT_SPEED_CAP.
-  // Used when the operator is essentially stationary and wants to spin.
-  float cappedRotation = constrain(zRotation, -PIVOT_SPEED_CAP, PIVOT_SPEED_CAP);
+  // Eco gear uses a looser cap so the operator keeps usable pivot
+  // authority even with the 40% forward-speed scaling.
+  float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW : PIVOT_SPEED_CAP;
+  float cappedRotation = constrain(zRotation, -pivotCap, pivotCap);
   float pivotL = xSpeed - cappedRotation;
   float pivotR = xSpeed + cappedRotation;
 
@@ -256,7 +271,8 @@ ServoOutput rcDrive() {
   // Apply tunable input gains, then clamp to the curvatureDrive domain.
   xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
-  if (xSpeed < -REVERSE_LIMIT) xSpeed = -REVERSE_LIMIT;
+  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
+  if (xSpeed < -revLimit) xSpeed = -revLimit;
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
   ws = applyGear(ws);
   return wheelSpeedsToServo(ws);
@@ -267,13 +283,10 @@ ServoOutput rcDrive() {
 // [GEAR] — RC CH4 → speed cap (Eco 40% / Normal 65% / Turbo 100%)
 // ═══════════════════════════════════════════════════════════════
 //
-// Defined here (after [RC]) so updateGear() can read sbusValid/sbusData
-// directly. Both rcDrive() above and updateJoystick() below call
-// applyGear() — Arduino's auto-prototype makes that legal regardless
-// of file order.
-
-float gearScale  = GEAR_LOW_SCALE;
-Gear  currentGear = GEAR_LOW;
+// updateGear() is defined here (after [RC]) so it can read sbusValid /
+// sbusData directly. The gearScale and currentGear globals it writes
+// are declared up in [CONFIG] so the drive functions and curvatureDrive
+// can read them for the Eco-only conditional caps.
 
 void updateGear() {
   if (!sbusValid) {
@@ -335,7 +348,8 @@ void updateJoystick(uint32_t now) {
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;
-  if (xSpeed < -REVERSE_LIMIT) xSpeed = -REVERSE_LIMIT;
+  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
+  if (xSpeed < -revLimit) xSpeed = -revLimit;
   WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
   ws = applyGear(ws);
   cachedJoyOut = wheelSpeedsToServo(ws);
