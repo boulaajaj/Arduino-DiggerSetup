@@ -1,4 +1,4 @@
-// types.h — Shared data structures for Digger Control V7.5
+// types.h — Shared data structures for Digger Control V7.6
 #pragma once
 #include <Arduino.h>
 
@@ -34,15 +34,6 @@ struct EscTelem {
   float    escTempC;    // degC (EMA smoothed)
   uint32_t lastGoodMs;  // millis() of last successful read
   bool     valid;       // has at least one good reading
-};
-
-// Beeper state (priority-ordered, higher value = higher priority)
-enum BeepPattern : uint8_t {
-  BEEP_SILENT      = 0,
-  BEEP_REVERSE     = 1,  // 1s on, 1s off — backup-alarm style
-  BEEP_BATTERY_30  = 2,  // single chirp every 10s
-  BEEP_BATTERY_20  = 3,  // double chirp every 1s
-  BEEP_OVERTEMP    = 4,  // double chirp twice per second
 };
 
 // CH4 gear position. Caps the post-curvatureDrive wheel speeds; the

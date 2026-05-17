@@ -9,9 +9,12 @@
 // Hardware shift (2026-04-25): swapped from E10/E3665 to GL10 ESC
 // + GL540L motor. The GL10's FOC handles motor acceleration
 // compensation and smoothness internally — Arduino's job shrinks
-// to: input mixing, override switch, gear caps, beeper alerts.
+// to: input mixing, override switch, gear caps.
 // V7.2 removed the Arduino-side inertia filter; the ESC's own
 // Acceleration + Drag Force settings own command smoothing now.
+// V7.6 removed the reverse-direction beeper entirely — audible
+// alerts will return as a battery-aware system after the planned
+// Nano R4 → UNO R4 migration (see GitHub issue tracker).
 // Telemetry (X.BUS Read Register) is scaffolded in types.h but
 // not polled — sbusUart (SCI0) is consumed by S.BUS.
 //
@@ -27,7 +30,6 @@
 //   [JOYSTICK]   ADC input — deadband, per-axis expo curve
 //   [GEAR]       RC CH4 → Eco 40% / Normal 65% / Turbo 100% wheel-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
-//   [BEEPER]     Priority-driven audible alert (D8)
 //   [OUTPUT]     ESC servo PWM
 //   [DEBUG]      10 Hz serial CSV telemetry
 //
@@ -36,7 +38,7 @@
 //   A1  ← Joystick X (steering)        [14-bit ADC]
 //   A4  (unused — sbusUart TX on SCI0, S.BUS is RX-only)
 //   A5  ← S.BUS RX (sbusUart on SCI0 via NPN inverter)
-//   D8  → Beeper (active buzzer, direct GPIO)
+//   D8     (reserved — future battery-aware beeper, V8/UNO R4)
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
 //   D0/D1 → Serial1 hardware UART (currently unused)
@@ -66,9 +68,9 @@ UART sbusUart(18, 19);
 // Pins
 const uint8_t PIN_JOY_Y  = A0;  // Throttle
 const uint8_t PIN_JOY_X  = A1;  // Steering
-const uint8_t PIN_BEEPER = 8;   // Active buzzer (HIGH = on)
 const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
 const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
+// D8 reserved for the future battery-aware beeper (deferred to V8 / UNO R4)
 
 // S.BUS channel mapping (0-indexed). Confirmed by live capture while
 // the operator moved each control independently on the RC6GS V3:
@@ -155,21 +157,6 @@ const float RC_STEERING_GAIN = 1.00f;
 // cap was for the older E10/E3665 hardware; GL10 + GL540L can take
 // full reverse without trouble.
 const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
-
-// Master beeper enable. When false: the boot self-test is skipped,
-// the runtime reverse-alert is muted, and D8 stays LOW. Flip to true
-// to re-enable both.
-const bool  BEEPER_ENABLED = true;
-
-// Reverse-beep trigger: how far below center the output must be
-// before BEEP_REVERSE engages. 50 us = ~12.5% reverse — past deadband
-// and clear of small drift.
-const int   REVERSE_BEEP_US = 50;
-
-// How long BEEP_REVERSE keeps playing after the last reverse-throttle
-// sample. Gives a 2-second tail so a quick stab into reverse still
-// gives a clear audible warning.
-const uint32_t REVERSE_BEEP_HOLD_MS = 2000;
 
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
@@ -382,159 +369,6 @@ ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [BEEPER] — Priority-driven audible alert on D8
-// ═══════════════════════════════════════════════════════════════
-//
-// Active buzzer driven directly from GPIO (HIGH = sounding).
-// Patterns are non-blocking, evaluated each loop pass against millis().
-// Pattern priority is encoded in the BeepPattern enum value (higher
-// = louder/more critical). Caller sets target each loop; if multiple
-// conditions fire, the highest pattern wins. BATTERY/OVERTEMP are
-// scaffolded but never set yet — telemetry isn't polled this build.
-
-struct BeepStep { uint16_t onMs; uint16_t offMs; };
-struct BeepProgram { uint8_t steps; uint16_t restMs; const BeepStep* seq; };
-
-// Step sequences. Each entry is (on_ms, off_ms). After all steps,
-// the program rests for restMs before repeating.
-const BeepStep PAT_REVERSE[]  = {{1000, 0}};
-const BeepStep PAT_BAT30[]    = {{200,  0}};
-const BeepStep PAT_BAT20[]    = {{200,  200}, {200, 0}};
-const BeepStep PAT_OVERTEMP[] = {{100,  100}, {100, 0}};
-
-const BeepProgram BEEP_PROGRAMS[] = {
-  {0, 0,    nullptr},        // BEEP_SILENT
-  {1, 1000, PAT_REVERSE},    // BEEP_REVERSE: 1s on, 1s off — backup-alarm style
-  {1, 9800, PAT_BAT30},      // BEEP_BATTERY_30: chirp every ~10s
-  {2, 600,  PAT_BAT20},      // BEEP_BATTERY_20: double chirp every ~1s
-  {2, 300,  PAT_OVERTEMP},   // BEEP_OVERTEMP: rapid double chirp
-};
-
-BeepPattern currentBeep = BEEP_SILENT;
-uint8_t     beepStepIdx = 0;
-uint32_t    beepStateStart = 0;
-bool        beepOn = false;
-
-void beeperInit() {
-  pinMode(PIN_BEEPER, OUTPUT);
-  digitalWrite(PIN_BEEPER, LOW);
-}
-
-// One-shot loudness self-test. Plays each drive style for 500 ms with
-// a 250 ms gap, prints a label to Serial so the operator can correlate
-// what they hear. Active buzzers (with internal oscillator) will be
-// loudest on DC HIGH and quieter (or silent) on tone(). Passive piezos
-// will be loudest on tone() near their resonant frequency (~2-4 kHz).
-void beeperSelfTest() {
-  if (!BEEPER_ENABLED) return;
-  if (Serial) Serial.println("# === Beeper loudness self-test (5 styles) ===");
-
-  struct TestStep {
-    const char* label;
-    uint16_t    toneHz;   // 0 = DC HIGH (digitalWrite)
-  };
-  const TestStep steps[] = {
-    {"# 1/5: DC HIGH (digitalWrite, full 5V duty)", 0},
-    {"# 2/5: tone 2.0 kHz",                         2000},
-    {"# 3/5: tone 2.7 kHz (typical piezo resonance)", 2700},
-    {"# 4/5: tone 3.5 kHz",                         3500},
-    {"# 5/5: tone 4.5 kHz",                         4500},
-  };
-  const size_t n = sizeof(steps) / sizeof(steps[0]);
-
-  for (size_t i = 0; i < n; i++) {
-    if (Serial) Serial.println(steps[i].label);
-    if (steps[i].toneHz == 0) {
-      digitalWrite(PIN_BEEPER, HIGH);
-    } else {
-      tone(PIN_BEEPER, steps[i].toneHz);
-    }
-    delay(500);
-    if (steps[i].toneHz == 0) digitalWrite(PIN_BEEPER, LOW);
-    else                      noTone(PIN_BEEPER);
-    delay(250);
-  }
-
-  if (Serial) Serial.println("# Self-test complete. Tell me which step was loudest.");
-}
-
-void setBeepPattern(BeepPattern p, uint32_t nowMs) {
-  if (p == currentBeep) return;
-  currentBeep = p;
-  beepStepIdx = 0;
-  beepStateStart = nowMs;
-
-  // If the new pattern starts with an ON step, fire it immediately —
-  // no leading silence. Avoids a 1-second wait before the first chirp.
-  const BeepProgram& prog = BEEP_PROGRAMS[currentBeep];
-  if (prog.steps > 0 && prog.seq[0].onMs > 0) {
-    digitalWrite(PIN_BEEPER, HIGH);
-    beepOn = true;
-  } else {
-    digitalWrite(PIN_BEEPER, LOW);
-    beepOn = false;
-  }
-}
-
-void beeperUpdate(uint32_t nowMs) {
-  const BeepProgram& prog = BEEP_PROGRAMS[currentBeep];
-  if (prog.steps == 0) {
-    if (beepOn) {
-      digitalWrite(PIN_BEEPER, LOW);
-      beepOn = false;
-    }
-    return;
-  }
-
-  uint32_t elapsed = nowMs - beepStateStart;
-  const BeepStep& step = prog.seq[beepStepIdx];
-
-  if (beepOn) {
-    if (elapsed >= step.onMs) {
-      digitalWrite(PIN_BEEPER, LOW);
-      beepOn = false;
-      beepStateStart = nowMs;
-    }
-  } else {
-    bool isLastStep = (beepStepIdx == prog.steps - 1);
-    uint32_t gap = isLastStep ? prog.restMs : step.offMs;
-    if (elapsed >= gap) {
-      if (isLastStep) beepStepIdx = 0;
-      else            beepStepIdx++;
-      const BeepStep& next = prog.seq[beepStepIdx];
-      if (next.onMs > 0) {
-        digitalWrite(PIN_BEEPER, HIGH);
-        beepOn = true;
-      }
-      beepStateStart = nowMs;
-    }
-  }
-}
-
-// Reverse-hold latch: BEEP_REVERSE stays active for REVERSE_BEEP_HOLD_MS
-// after the last reverse-throttle sample. Gives a 2-second tail so a
-// quick stab into reverse still produces a clearly audible warning.
-bool     inReverseHold     = false;
-uint32_t reverseHoldStartMs = 0;
-
-// Decide which pattern to play based on current state. Returns the
-// highest-priority pattern that applies. Battery/temp are placeholders
-// until X.BUS telemetry is wired back in.
-BeepPattern selectBeepPattern(int outL, int outR, uint32_t nowMs) {
-  if (!BEEPER_ENABLED) return BEEP_SILENT;
-  bool reversingNow = (outL < SVC - REVERSE_BEEP_US) || (outR < SVC - REVERSE_BEEP_US);
-  if (reversingNow) {
-    inReverseHold = true;
-    reverseHoldStartMs = nowMs;
-  } else if (inReverseHold && (nowMs - reverseHoldStartMs) >= REVERSE_BEEP_HOLD_MS) {
-    inReverseHold = false;
-  }
-  if (inReverseHold) return BEEP_REVERSE;
-  return BEEP_SILENT;
-}
-
-
-// ═══════════════════════════════════════════════════════════════
 // [OUTPUT] — ESC servo PWM (non-blocking)
 // ═══════════════════════════════════════════════════════════════
 
@@ -559,7 +393,7 @@ void outputWrite(int left, int right) {
 // ═══════════════════════════════════════════════════════════════
 // [DEBUG] — 10 Hz serial CSV telemetry
 // ═══════════════════════════════════════════════════════════════
-// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost
+// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost
 
 uint32_t prevPrint = 0;
 
@@ -567,8 +401,8 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.5 — GL10 FOC + S.BUS sbusUart + Beeper D8 + Gear ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,Beep,FS,Lost");
+    Serial.println("# === Digger V7.6 — GL10 FOC + S.BUS sbusUart + Gear (beeper removed) ===");
+    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost");
   }
 }
 
@@ -582,10 +416,10 @@ void debugPrint(uint32_t now) {
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
   char buf[120];
-  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
            rcT, rcS, rc4, rc5,
            cachedJoy.rawY, cachedJoy.rawX,
-           outL, outR, (int)currentGear, (int)currentBeep,
+           outL, outR, (int)currentGear,
            sbusData.failsafe, sbusData.lost_frame);
   Serial.println(buf);
 }
@@ -599,14 +433,11 @@ void setup() {
   analogReadResolution(14);
   sbusRx.Begin();
   outputInit();
-  beeperInit();
   debugInit();
-  beeperSelfTest();
 }
 
 void loop() {
   uint32_t now = micros();
-  uint32_t nowMs = now / 1000UL;
 
   // 1. Read inputs
   if (sbusRx.Read()) {
@@ -633,10 +464,6 @@ void loop() {
   // command straight through.
   outputWrite(mix.left, mix.right);
 
-  // 4. Beeper — evaluate against current output, then advance pattern
-  setBeepPattern(selectBeepPattern(outL, outR, nowMs), nowMs);
-  beeperUpdate(nowMs);
-
-  // 5. Debug
+  // 4. Debug
   debugPrint(now);
 }

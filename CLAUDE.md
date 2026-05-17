@@ -23,15 +23,16 @@ switch selects who has authority.
 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, transmitter does tank mixing |
 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect (direct to ADC — 5V tolerant) |
-| Beeper | Active buzzer | Driven directly from D8 (HIGH = on) |
 
 **Hardware history:** Previously used XC E10 ESC + XC E3665 motor.
 Swapped to GL10 + GL540L on 2026-04-25. The FOC ESC handles motor
 acceleration compensation and smoothness internally, so the Arduino's
-job shrinks to input mixing, override switching, soft limits, and
-beeper alerts. The earlier dual-loop PID / hall-sensor-tap / X.BUS
-control plans are no longer needed for control — see "Telemetry"
-below for what's deferred.
+job shrinks to input mixing, override switching, and soft limits.
+The earlier dual-loop PID / hall-sensor-tap / X.BUS control plans
+are no longer needed for control — see "Telemetry" below for what's
+deferred. V7.6 removed the reverse-direction beeper subsystem
+entirely; audible alerts will return as a battery-aware system
+after the planned Nano R4 → UNO R4 migration.
 
 ## Pin Assignments (Nano R4)
 
@@ -40,7 +41,7 @@ A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A4     (sbusUart TX on SCI0, currently unused)
 A5  <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
-D8  -> Beeper (active buzzer, direct GPIO) [HIGH = sounding]
+D8     (reserved — future battery-aware beeper, V8 / UNO R4)
 D9  -> Left Track ESC                       [Servo PWM, 50 Hz, 1000-2000 us]
 D10 -> Right Track ESC                      [Servo PWM]
 D0/D1 — Serial1 hardware UART (currently unused; S.BUS moved off it)
@@ -78,10 +79,10 @@ V5.0/V6.0 — just relocated to A5. Library config is unchanged
 ### Telemetry (deferred)
 
 `types.h` defines `EscTelem { voltage, motorTempC, escTempC, lastGoodMs, valid }`
-and `BeepPattern { BAT_30, BAT_20, OVERTEMP, ... }`, but no telemetry is
-polled in V7. With S.BUS occupying `sbusUart` on SCI0, the only remaining
-hardware UART (`Serial1` on D0/D1, SCI2) is available but unused, and the
-standing rule is "never SoftwareSerial for telemetry".
+as scaffolding, but no telemetry is polled in V7. With S.BUS occupying
+`sbusUart` on SCI0, the only remaining hardware UART (`Serial1` on D0/D1,
+SCI2) is available but unused, and the standing rule is "never
+SoftwareSerial for telemetry".
 The plan when telemetry comes back online:
 
 - **Use X.BUS Read Register (func 0x10), NOT Throttle (0x50).** Throttle
@@ -91,15 +92,16 @@ The plan when telemetry comes back online:
   0x22 mot-Tem (raw − 40 °C).
 - **Cadence:** 1 Hz, alternating between the two ESCs (each sampled every 2 s),
   EMA filter with 10 s time constant. After 5 s with no good frame the
-  reading is marked stale → battery/temp beeps suppressed (no false
-  alarms), reverse beep still works.
+  reading is marked stale.
 - **Hardware path TBD** — `Serial1` (D0/D1) is free, so X.BUS telemetry
   can land there if the wiring is feasible. Alternative is to relocate
   S.BUS off `sbusUart` and reuse SCI0.
+- **Audible alerts driven by telemetry** — once battery voltage is
+  available, the V8 battery-aware beeper (issue tracker) will consume it.
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.5 — GL10 FOC) + `types.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.6 — GL10 FOC, beeper removed) + `types.h`
 
 Signal pipeline:
 
@@ -113,29 +115,32 @@ Signal pipeline:
    In Eco the pivot and reverse caps get a +5pp boost so the operator
    keeps usable maneuvering authority.
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
-7. Beeper update on D8 — reverse alarm whenever output < SVC − 50us
 
 Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
-[JOYSTICK], [MIXER], [BEEPER], [OUTPUT], [DEBUG]. Search
-`[NAME]` to jump.
+[JOYSTICK], [MIXER], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
-## Beeper Patterns
+## Audible Alerts — Deferred to V8
 
-Priority is encoded in the `BeepPattern` enum value (higher = more critical).
-Each loop, `selectBeepPattern()` returns the highest-priority condition that
-applies; `beeperUpdate()` plays it non-blocking against `millis()`.
+The reverse-direction beeper was removed in V7.6 per operator request:
+the reverse-alarm cadence (1s on / 1s off) was disruptive without adding
+safety value the operator didn't already have from line-of-sight on a
+~50 lb machine.
 
-| Pattern | Trigger | Cadence |
-| --- | --- | --- |
-| BEEP_REVERSE | Either ESC output < (SVC − 50us) | 1s on, 1s off (backup-alarm) |
-| BEEP_BATTERY_30 | (deferred — needs telemetry) | 200ms chirp every 10s |
-| BEEP_BATTERY_20 | (deferred — needs telemetry) | Double chirp every 1s |
-| BEEP_OVERTEMP | (deferred — needs telemetry) | Rapid double chirp |
+When the project migrates from Nano R4 to UNO R4 (planned, see the issue
+tracker for "Battery-aware beeper, V8"), the beeper comes back as a
+battery-level alarm driven by X.BUS voltage telemetry:
 
-Only `BEEP_REVERSE` is wired in V7. The others are scaffolded for when
-telemetry comes back online.
+| Battery state | Pattern |
+| --- | --- |
+| ≥ 30% | Silent |
+| < 30% | 1 beep every 10 s |
+| < 20% | 3 beeps every 10 s |
+| < 10% | Continuous tone |
+| < safety cutoff | Power cut — vehicle will not move forward |
+
+D8 is reserved for that future implementation; no code drives it today.
 
 ## Key Design Decisions
 
@@ -148,7 +153,6 @@ moves into the ESC. Arduino code keeps:
 - Input shaping (expo, deadband, curvatureDrive)
 - Mixing (override switch)
 - Gear caps (Eco 40% / Normal 65% / Turbo 100% via RC CH4)
-- Beeper alerts
 
 V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
 the GL10's own Acceleration + Drag Force settings now own command
@@ -164,16 +168,18 @@ don't apply to GL10/GL540L and are not used.
 - [x] V5.0 sketch: curvatureDrive, S.BUS, expo, inertia, soft limits
 - [x] V6.0 (main): X.BUS closed-loop RPM with curvatureDrive (E10/E3665 era)
 - [x] GL10 + GL540L hardware swap (2026-04-25)
-- [x] V7.0 sketch: S.BUS on `sbusUart`/A5, beeper on D8, GL10 PWM control
+- [x] V7.0 sketch: S.BUS on `sbusUart`/A5, GL10 PWM control
 - [x] V7.1 tuning: tank-style curvature, pivot authority, expo split
 - [x] V7.2: removed Arduino-side inertia filter (ESC owns smoothing)
 - [x] V7.3: symmetric-add + desaturate in curvatureDrive (hold speed through turns)
 - [x] V7.4: steering polarity fix + reverse cap + Eco/Normal/Turbo gear spread
 - [x] V7.5: Eco-gear +5pp boost on reverse and pivot caps
+- [x] V7.6: removed reverse-direction beeper entirely (issue #39)
 - [x] Field test at reduced power
 - [ ] X.BUS telemetry on `Serial1` (D0/D1) — voltage / temp / RPM (see issue #36)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
 - [ ] Migrate to UNO R4 WiFi for wireless telemetry (issue #6)
+- [ ] Battery-aware beeper after UNO R4 migration (V8 milestone)
 
 ## File Map
 
@@ -181,7 +187,7 @@ don't apply to GL10/GL540L and are not used.
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.5 — GL10 FOC)
-sketches/rc_test/types.h                 — Shared structs (JoystickState, BeepPattern, EscTelem, ...)
+sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
 sketches/serial2_test/serial2_test.ino   — Confirms second UART on A4/A5 via SCI0 works
 sketches/xbus_master/xbus_master.ino     — X.BUS master test sketch (deferred — kept for reference)
 docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
