@@ -35,35 +35,35 @@ the vehicle is assembled and on the ground to build the real FF table.
 **Steady-state RPM (mean ± standard deviation across 5 runs, left motor):**
 
 | Throttle % | Mean RPM | StDev | Notes |
-| ---------- | -------- | ----- | ----- |
-|   5        |      0   |     0 | ZERO in all 5 runs |
-|  10        |   1220   |   494 | **HIGHLY variable** — 379 to 1647 RPM |
-|  15        |   2774   |   214 | settling down |
-|  20        |   4154   |   367 | |
-|  25        |   5714   |   189 | |
-|  30        |   6827   |   224 | |
-|  35        |   8120   |   203 | |
-|  40        |   9003   |   128 | very repeatable |
-|  45        |   9554   |   163 | |
-|  50        |  10377   |   125 | |
-|  55        |  10873   |   169 | |
-|  60        |  11243   |   126 | |
+| --- | --- | --- | --- |
+| 5 | 0 | 0 | ZERO in all 5 runs |
+| 10 | 1220 | 494 | **HIGHLY variable** — 379 to 1647 RPM |
+| 15 | 2774 | 214 | settling down |
+| 20 | 4154 | 367 | |
+| 25 | 5714 | 189 | |
+| 30 | 6827 | 224 | |
+| 35 | 8120 | 203 | |
+| 40 | 9003 | 128 | very repeatable |
+| 45 | 9554 | 163 | |
+| 50 | 10377 | 125 | |
+| 55 | 10873 | 169 | |
+| 60 | 11243 | 126 | |
 
 **Response time (ms to reach 90% of new level from previous level):**
 
 | Throttle % | Mean rise | Range |
-| ---------- | --------- | ----- |
-| 10  | 573 ms | 413–837 |
-| 15  | 799 ms | 637–898 |
-| 20  | 608 ms | 304–828 |
-| 25  | 611 ms | 294–898 |
-| 30  | 416 ms | 360–558 |
-| 35  | 635 ms | 493–848 |
-| 40  | 611 ms | 293–897 |
-| 45  | 326 ms | 220–504 |
-| 50  | 358 ms | 290–454 |
-| 55  | 395 ms | 210–624 |
-| 60  | 259 ms | 20–443 |
+| --- | --- | --- |
+| 10 | 573 ms | 413–837 |
+| 15 | 799 ms | 637–898 |
+| 20 | 608 ms | 304–828 |
+| 25 | 611 ms | 294–898 |
+| 30 | 416 ms | 360–558 |
+| 35 | 635 ms | 493–848 |
+| 40 | 611 ms | 293–897 |
+| 45 | 326 ms | 220–504 |
+| 50 | 358 ms | 290–454 |
+| 55 | 395 ms | 210–624 |
+| 60 | 259 ms | 20–443 |
 
 **Pattern:** response gets faster as throttle increases — each 5 % buys less
 RPM, and what it does buy arrives quicker.
