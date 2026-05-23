@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat <<'HOOK_EOF'\n[SESSION-START MEMORY HOOK]\nBefore answering, silently review docs/DECISION-LOG.md for prior technical decisions.\nRules for this session:\n- If you learn new technical facts (wiring confirmed, component values tested, circuit topology validated, firmware behavior observed), note them mentally and offer to append to docs/DECISION-LOG.md at natural breakpoints.\n- NEVER record personal information, conversation tone, opinions, emotional state, or non-technical discussion.\n- ONLY record: circuit decisions, test results, component values, pin assignments, protocol findings, firmware behavior, wiring changes, and hardware observations.\n- Keep entries terse: date, what was decided/confirmed, why.\nHOOK_EOF",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolCall": [
+      {
+        "matcher": "Bash:git commit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat <<'HOOK_EOF'\n[POST-COMMIT MEMORY HOOK]\nA commit was just made. Check if this session established any new technical facts that are NOT already in docs/DECISION-LOG.md:\n- New wiring topology confirmed working\n- Component values finalized or changed\n- Protocol behavior discovered (timing, polarity, byte order)\n- Pin assignment changes\n- Test results (what worked, what failed and why)\n- Architecture decisions (why X was chosen over Y)\nIf yes, ask the user: \"This session confirmed [specific technical fact]. Want me to add it to the decision log?\"\nIf nothing new was established, do nothing — do NOT prompt.\nNEVER log: personal info, conversation style, user preferences, emotional context, or non-technical discussion.\nHOOK_EOF",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit:docs/DECISION-LOG.md",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat <<'HOOK_EOF'\n[DECISION-LOG WRITE GUARD]\nYou are writing to the decision log. Before proceeding, verify:\n1. Every line contains ONLY technical facts (circuit, firmware, protocol, hardware)\n2. NO personal information, names (except component/product names), email addresses, or conversation tone\n3. NO subjective commentary — only what was built, tested, measured, or decided\n4. Entries are dated and terse (one line per fact when possible)\nIf any line fails these checks, remove it before writing.\nHOOK_EOF",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
