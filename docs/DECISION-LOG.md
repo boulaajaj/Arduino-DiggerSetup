@@ -20,10 +20,13 @@ Updated by session hooks — only technical content, no personal info.
 - Exact diode orientation and pull-up value on breadboard: **not yet recorded — needs bench verification**.
 - Test sketch: `sketches/xbus_master/xbus_master.ino`.
 
-## 2026-05-23 — Daughter board design started
+## 2026-05-23 — Interface board design
 
-- Purpose: replace breadboard X.BUS merge + S.BUS inverter with soldered stripboard.
-- Build plan: `docs/DAUGHTER-BOARD.md`.
-- Design uses: 2× 1N5819 Schottky (cathode→ESC, anode→bus), 4.7kΩ pull-up, 1kΩ TX series resistor (on main board), 2N3904 S.BUS inverter with 2× 10kΩ.
-- Diode polarity in `docs/WIRING-GUIDE.md` §1 is documented incorrectly (says anode→ESC, should be anode→bus). Daughter board doc corrects this.
-- D0 conflict: X.BUS and S.BUS both want Serial1 RX. Only one can be active at a time until a dual-UART board is used.
+- Purpose: replace breadboard X.BUS merge + S.BUS inverter with a soldered plug-and-play board.
+- Build plan: `docs/INTERFACE-BOARD.md`.
+- X.BUS merge: no diodes needed (master-polled, no bus contention). Both ESC yellows connect directly to bus node.
+- Components: 4.7kΩ pull-up, 1kΩ TX series resistor (on board between J3 and bus), 2N3904 S.BUS inverter with 2× 10kΩ.
+- Motor control via PWM (D9/D10 → ESCs direct), X.BUS for telemetry only (RPM, current, voltage, temp).
+- X.BUS telemetry confirmed working on breadboard with both GL10 ESCs.
+- Six servo connectors: 2× ESC telemetry IN, 1× TX to Arduino, 1× RX to Arduino, 1× S.BUS IN from receiver, 1× inverted S.BUS OUT to Arduino.
+- D0 conflict: X.BUS and S.BUS both want Serial1 RX. Only one can be connected at a time until a dual-UART board is used.
