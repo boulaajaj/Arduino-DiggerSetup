@@ -3,9 +3,9 @@
 ## What This Is
 
 Arduino Nano R4-based tank-style track controller for a ride-on excavator.
-Two brushless motors drive rubber tracks via ESCs. Dual input: RC transmitter
-(Jason) and joystick (Malaki/rider). 3-position override switch selects who
-has authority.
+Two FOC brushless motors drive rubber tracks via FOC ESCs. Dual input:
+RC transmitter (Jason) and joystick (Malaki/rider). 3-position override
+switch selects who has authority.
 
 ## People
 
@@ -18,263 +18,189 @@ has authority.
 | Component | Model | Key Detail |
 | --- | --- | --- |
 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 5V tolerant GPIO, 14-bit ADC |
-| ESC (x2) | XC E10 Sensored Brushless 140A | Servo PWM input, sensored mode |
-| Motor (x2) | XC E3665 2500KV Sensored Brushless | 4-pole, 8mm shaft, hall sensor cable to ESC |
+| ESC (x2) | XC GL10 80A FOC | Standard 50 Hz servo PWM input, internal FOC compensation, IP67 |
+| Motor (x2) | XC GL540L | Sensored brushless, paired with GL10 |
 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, transmitter does tank mixing |
 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect (direct to ADC — 5V tolerant) |
-| Current Sensor (x2) | CS7581 Hall-effect | Per-motor current monitoring |
+
+**Hardware history:** Previously used XC E10 ESC + XC E3665 motor.
+Swapped to GL10 + GL540L on 2026-04-25. The FOC ESC handles motor
+acceleration compensation and smoothness internally, so the Arduino's
+job shrinks to input mixing, override switching, and soft limits.
+The earlier dual-loop PID / hall-sensor-tap / X.BUS control plans
+are no longer needed for control — see "Telemetry" below for what's
+deferred. V7.6 removed the reverse-direction beeper subsystem
+entirely; audible alerts will return as a battery-aware system
+after the planned Nano R4 → UNO R4 migration.
 
 ## Pin Assignments (Nano R4)
 
 ```text
-D0  <- S.BUS input (Serial1 RX)           [All RC channels via NPN inverter]
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
-A2  <- CS7581 Current Sensor (Left)        [14-bit ADC, future]
-A3  <- CS7581 Current Sensor (Right)       [14-bit ADC, future]
-D5     (available)                          [reserved: hall sensor tap if needed]
-D6     (available)                          [reserved: hall sensor tap if needed]
-D9  -> Left Track ESC                      [Servo PWM output]
-D10 -> Right Track ESC                     [Servo PWM output]
-5V  -> RC Receiver + Joystick VCC
+A4     (sbusUart TX on SCI0, currently unused)
+A5  <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
+D8     (reserved — future battery-aware beeper, V8 / UNO R4)
+D9  -> Left Track ESC                       [Servo PWM, 50 Hz, 1000-2000 us]
+D10 -> Right Track ESC                      [Servo PWM]
+D0/D1 — Serial1 hardware UART (currently unused; S.BUS moved off it)
+USB-C — USB CDC Serial for debug + firmware upload
+5V  -> RC Receiver + Joystick VCC + S.BUS inverter
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
 ```
 
-**Future X.BUS pin assignment (when integrated):**
-
-```text
-D0  <- X.BUS shared bus (Serial RX)        [Half-duplex, direct — no inverter]
-D1  -> X.BUS shared bus (Serial TX)        [Through 1K series resistor]
-```
-
-Note: X.BUS on D0/D1 conflicts with both USB Serial and S.BUS (Serial1).
-The final architecture will need to resolve this — either use S.BUS for RC
-input and X.BUS on a separate UART, or migrate RC to X.BUS-only control.
-
 ### UART Architecture (Nano R4)
 
-The Nano R4 has a single hardware UART on D0/D1, which is also the USB
-Serial connection. Standard Arduino `Serial` works over USB — no Router
-Bridge, no Monitor object, no special workarounds needed.
+The Nano R4 exposes one stock hardware UART (Serial1 on D0/D1) plus a
+second UART that can be instantiated on A4 (TX, pin 18) / A5 (RX, pin 19)
+via the RA4M1's SCI0 channel. The sketch declares it under a unique
+name (NOT `Serial2`) to avoid the core's macro collision with the
+pre-declared `_UART2_` symbol:
 
-**X.BUS Protocol (CONFIRMED 2026-04-14):** XC E10 "X.BUS" is a proprietary
-modbus-like master-slave protocol by Shenzhen XC-ESC Technology Co., Ltd.
-NOT Spektrum X-Bus, NOT JR PROPO XBUS — completely unrelated protocols that
-share the name. Half-duplex UART on a single wire, 115200 baud, 8N1,
-little-endian, non-inverted (standard UART polarity, idle HIGH).
-Both ESCs share one bus (addressable 0-15). The Arduino acts as master —
-**ESCs never transmit unless polled**. Full protocol spec: `docs/XBUS-PROTOCOL.md`.
+```cpp
+UART sbusUart(18, 19);            // A4 TX (unused), A5 RX (S.BUS)
+bfs::SbusRx sbusRx(&sbusUart);
+```
 
 | Port | Hardware | Pin | Function |
 | --- | --- | --- | --- |
-| Serial | UART | D0 (RX) / D1 (TX) | USB Serial AND X.BUS (shared, cannot use both simultaneously) |
+| Serial | USB CDC | (USB-C) | Debug telemetry / firmware upload |
+| Serial1 | UART (SCI2) | D0 (RX) / D1 (TX) | Currently unused |
+| sbusUart | UART (SCI0) | A4 (TX) / A5 (RX) | S.BUS RX from R7FG via inverter |
 
-**D0 conflict:** X.BUS on D0 conflicts with USB Serial. During bench
-testing, unplug X.BUS from D0 to use Serial Monitor for debugging. Plug
-X.BUS back for field operation. No code change needed — just a wire swap.
+S.BUS is electrically inverted at idle. A small NPN-based inverter
+circuit on the receiver wire flips the signal so `sbusUart` sees standard
+UART polarity (idle HIGH). Same inverter circuit that was on D0 in
+V5.0/V6.0 — just relocated to A5. Library config is unchanged
+(100000 baud, 8E2, courtesy of `bfs::SbusRx`).
+
+### Telemetry (deferred)
+
+`types.h` defines `EscTelem { voltage, motorTempC, escTempC, lastGoodMs, valid }`
+as scaffolding, but no telemetry is polled in V7. With S.BUS occupying
+`sbusUart` on SCI0, the only remaining hardware UART (`Serial1` on D0/D1,
+SCI2) is available but unused, and the standing rule is "never
+SoftwareSerial for telemetry".
+The plan when telemetry comes back online:
+
+- **Use X.BUS Read Register (func 0x10), NOT Throttle (0x50).** Throttle
+  frames put the ESC into BUS_MODE and override our PWM — incompatible
+  with the GL10's PWM input strategy.
+- **Registers to poll:** 0x0C VbatBus (×0.1 V), 0x20 mos-Tem (raw − 40 °C),
+  0x22 mot-Tem (raw − 40 °C).
+- **Cadence:** 1 Hz, alternating between the two ESCs (each sampled every 2 s),
+  EMA filter with 10 s time constant. After 5 s with no good frame the
+  reading is marked stale.
+- **Hardware path TBD** — `Serial1` (D0/D1) is free, so X.BUS telemetry
+  can land there if the wiring is feasible. Alternative is to relocate
+  S.BUS off `sbusUart` and reuse SCI0.
+- **Audible alerts driven by telemetry** — once battery voltage is
+  available, the V8 battery-aware beeper (issue tracker) will consume it.
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V5.0 — Curvature Drive) + `types.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.6 — GL10 FOC, beeper removed) + `types.h`
 
 Signal pipeline:
 
-1. RC inputs: S.BUS on Serial1 (D0 via NPN inverter), all 16 channels
-2. Joystick via 14-bit ADC (A0, A1, cached at 100Hz) → deadband → expo curve
-3. Both inputs → curvatureDrive() (WPILib algorithm):
-   - At speed: steering slows inner track only, outer holds speed
-   - At standstill: arcade-style pivot turns (45% cap)
+1. RC inputs: S.BUS on `sbusUart` (A5 RX via NPN inverter), all 16 channels
+2. Joystick via 14-bit ADC (A0, A1, cached at 100 Hz) → deadband → expo curve (separate throttle/steering coefficients)
+3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
+   - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
+   - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Reverse speed limiter (35% of forward max, straight-line only)
-6. Soft power scaling (tanh saturation)
-7. Inertia simulation (asymmetric exponential: 0.3s accel, 0.5s decel)
-8. Servo output to ESCs (D9, D10)
+5. Gear cap (RC CH4): Eco 40% / Normal 65% / Turbo 100% wheel-speed cap.
+   In Eco the pivot and reverse caps get a +5pp boost so the operator
+   keeps usable maneuvering authority.
+6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
 
 Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
-[JOYSTICK], [MIXER], [DYNAMICS], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
+[JOYSTICK], [MIXER], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
+## Audible Alerts — Deferred to V8
+
+The reverse-direction beeper was removed in V7.6 per operator request:
+the reverse-alarm cadence (1s on / 1s off) was disruptive without adding
+safety value the operator didn't already have from line-of-sight on a
+~50 lb machine.
+
+When the project migrates from Nano R4 to UNO R4 (planned, see the issue
+tracker for "Battery-aware beeper, V8"), the beeper comes back as a
+battery-level alarm driven by X.BUS voltage telemetry:
+
+| Battery state | Pattern |
+| --- | --- |
+| ≥ 30% | Silent |
+| < 30% | 1 beep every 10 s |
+| < 20% | 3 beeps every 10 s |
+| < 10% | Continuous tone |
+| < safety cutoff | Power cut — vehicle will not move forward |
+
+D8 is reserved for that future implementation; no code drives it today.
+
 ## Key Design Decisions
 
-### PID Compensates by BOOSTING, Not Reducing
+### GL10 FOC Replaces Custom PID Loops (DECIDED 2026-04-25)
 
-When a track hits resistance (mud, cold rubber, uphill), it draws more current
-than expected. The PID **increases** the ESC command to push through and
-maintain speed. It does NOT reduce power — that would make the machine slow
-down or stall when it encounters any load.
+The previous control plan layered current-feedforward + RPM-feedback PID
+on top of the E10 ESC. With the GL10's internal FOC, that whole stack
+moves into the ESC. Arduino code keeps:
 
-### RPM Feedback via Motor Hall Sensor Tap (DECIDED 2026-03-20)
+- Input shaping (expo, deadband, curvatureDrive)
+- Mixing (override switch)
+- Gear caps (Eco 40% / Normal 65% / Turbo 100% via RC CH4)
 
-**Decision: Tap the motor's existing hall sensor cable for RPM feedback.**
+V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
+the GL10's own Acceleration + Drag Force settings now own command
+smoothing end-to-end, and the Arduino-side filter was double-smoothing
+the stream (operator felt "vehicle keeps coasting after stick release").
 
-Why RPM instead of current-only PID:
-
-- Current is a proxy for load, not speed. The PID needs to know actual motor
-  speed to maintain consistent track velocity under varying conditions.
-- The XC E3665 motors are **sensored** — they already have hall-effect sensors
-  inside. A 6-pin cable carries Hall A/B/C signals from motor to ESC for
-  commutation.
-- These signals are 5V logic (powered by the ESC's 5V rail).
-
-Why tap the motor hall cable (not sprocket RPM):
-
-- Measuring at the motor gives high resolution (many pulses/rev)
-- No gearbox lag — instant feedback, no backlash delay
-- The signal is already there — just wire in parallel
-
-Why not Bluetooth telemetry from the ESC:
-
-- 50-200ms latency — too slow for real-time PID at 20kHz loop
-- Proprietary protocol, poorly documented
-- Needs extra BT module on the Arduino side
-- Way more code complexity for worse results
-
-### Hall Sensor Tap — Technical Details
-
-**Motor sensor cable (6-pin JST-ZH, standard Hobbywing pinout):**
-
-| Pin | Signal |
-| --- | --- |
-| 1 | 5V (from ESC) |
-| 2 | Hall A |
-| 3 | Hall B |
-| 4 | Hall C |
-| 5 | Temperature / NC |
-| 6 | GND |
-
-**Wiring — parallel tap (non-invasive):**
-
-```text
-Motor Hall A ──────┬──── ESC Hall A
-                   │
-              Arduino D5 (direct — 5V tolerant)
-
-Motor Hall B ──────┬──── ESC Hall B
-                   │
-              Arduino D6 (direct — 5V tolerant)
-
-Motor GND ─────────┬──── ESC GND
-                   │
-              Arduino GND
-```
-
-**No level shifting needed!**
-The Nano R4 has 5V tolerant GPIO. Hall sensor outputs are 5V and can
-connect directly to D5/D6.
-
-**Resolution (4-pole motor, 2 pole pairs):**
-
-- 2 electrical revolutions per mechanical revolution
-- Counting rising edges on 2 hall lines = 4 edges per motor revolution
-- At 5,000 RPM (loaded): ~333 edges/sec — easy for Arduino interrupts
-- At 100 RPM: ~7 edges/sec — still workable
-
-**RPM calculation:**
-
-```text
-edgesPerRevolution = 4  // 2 hall lines × 2 pole pairs
-RPM = (edgeCount / edgesPerRevolution) / elapsed_seconds * 60
-```
-
-Or interval-based (better at low RPM):
-
-```text
-RPM = 60,000,000 / (microsBetweenEdges * edgesPerRevolution)
-```
-
-### Dual-Loop PID Architecture (DECIDED 2026-03-21)
-
-**Both current AND RPM feedback are used simultaneously.**
-
-- **Inner loop (feedforward):** CS7581 current sensors detect load spikes instantly.
-  Current spikes BEFORE RPM drops. Pre-compensates by boosting power before the
-  operator feels anything.
-- **Outer loop (feedback):** RPM measurement (X.BUS or hall sensor) confirms actual
-  motor speed. Fine-tunes to hold target RPM.
-- This is standard industrial motor control: inner current + outer speed loop.
-
-### RPM Source: X.BUS Telemetry (UPDATED 2026-04-14)
-
-X.BUS is the **primary RPM source**. The protocol provides RPM in Hz as part
-of its telemetry response (function code 0x50). No hall sensor tap or
-additional hardware needed — RPM comes over the same wire used for throttle.
-
-- **Both ESCs:** X.BUS Yellow wires joined → shared bus → D0 (Serial RX) + D1 (Serial TX)
-- **Bus wiring:** TX through 1K series resistor, RX direct, 3K-10K pull-up to 5V
-- **No NPN inverter** — X.BUS is standard UART (non-inverted), unlike S.BUS
-- **Fallback:** Hall sensor tap on D5/D6 remains available if X.BUS latency is insufficient
-- **Test with:** `sketches/xbus_master/xbus_master.ino`
-- **Full protocol spec:** `docs/XBUS-PROTOCOL.md`
-- **Investigation history:** `docs/XBUS-INVESTIGATION.md`
-
-### Control Mode Selector (RC CH4 on D3, 3-position switch)
-
-| CH4 | Mode | Layers Active |
-| --- | --- | --- |
-| LOW | RAW | Direct stick→ESC, no processing (baseline) |
-| MID | RPM_ONLY | Outer RPM PID only (speed regulation, no smoothing) |
-| HIGH | FULL_STACK | Current FF + RPM + expo + inertia + soft limits |
-
-Flip CH4 on the field to A/B/C compare control quality in real-time.
-Mode transitions reset all PID/inertia state to prevent jumps.
+The earlier feedforward tables (V7.0 on `claude/ff-trim-controller`)
+were built from plant characterization of the E10/E3665 combo. They
+don't apply to GL10/GL540L and are not used.
 
 ## Implementation Status
 
 - [x] V5.0 sketch: curvatureDrive, S.BUS, expo, inertia, soft limits
-- [x] PID load compensation design (current-based, boosts under resistance)
-- [x] Anti-runaway failsafe (S.BUS timeout + RC lockout)
-- [x] 7-panel live plot (live_plot.py)
-- [x] Operator guide for Jason and Malaki
-- [x] X.BUS protocol investigation (passive, inverted, active polling)
-- [x] X.BUS official protocol received from XC-ESC Technology
-- [x] X.BUS protocol translated and documented (docs/XBUS-PROTOCOL.md)
-- [x] X.BUS master test sketch written (sketches/xbus_master/)
-- [ ] **X.BUS bench test with correct protocol** ← NEXT
-- [ ] X.BUS integration into main controller (replace Servo PWM with X.BUS throttle)
-- [ ] Dual-loop PID implementation (X.BUS telemetry provides RPM + current)
-- [ ] CS7581 current sensor wiring and calibration
-- [ ] Field test at reduced power
-
-## Next Steps
-
-1. **Build half-duplex bus circuit** (simplified for Nano R4):
-   - ESC X.BUS Yellow → shared bus
-   - Arduino D1 (TX) → 1K resistor → bus
-   - Arduino D0 (RX) → bus (direct, no inverter)
-   - 3K-10K pull-up to 5V on the bus
-   - **No NPN inverter** — X.BUS is non-inverted standard UART
-2. **Upload `sketches/xbus_master/xbus_master.ino`** to Nano R4 (COM8)
-3. **Test with one ESC first** — verify:
-   - Protocol handshake (0x0F/0xF0 headers)
-   - Checksum interpretation (narrow vs full)
-   - Telemetry response timing (<2ms)
-   - Status bit 3 (BUS_MODE) confirms X.BUS control active
-   - Status bit 11 (CAP_CHARGED) before sending throttle
-4. **Test with both ESCs** — verify addressed bus with 2 slaves
-5. **Integrate into main controller** — replace Servo PWM with X.BUS throttle,
-   use telemetry RPM for PID outer loop
-6. **Goal:** All control AND telemetry via X.BUS — one wire per ESC replaces
-   Servo PWM + hall sensors + current sensors
+- [x] V6.0 (main): X.BUS closed-loop RPM with curvatureDrive (E10/E3665 era)
+- [x] GL10 + GL540L hardware swap (2026-04-25)
+- [x] V7.0 sketch: S.BUS on `sbusUart`/A5, GL10 PWM control
+- [x] V7.1 tuning: tank-style curvature, pivot authority, expo split
+- [x] V7.2: removed Arduino-side inertia filter (ESC owns smoothing)
+- [x] V7.3: symmetric-add + desaturate in curvatureDrive (hold speed through turns)
+- [x] V7.4: steering polarity fix + reverse cap + Eco/Normal/Turbo gear spread
+- [x] V7.5: Eco-gear +5pp boost on reverse and pivot caps
+- [x] V7.6: removed reverse-direction beeper entirely (issue #39)
+- [x] Field test at reduced power
+- [ ] X.BUS telemetry on `Serial1` (D0/D1) — voltage / temp / RPM (see issue #36)
+- [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
+- [ ] Migrate to UNO R4 WiFi for wireless telemetry (issue #6)
+- [ ] Battery-aware beeper after UNO R4 migration (V8 milestone)
 
 ## File Map
 
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V5.0 — Curvature Drive)
-sketches/rc_test/types.h                 — Shared structs (JoystickState, MixerOutput, etc.)
-sketches/xbus_master/xbus_master.ino     — X.BUS master protocol test sketch
-sketches/xbus_probe/xbus_probe.ino       — X.BUS passive probe (historical — used wrong protocol)
-sketches/xbus_poll_test/xbus_poll_test.ino — X.BUS active polling test (historical)
-docs/XBUS-PROTOCOL.md                   — Official XC X.BUS protocol reference (translated)
-docs/XBUS-INVESTIGATION.md              — X.BUS investigation timeline and lessons learned
-docs/CONTROL-RESEARCH.md                — Tank mix, RC input, loop patterns research
-docs/WIRING-GUIDE.md                    — Hardware wiring reference
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.5 — GL10 FOC)
+sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
+sketches/serial2_test/serial2_test.ino   — Confirms second UART on A4/A5 via SCI0 works
+sketches/xbus_master/xbus_master.ino     — X.BUS master test sketch (deferred — kept for reference)
+docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
+docs/GL10-PARAMETERS.md                  — Configurable parameter reference + code-context analysis
+docs/GL10-OPERATION.md                   — Startup, throttle calibration, factory reset, LED/beep reference
+docs/XBUS-PROTOCOL.md                    — Official XC X.BUS protocol reference (translated)
+docs/XBUS-INVESTIGATION.md               — X.BUS investigation timeline and lessons learned
+docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
+docs/WIRING-GUIDE.md                     — Hardware wiring reference
+docs/MISSION.md                          — Project design philosophy (smoothness above all)
+docs/PLANT-CHARACTERIZATION.md           — Measured plant response (E10/E3665 era, kept for reference)
 live_plot.py                             — Real-time matplotlib monitor
-monitor.py                              — Simple serial monitor
+monitor.py                               — Simple serial monitor
 ```
 
 ## Coding Rules
@@ -293,12 +219,44 @@ monitor.py                              — Simple serial monitor
 - Per-channel failsafe — each RC channel has an independent timeout, never combined
 - ISRs must be under 10us — read pin, store timestamp, exit
 
+### Telemetry
+
+- **Never** use `SoftwareSerial` for telemetry input. Hardware UARTs only.
+  Bit-banged debug TX is OK if needed.
+
 ### Style
 
 - Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
 - Use `constrain()` at all servo output boundaries
 - Comment each `[MODULE]` section header with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
+
+### ESC / motor configuration changes
+
+Every ESC parameter (XC-Link Bluetooth app, X.BUS register, programming
+card) must be evaluated against **what PWM commands the Arduino code
+actually sends** before recommending a value. Per-direction caps,
+asymmetric scalings, and brake limits can silently clip legitimate
+commands and break features.
+
+Concrete example: `curvatureDrive` in pivot mode commands one track
+forward and the other in reverse (e.g. left = +55%, right = -55%) at
+high gear. The GL10's factory default `Max Reverse Force = 50%` would
+deliver only -27.5% on the reverse track, collapsing the pivot
+differential. Setting it to 100% lets pivot work as designed.
+
+Before any XC-Link parameter change:
+
+1. List every command path that drives each motor (RC throttle, RC
+   pivot/curvature, joystick equivalents, gear scaling, override mixer).
+2. Identify the per-direction min/max each path can produce.
+3. Verify the proposed setting does not clip, scale, or distort any of
+   those commands in a way that breaks an intended behavior.
+4. Call out cross-impacts explicitly with the specific feature affected
+   — never just hand over a value.
+
+See `docs/GL10-PARAMETERS.md` for the full GL10 parameter list with
+per-parameter code-context analysis.
 
 ## Build & Upload
 
