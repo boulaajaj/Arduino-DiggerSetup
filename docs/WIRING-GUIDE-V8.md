@@ -128,17 +128,17 @@ and the Arduino (under the seat). One cable, one disconnect point.
 
 ### Cable Pin Map
 
-| Cable Pin | Signal | Wire Color | Purpose |
-|-----------|--------|------------|---------|
-| 1 | PWM Left | White | D9 → ESC Left throttle |
-| 2 | PWM Right | Blue | D10 → ESC Right throttle |
-| 3 | X.BUS TX | Yellow | D1 → Interface board bus |
-| 4 | X.BUS RX | Green | Interface board bus → D0 |
-| 5 | S.BUS | Orange | Interface board inverter → D12 |
-| 6 | VIN 7.4V | Red | ESC BEC → Arduino VIN |
-| 7 | GND | Black | Common ground |
-| 8 | 5V | Brown | Arduino 5V → Interface board |
-| 9 | Spare | — | Future (beeper, sensor) |
+| Cable Pin | Shield Pin | Wire Color | Direction | Purpose |
+|-----------|-----------|------------|-----------|---------|
+| 1 | **D9** | Blue (thick) | Arduino → ESC | PWM left track |
+| 2 | **D10** | Yellow | Arduino → ESC | PWM right track |
+| 3 | **D1** | Green (thin) | Arduino → bus | X.BUS telemetry TX |
+| 4 | **D0** | Blue (thin) | Bus → Arduino | X.BUS telemetry RX |
+| 5 | **D12** | Red (thin) | Board → Arduino | S.BUS inverted (SCI0 RX) |
+| 6 | **VIN** | Yellow (thick) | ESC → Arduino | Power in 7.4V |
+| 7 | **GND** | Green (thick) | Common | Ground |
+| 8 | **5V** | White (thin) | Arduino → board | 5V back to interface board |
+| 9 | — | — | — | Spare (not connected) |
 
 ### Interface Board Side — 6 Female Servo Connectors
 
@@ -209,19 +209,19 @@ Full parameter reference: `docs/GL10-QUICK-REFERENCE.md`
 
 ## 7. Wire Labels
 
-| Label | Cable Pin | From → To |
-|-------|-----------|-----------|
-| PWM-L | 1 | D9 → ESC Left throttle |
-| PWM-R | 2 | D10 → ESC Right throttle |
-| XBUS-TX | 3 | D1 → Interface board bus |
-| XBUS-RX | 4 | Interface board bus → D0 |
-| SBUS | 5 | Interface board Q1 → D12 |
-| VIN-7V4 | 6 | ESC BEC → Arduino VIN |
-| GND | 7 | Common ground |
-| 5V-OUT | 8 | Arduino 5V → Interface board |
-| SPARE | 9 | — |
-| JOY-Y | — | Joystick → A0 (direct) |
-| JOY-X | — | Joystick → A1 (direct) |
+| Label | Cable Pin | Wire Color | From → To |
+|-------|-----------|------------|-----------|
+| PWM-L | 1 | Blue (thick) | D9 → ESC Left throttle |
+| PWM-R | 2 | Yellow | D10 → ESC Right throttle |
+| XBUS-TX | 3 | Green (thin) | D1 → Interface board bus |
+| XBUS-RX | 4 | Blue (thin) | Interface board bus → D0 |
+| SBUS | 5 | Red (thin) | Interface board Q1 → D12 |
+| VIN-7V4 | 6 | Yellow (thick) | ESC BEC → Arduino VIN |
+| GND | 7 | Green (thick) | Common ground |
+| 5V-OUT | 8 | White (thin) | Arduino 5V → Interface board |
+| SPARE | 9 | — | — |
+| JOY-Y | — | — | Joystick → A0 (direct to shield) |
+| JOY-X | — | — | Joystick → A1 (direct to shield) |
 
 ---
 
