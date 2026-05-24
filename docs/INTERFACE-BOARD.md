@@ -26,7 +26,7 @@ an NPN inverter before the Arduino can read it.
 Per `docs/XBUS-PROTOCOL.md` §7, the official simplified circuit for
 a 5V-tolerant Arduino:
 
-```
+```text
                     +5V
                      │
                    [4.7kΩ R1]  pull-up (holds bus idle HIGH)
@@ -60,7 +60,7 @@ connect two BECs to the same rail.
 S.BUS is inverted UART (idle LOW). Arduino expects standard UART
 (idle HIGH). One NPN common-emitter stage fixes this:
 
-```
+```text
                     +5V
                      │
                    [10kΩ R4]  collector pull-up
@@ -90,7 +90,7 @@ S.BUS is inverted UART (idle LOW). Arduino expects standard UART
 | R2 | Resistor ¼W | **1 kΩ** | 1 | Arduino TX series (contention protection) |
 | R3 | Resistor ¼W | **10 kΩ** | 1 | S.BUS NPN base resistor |
 | R4 | Resistor ¼W | **10 kΩ** | 1 | S.BUS NPN collector pull-up |
-| Q1 | NPN transistor | **2N3904** (or BC547) | 1 | S.BUS inverter |
+| Q1 | NPN transistor | **2N3904** | 1 | S.BUS inverter |
 | J1–J6 | Pin header | 3-pin 0.1″ male | 6 | Servo connectors |
 | — | Stripboard | ~25 × 45 mm | 1 | Veroboard, copper strips horizontal |
 | — | Hookup wire | 22 AWG | a few cm | Strip-to-strip jumpers if needed |
@@ -162,15 +162,15 @@ Only 3 cuts — much simpler than the previous design.
 
 ### 6.4 2N3904 pinout reminder
 
-```
+```text
    ╔═══╗
    ║flat║
    ╚╤╤╤╝
     E B C
 ```
 
-Mount with flat side facing away from the headers. Emitter on strip 7
-(GND), base on strip 6, collector on strip 5 (S.BUS OUT).
+Mount with flat side facing you (toward the component side). Emitter on
+strip 7 (GND), base on strip 6, collector on strip 5 (S.BUS OUT).
 
 ---
 

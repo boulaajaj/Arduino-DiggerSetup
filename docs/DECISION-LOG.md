@@ -17,7 +17,7 @@ Updated by session hooks — only technical content, no personal info.
 - Both GL10 ESCs respond to polling with telemetry via X.BUS.
 - Breadboard uses Schottky diode merge + pull-up resistor on shared bus.
 - Arduino polls on D1 (TX), receives on D0 (RX), same physical bus node.
-- Exact diode orientation and pull-up value on breadboard: **not yet recorded — needs bench verification**.
+- Breadboard used Schottky diode merge + 4.7kΩ pull-up. Superseded by the interface board design (no diodes needed for master-polled X.BUS).
 - Test sketch: `sketches/xbus_master/xbus_master.ino`.
 
 ## 2026-05-23 — Interface board design
