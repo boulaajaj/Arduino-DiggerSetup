@@ -142,25 +142,34 @@ and the Arduino (under the seat). One cable, one disconnect point.
 
 ### Interface Board Side — 6 Female Servo Connectors
 
-| Connector | Wires | Receives Plug From |
-|-----------|-------|--------------------|
-| F1 — PWM L | Signal + GND | ESC Left throttle servo cable |
-| F2 — PWM R | Signal + GND | ESC Right throttle servo cable |
-| F3 — XBUS TX | Signal + GND | Interface board J3 (TX header) |
-| F4 — XBUS RX | Signal + GND | Interface board J4 (RX header) |
-| F5 — SBUS | Signal + GND | Interface board J6 (inverted S.BUS) |
-| F6 — Power | VIN + 5V + GND | ESC BEC power + 5V return |
+All connectors are standard **3-pin servo** (Signal, VCC, GND) for
+structural support and modularity. VCC pin is soldered to the board
+pad for mechanical strength but not electrically connected on signal-only
+connectors (J3, J4, J6, F1, F2, F5).
+
+| Connector | Pin 1 (Signal) | Pin 2 (VCC) | Pin 3 (GND) | Receives Plug From |
+|-----------|---------------|-------------|-------------|-------------------|
+| F1 — PWM L | Signal | N/C (structural) | GND | ESC Left throttle servo |
+| F2 — PWM R | Signal | N/C (structural) | GND | ESC Right throttle servo |
+| F3 — XBUS TX | Signal | N/C (structural) | GND | Interface board J3 |
+| F4 — XBUS RX | Signal | N/C (structural) | GND | Interface board J4 |
+| F5 — SBUS | Signal | N/C (structural) | GND | Interface board J6 |
+| F6 — Power | VIN 7.4V | GND | 5V return | ESC BEC + Arduino 5V |
 
 ### Arduino Shield Side — 6 Servo Connectors
 
-| Connector | Plugs Into | Wires |
-|-----------|-----------|-------|
-| S1 — PWM L | Shield D9 header | Signal + GND |
-| S2 — PWM R | Shield D10 header | Signal + GND |
-| S3 — XBUS TX | Shield D1 header | Signal + GND |
-| S4 — XBUS RX | Shield D0 header | Signal + GND |
-| S5 — SBUS | Shield D12 header | Signal + GND |
-| S6 — Power | VIN + 5V + GND pins | 3-wire split to power header |
+All connectors are standard **3-pin servo** plugging into shield headers.
+Shield headers provide VCC from the 5V rail on the middle pin — this is
+harmless on signal-only connectors (not connected on the cable side).
+
+| Connector | Shield Header | Pin 1 (Signal) | Pin 2 (VCC) | Pin 3 (GND) |
+|-----------|--------------|---------------|-------------|-------------|
+| S1 — PWM L | D9 | Signal | (from shield, unused) | GND |
+| S2 — PWM R | D10 | Signal | (from shield, unused) | GND |
+| S3 — XBUS TX | D1 | Signal | (from shield, unused) | GND |
+| S4 — XBUS RX | D0 | Signal | (from shield, unused) | GND |
+| S5 — SBUS | D12 | Signal | (from shield, unused) | GND |
+| S6 — Power | VIN/5V/GND | VIN 7.4V | GND | 5V return |
 
 ### Direct to Shield (not through cable)
 

@@ -17,9 +17,9 @@ Use `docs/interface-board.kicad_sch` for KiCad direct import.
 | J1 | 3-pin header | Servo male | 2.54mm pitch | 1 |
 | J2 | 3-pin header | Servo male | 2.54mm pitch | 1 |
 | J5 | 3-pin header | Servo male | 2.54mm pitch | 1 |
-| J3 | 2-pin header | Servo male | 2.54mm pitch | 1 |
-| J4 | 2-pin header | Servo male | 2.54mm pitch | 1 |
-| J6 | 2-pin header | Servo male | 2.54mm pitch | 1 |
+| J3 | 3-pin header | Servo male | 2.54mm pitch | 1 |
+| J4 | 3-pin header | Servo male | 2.54mm pitch | 1 |
+| J6 | 3-pin header | Servo male | 2.54mm pitch | 1 |
 | F6 | 3-pin header | Servo male | 2.54mm pitch | 1 |
 
 ---
