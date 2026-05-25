@@ -30,3 +30,21 @@ Updated by session hooks — only technical content, no personal info.
 - X.BUS telemetry confirmed working on breadboard with both GL10 ESCs.
 - Six servo connectors: 2× ESC telemetry IN, 1× TX to Arduino, 1× RX to Arduino, 1× S.BUS IN from receiver, 1× inverted S.BUS OUT to Arduino.
 - D0 conflict: X.BUS and S.BUS both want Serial1 RX. Only one can be connected at a time until a dual-UART board is used.
+
+## 2026-05-24 — UNO R4 WiFi migration: pin map, UART, power, 9-pin cable
+
+- Migrating from Nano R4 to UNO R4 WiFi with Sensor Shield V5.0.
+- **UART discovery:** On UNO R4 WiFi, SCI0 is on D11(TX)/D12(RX), NOT A4/A5 (those are I2C-only). Serial2 is reserved for WiFi ESP32-S3. Confirmed via ArduinoCore-renesas variant.cpp: D11=P411 (SCI0 TX), D12=P410 (SCI0 RX).
+- **UART plan:** Serial1 (SCI2, D0/D1) for X.BUS 115200. sbusUart (SCI0, D12 RX) for S.BUS 100000 8E2. Both hardware UARTs, fully reliable.
+- **Power:** GL10 BEC set to 7.4V → VIN. ISL854102FRZ buck converter → 5V on all rails. USB+VIN coexist (Schottky diodes). SEL jumper IN.
+- **9-pin cable:** 5 signal (PWM L/R, XBUS TX/RX, SBUS) + 3 power (VIN, GND, 5V) + 1 spare. Joystick direct to shield A0/A1.
+- **Full wiring spec:** `docs/WIRING-GUIDE-V8.md`.
+
+## 2026-05-24 — GL10 throttle range calibration completed
+
+- Both GL10 ESCs calibrated to match the same transmitter stick range.
+- GL10 calibration sequence: full REVERSE on power-up → full FORWARD → NEUTRAL (not forward-first like generic ESCs).
+- Confirmed success: red+green LEDs flash 4× with "so-mi-do" melody.
+- Official procedure from GL10 User Manual Section 5 (`docs/GL10-Manual.pdf`).
+- App name is TXC-Link (not XC-Link). Default Bluetooth password: 1234.
+- Quick reference saved: `docs/GL10-QUICK-REFERENCE.md`.
