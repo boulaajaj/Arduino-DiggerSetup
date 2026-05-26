@@ -71,7 +71,7 @@
 | D11 | SCI0 TX (reserved — paired with D12 S.BUS UART) |
 | D13 | Free (LED_BUILTIN) |
 | A2, A3 | Free analog inputs |
-| A4, A5 | Free (I2C SDA/SCL — no SCI on UNO R4 WiFi) |
+| A4, A5 | I2C SDA/SCL (also Qwiic connector — no SCI on UNO R4 WiFi) |
 
 ### UART Architecture
 
@@ -154,7 +154,7 @@ connectors (J3, J4, J6, F1, F2, F5).
 | F3 — XBUS TX | Signal | N/C (structural) | GND | Interface board J3 |
 | F4 — XBUS RX | Signal | N/C (structural) | GND | Interface board J4 |
 | F5 — SBUS | Signal | N/C (structural) | GND | Interface board J6 |
-| F6 — Power | VIN 7.4V | GND | 5V return | ESC BEC + Arduino 5V |
+| F6 — Power | VIN 7.4V (pin 1) | GND (pin 2) | 5V return (pin 3) | ESC BEC + Arduino 5V |
 
 ### Arduino Shield Side — 6 Servo Connectors
 
@@ -169,7 +169,7 @@ harmless on signal-only connectors (not connected on the cable side).
 | S3 — XBUS TX | D1 | Signal | (from shield, unused) | GND |
 | S4 — XBUS RX | D0 | Signal | (from shield, unused) | GND |
 | S5 — SBUS | D12 | Signal | (from shield, unused) | GND |
-| S6 — Power | VIN/5V/GND | VIN 7.4V | GND | 5V return |
+| S6 — Power | VIN/5V/GND | VIN 7.4V (pin 1) | GND (pin 2) | 5V return (pin 3) |
 
 ### Direct to Shield (not through cable)
 

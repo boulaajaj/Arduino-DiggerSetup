@@ -88,15 +88,18 @@ generic ESCs).
 | 17 | Cooling Fan | Temp Control / On | Temp Control | Fan on >55°C, off <50°C |
 | 18 | Motor Param ID | Close / On | Close | Motor auto-identification |
 
-**Updated defaults from GL10-PARAMETERS.md:** Inertia=1, Drag=30%,
-Max Brake=60%, Max Reverse=100%. See `docs/GL10-PARAMETERS.md` on main
-branch for the full code-context analysis of why.
+**Our recommended settings (different from factory defaults):**
+Inertia=1, Drag=30%, Max Brake=60%, Max Reverse=100%.
+These are documented in `docs/GL10-PARAMETERS.md` (on main) and in the
+ESC Configuration table in `docs/WIRING-GUIDE-V8.md`. The table above
+shows **factory defaults** from the manual, not our tuned values.
 
 ---
 
 ## Factory Reset (Manual Section 8)
 
 **Reset Bluetooth only** (lost password):
+
 1. Connect ESC white wire to BEC red wire (+5V)
 2. Power on ESC
 3. Disconnect when green LED off, red LED on
@@ -114,4 +117,4 @@ branch for the full code-context analysis of why.
 - **Low voltage protection** reduces power to 20% after 10 seconds below cutoff
 - **Inertia default 6 is high** for crawlers — manual says "small value
   recommended for crawling, higher for straight-line racing"
-- **All beeps timeout after 5 minutes** to save power; fault re-checks in 5 min
+- **All beeps time out after 5 minutes** to save power; fault re-checks in 5 min
