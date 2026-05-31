@@ -19,3 +19,6 @@ __pycache__/
 
 # Arduino
 libraries/
+
+# Claude Code agent worktrees (transient)
+.claude/worktrees/

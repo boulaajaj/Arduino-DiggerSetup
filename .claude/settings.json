@@ -24,9 +24,9 @@
         ]
       }
     ],
-    "PostToolCall": [
+    "PostToolUse": [
       {
-        "matcher": "Bash:git commit",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
@@ -36,7 +36,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit:docs/DECISION-LOG.md",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
