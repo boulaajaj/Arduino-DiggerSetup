@@ -1,0 +1,142 @@
+[
+  "3",
+  "1b2f3a4e5c6d7890",
+  {
+    "head": {
+      "docType": "1",
+      "editorVersion": "6.5.40",
+      "title": "Interface Board - XBUS Merge + SBUS Inverter",
+      "description": "Excavator track controller interface board"
+    },
+    "canvas": "CA~1600~1200~#FFFFFF~yes~#CCCCCC~10~1600~1200~line~10~pixel~5~800~600",
+    "shape": [
+      "T~L~200~50~0~#000000~Interface Board - XBUS Merge + SBUS Inverter~Arial~bold~16px~~gge_title",
+
+      "T~L~100~120~0~#0000FF~── INPUT CONNECTORS ──~Arial~bold~12px~~gge_t1",
+      "T~L~1050~120~0~#FF0000~── OUTPUT CONNECTORS ──~Arial~bold~12px~~gge_t2",
+
+      "T~L~80~160~0~#333333~J1: ESC LEFT XBUS~Arial~bold~10px~~gge_lj1",
+      "R~80~175~170~55~1~#000000~1~0~#E8F5E9~gge_rj1",
+      "T~L~90~185~0~#333333~SIG  VIN  GND~Arial~~9px~~gge_tj1",
+      "T~L~90~205~0~#888888~Yel  Red  Brn~Arial~~8px~~gge_tj1b",
+
+      "T~L~80~270~0~#333333~J2: ESC RIGHT XBUS~Arial~bold~10px~~gge_lj2",
+      "R~80~285~170~55~1~#000000~1~0~#E8F5E9~gge_rj2",
+      "T~L~90~295~0~#333333~SIG  N/C  GND~Arial~~9px~~gge_tj2",
+      "T~L~90~315~0~#888888~Yel  CUT  Brn~Arial~~8px~~gge_tj2b",
+
+      "T~L~80~400~0~#333333~J5: RECEIVER SBUS~Arial~bold~10px~~gge_lj5",
+      "R~80~415~170~55~1~#000000~1~0~#FFF3E0~gge_rj5",
+      "T~L~90~425~0~#333333~SIG  +5V  GND~Arial~~9px~~gge_tj5",
+      "T~L~90~445~0~#888888~←Powered by 5V rail~Arial~~8px~~gge_tj5b",
+
+      "T~L~1050~160~0~#333333~J3: XBUS TX OUT~Arial~bold~10px~~gge_lj3",
+      "R~1050~175~170~45~1~#000000~1~0~#E3F2FD~gge_rj3",
+      "T~L~1060~190~0~#333333~SIG    GND~Arial~~9px~~gge_tj3",
+      "T~L~1060~205~0~#228B22~→ cable pin 3 → D1~Arial~bold~8px~~gge_tj3b",
+
+      "T~L~1050~250~0~#333333~J4: XBUS RX OUT~Arial~bold~10px~~gge_lj4",
+      "R~1050~265~170~45~1~#000000~1~0~#E3F2FD~gge_rj4",
+      "T~L~1060~280~0~#333333~SIG    GND~Arial~~9px~~gge_tj4",
+      "T~L~1060~295~0~#228B22~→ cable pin 4 → D0~Arial~bold~8px~~gge_tj4b",
+
+      "T~L~1050~350~0~#333333~J6: SBUS OUT~Arial~bold~10px~~gge_lj6",
+      "R~1050~365~170~45~1~#000000~1~0~#FCE4EC~gge_rj6",
+      "T~L~1060~380~0~#333333~SIG    GND~Arial~~9px~~gge_tj6",
+      "T~L~1060~395~0~#228B22~→ cable pin 5 → D12~Arial~bold~8px~~gge_tj6b",
+
+      "T~L~1050~450~0~#333333~F6: POWER~Arial~bold~10px~~gge_lf6",
+      "R~1050~465~170~55~1~#000000~1~0~#FFF9C4~gge_rf6",
+      "T~L~1060~475~0~#333333~VIN  GND  +5V~Arial~~9px~~gge_tf6",
+      "T~L~1060~495~0~#228B22~pins 6   7   8~Arial~bold~8px~~gge_tf6b",
+
+      "T~L~420~140~0~#000000~── CIRCUIT ──~Arial~bold~12px~~gge_t3",
+
+      "T~L~550~170~0~#0000FF~+5V RAIL~Arial~bold~10px~~gge_t5v",
+      "PL~400 185 900 185~#FF0000~2~0~none~gge_5vrail",
+
+      "T~L~440~195~0~#333333~R1~Arial~bold~9px~~gge_lr1",
+      "T~L~430~210~0~#333333~4.7kΩ~Arial~~8px~~gge_vr1",
+      "R~430~200~50~40~1~#000000~1~0~#FFFFFF~gge_r1",
+      "PL~455 185 455 200~#008800~2~0~none~gge_r1w1",
+      "PL~455 240 455 270~#008800~2~0~none~gge_r1w2",
+
+      "T~L~500~260~0~#0000FF~BUS NODE~Arial~bold~10px~~gge_tbus",
+      "PL~400 270 900 270~#0000FF~2~0~none~gge_busrail",
+
+      "T~L~250~270~0~#333333~J1.SIG ──→~Arial~~9px~~gge_j1sig",
+      "PL~340 270 400 270~#008800~2~0~none~gge_j1w",
+
+      "T~L~250~325~0~#333333~J2.SIG ──→~Arial~~9px~~gge_j2sig",
+      "PL~340 325 400 325~#008800~2~0~none~gge_j2w",
+      "PL~400 325 400 270~#008800~2~0~none~gge_j2wup",
+
+      "T~L~700~280~0~#333333~R2~Arial~bold~9px~~gge_lr2",
+      "T~L~695~295~0~#333333~1kΩ~Arial~~8px~~gge_vr2",
+      "R~690~285~50~30~1~#000000~1~0~#FFFFFF~gge_r2",
+      "PL~690 270 690 285~#008800~2~0~none~gge_r2w1",
+      "PL~740 300 900 300~#008800~2~0~none~gge_r2w2",
+      "T~L~910~295~0~#228B22~→ J3.SIG (TX)~Arial~bold~9px~~gge_txout",
+
+      "PL~800 270 900 270~#008800~2~0~none~gge_rxw",
+      "T~L~910~265~0~#228B22~→ J4.SIG (RX)~Arial~bold~9px~~gge_rxout",
+
+      "T~L~350~400~0~#333333~J5.SIG ──→~Arial~~9px~~gge_j5sig",
+      "PL~430 435 500 435~#FF6600~2~0~none~gge_j5w",
+
+      "T~L~520~420~0~#333333~R3~Arial~bold~9px~~gge_lr3",
+      "T~L~510~435~0~#333333~10kΩ~Arial~~8px~~gge_vr3",
+      "R~510~425~50~30~1~#000000~1~0~#FFFFFF~gge_r3",
+
+      "PL~560 435 620 435~#FF6600~2~0~none~gge_r3w",
+
+      "T~L~635~395~0~#333333~Q1~Arial~bold~9px~~gge_lq1",
+      "T~L~625~410~0~#333333~2N3904~Arial~~8px~~gge_vq1",
+      "R~620~420~60~70~1~#000000~1~0~#FFFDE7~gge_q1",
+      "T~L~630~430~0~#333333~B~Arial~~8px~~gge_q1b",
+      "T~L~645~425~0~#333333~C~Arial~~8px~~gge_q1c",
+      "T~L~645~465~0~#333333~E~Arial~~8px~~gge_q1e",
+
+      "PL~660 420 660 370~#FF6600~2~0~none~gge_q1cw",
+
+      "T~L~770~350~0~#333333~R4~Arial~bold~9px~~gge_lr4",
+      "T~L~760~365~0~#333333~10kΩ~Arial~~8px~~gge_vr4",
+      "R~760~355~50~40~1~#000000~1~0~#FFFFFF~gge_r4",
+      "PL~785 185 785 355~#FF0000~2~0~none~gge_r4w1",
+      "PL~785 395 785 420~#FF6600~2~0~none~gge_r4w2",
+      "PL~660 370 785 370~#FF6600~2~0~none~gge_r4w3",
+
+      "PL~785 420 900 420~#FF6600~2~0~none~gge_sbusout",
+      "T~L~910~415~0~#228B22~→ J6.SIG (SBUS)~Arial~bold~9px~~gge_sbusoutl",
+
+      "PL~660 490 660 530~#000000~2~0~none~gge_q1ew",
+
+      "T~L~550~540~0~#000000~GND RAIL~Arial~bold~10px~~gge_tgnd",
+      "PL~400 530 900 530~#000000~2~0~none~gge_gndrail",
+
+      "T~L~200~195~0~#FF0000~J1.VIN (7.4V) ═══════════════════════════════════════~Arial~bold~9px~~gge_vinpass",
+      "T~L~910~475~0~#228B22~→ F6.VIN~Arial~bold~9px~~gge_vinout",
+
+      "T~L~200~460~0~#888888~J5.+5V ← from 5V rail~Arial~~8px~~gge_j5pwr",
+      "T~L~910~500~0~#228B22~← F6.+5V (from Arduino)~Arial~bold~8px~~gge_5vret",
+
+      "T~L~100~580~0~#333333~POWER FLOW:~Arial~bold~10px~~gge_pf",
+      "T~L~100~600~0~#FF0000~▶ VIN 7.4V: ESC-L BEC (J1 red) → pass-through → F6.VIN → cable pin 6 → Arduino VIN~Arial~~9px~~gge_pf1",
+      "T~L~100~620~0~#0000FF~▶ 5V: Arduino 5V rail → cable pin 8 → F6.+5V → board 5V rail → R1, R4, receiver (J5)~Arial~~9px~~gge_pf2",
+      "T~L~100~640~0~#000000~▶ GND: All connectors share common ground rail~Arial~~9px~~gge_pf3",
+
+      "T~L~100~680~0~#333333~NET TABLE:~Arial~bold~10px~~gge_nt",
+      "T~L~100~700~0~#0000FF~BUS: J1.SIG + J2.SIG + R1.2 + R2.1 + J4.SIG~Arial~~9px~~gge_nt1",
+      "T~L~100~720~0~#FF0000~5V:  R1.1 + R4.1 + J5.VCC + F6.+5V~Arial~~9px~~gge_nt2",
+      "T~L~100~740~0~#000000~GND: J1.GND + J2.GND + J5.GND + J3.GND + J4.GND + J6.GND + F6.GND + Q1.E~Arial~~9px~~gge_nt3",
+      "T~L~100~760~0~#FF6600~VIN: J1.VCC (7.4V) → F6.VIN~Arial~~9px~~gge_nt4",
+      "T~L~100~780~0~#228B22~TX_OUT: R2.2 → J3.SIG  |  SBUS_OUT: Q1.C + R4.2 → J6.SIG~Arial~~9px~~gge_nt5"
+    ],
+    "BBox": {
+      "x": 50,
+      "y": 30,
+      "width": 1300,
+      "height": 800
+    }
+  }
+]

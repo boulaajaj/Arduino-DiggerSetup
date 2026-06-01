@@ -188,7 +188,7 @@ PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.5 — GL10 FOC)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
-sketches/serial2_test/serial2_test.ino   — Confirms second UART on A4/A5 via SCI0 works
+sketches/serial2_test/serial2_test.ino   — Nano R4 A4/A5 SCI0 test (OBSOLETE; superseded by sbus_d12_test, excluded from CI)
 sketches/xbus_master/xbus_master.ino     — X.BUS master test sketch (deferred — kept for reference)
 docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
 docs/GL10-PARAMETERS.md                  — Configurable parameter reference + code-context analysis

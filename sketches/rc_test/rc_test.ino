@@ -36,18 +36,18 @@
 // Pin map:
 //   A0  ← Joystick Y (throttle)        [14-bit ADC]
 //   A1  ← Joystick X (steering)        [14-bit ADC]
-//   A4  (unused — sbusUart TX on SCI0, S.BUS is RX-only)
-//   A5  ← S.BUS RX (sbusUart on SCI0 via NPN inverter)
+//   D11 (unused — sbusUart TX on SCI0, S.BUS is RX-only)
+//   D12 ← S.BUS RX (sbusUart on SCI0 via NPN inverter)
 //   D8     (reserved — future battery-aware beeper, V8/UNO R4)
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
 //   D0/D1 → Serial1 hardware UART (currently unused)
 //   USB-C → USB CDC Serial (debug + firmware upload)
 //
-// S.BUS wiring (unchanged inverter circuit, now lands on A5):
-//   R7FG S.BUS signal ──[1K]──► NPN base
+// S.BUS wiring (unchanged inverter circuit, now lands on D12):
+//   R7FG S.BUS signal ──[10K]──► NPN base
 //   NPN emitter ──► GND
-//   5V ──[10K]──┬──► NPN collector ──► A5 (sbusUart RX)
+//   5V ──[10K]──┬──► NPN collector ──► D12 (sbusUart RX)
 
 #include <Arduino.h>
 #include <Servo.h>
@@ -55,10 +55,15 @@
 #include "types.h"
 
 
-// Second hardware UART on A4=TX(pin 18) / A5=RX(pin 19) via SCI0.
+// Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
 // S.BUS only needs RX; TX is unused. Named `sbusUart` (not Serial2)
 // to avoid the macro collision with the core's pre-declared _UART2_.
-UART sbusUart(18, 19);
+// UNO R4 WiFi: SCI0 is on D11/D12 (Nano R4 used A4/A5 for SCI0).
+// These pin constants live here (not in [CONFIG] below) because sbusUart is a
+// global constructed at static-init time — it must see them before [CONFIG].
+const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
+const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
+UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -231,7 +236,7 @@ ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [RC] — S.BUS input on sbusUart / SCI0 (A5 RX, NPN inverter)
+// [RC] — S.BUS input on sbusUart / SCI0 (D12 RX, NPN inverter)
 // ═══════════════════════════════════════════════════════════════
 
 bfs::SbusRx sbusRx(&sbusUart);
