@@ -20,7 +20,6 @@ jobs:
           - pin_test
           - sbus_test
           - sbus_d12_test
-          - serial2_test
           - telem_decode
           - usb_test
           - xbus_inverted_test

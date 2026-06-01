@@ -1,6 +1,12 @@
-// Serial2 Hardware UART Test — Arduino Nano R4
+// Serial2 Hardware UART Test — Arduino Nano R4 (OBSOLETE / Nano R4 only)
 // Tests if a second hardware UART works on A4 (TX) / A5 (RX)
 // using the SCI0 channel on the RA4M1.
+//
+// NOTE: Kept for historical reference only. Does NOT compile for the
+// UNO R4 WiFi (A4/A5 are I2C-only there, and the `Serial2` instance name
+// collides with the core's _UART2_ macro). Superseded by
+// sketches/sbus_d12_test for the UNO R4 WiFi (SCI0 on D11/D12).
+// Excluded from CI for this reason — see .github/workflows/arduino-ci.yml.
 
 #include "Serial.h"
 
