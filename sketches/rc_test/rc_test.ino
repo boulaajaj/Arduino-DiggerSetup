@@ -44,8 +44,8 @@
 //   D0/D1 → Serial1 hardware UART (currently unused)
 //   USB-C → USB CDC Serial (debug + firmware upload)
 //
-// S.BUS wiring (unchanged inverter circuit, now lands on A5):
-//   R7FG S.BUS signal ──[1K]──► NPN base
+// S.BUS wiring (unchanged inverter circuit, now lands on D12):
+//   R7FG S.BUS signal ──[10K]──► NPN base
 //   NPN emitter ──► GND
 //   5V ──[10K]──┬──► NPN collector ──► D12 (sbusUart RX)
 
@@ -59,7 +59,11 @@
 // S.BUS only needs RX; TX is unused. Named `sbusUart` (not Serial2)
 // to avoid the macro collision with the core's pre-declared _UART2_.
 // UNO R4 WiFi: SCI0 is on D11/D12 (Nano R4 used A4/A5 for SCI0).
-UART sbusUart(11, 12);
+// These pin constants live here (not in [CONFIG] below) because sbusUart is a
+// global constructed at static-init time — it must see them before [CONFIG].
+const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
+const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
+UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
 
 
 // ═══════════════════════════════════════════════════════════════

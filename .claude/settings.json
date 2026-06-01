@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat <<'HOOK_EOF'\n[POST-COMMIT MEMORY HOOK]\nA commit was just made. Check if this session established any new technical facts that are NOT already in docs/DECISION-LOG.md:\n- New wiring topology confirmed working\n- Component values finalized or changed\n- Protocol behavior discovered (timing, polarity, byte order)\n- Pin assignment changes\n- Test results (what worked, what failed and why)\n- Architecture decisions (why X was chosen over Y)\nIf yes, ask the user: \"This session confirmed [specific technical fact]. Want me to add it to the decision log?\"\nIf nothing new was established, do nothing — do NOT prompt.\nNEVER log: personal info, conversation style, user preferences, emotional context, or non-technical discussion.\nHOOK_EOF",
+            "command": "cat <<'HOOK_EOF'\n[POST-COMMIT MEMORY HOOK]\nThis fires after EVERY Bash command — act ONLY if the command was a `git commit` (otherwise do nothing and say nothing). If a commit was just made, check whether this session established any new technical facts that are NOT already in docs/DECISION-LOG.md:\n- New wiring topology confirmed working\n- Component values finalized or changed\n- Protocol behavior discovered (timing, polarity, byte order)\n- Pin assignment changes\n- Test results (what worked, what failed and why)\n- Architecture decisions (why X was chosen over Y)\nIf yes, ask the user: \"This session confirmed [specific technical fact]. Want me to add it to the decision log?\"\nIf nothing new was established, do nothing — do NOT prompt.\nNEVER log: personal info, conversation style, user preferences, emotional context, or non-technical discussion.\nHOOK_EOF",
             "timeout": 5000
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat <<'HOOK_EOF'\n[DECISION-LOG WRITE GUARD]\nYou are writing to the decision log. Before proceeding, verify:\n1. Every line contains ONLY technical facts (circuit, firmware, protocol, hardware)\n2. NO personal information, names (except component/product names), email addresses, or conversation tone\n3. NO subjective commentary — only what was built, tested, measured, or decided\n4. Entries are dated and terse (one line per fact when possible)\nIf any line fails these checks, remove it before writing.\nHOOK_EOF",
+            "command": "cat <<'HOOK_EOF'\n[DECISION-LOG WRITE GUARD]\nThis fires after EVERY Write/Edit — act ONLY if the target file is docs/DECISION-LOG.md (otherwise do nothing). If writing to the decision log, verify:\n1. Every line contains ONLY technical facts (circuit, firmware, protocol, hardware)\n2. NO personal information, names (except component/product names), email addresses, or conversation tone\n3. NO subjective commentary — only what was built, tested, measured, or decided\n4. Entries are dated and terse (one line per fact when possible)\nIf any line fails these checks, remove it before writing.\nHOOK_EOF",
             "timeout": 5000
           }
         ]
