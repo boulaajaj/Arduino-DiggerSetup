@@ -98,3 +98,22 @@ Research for the WiFi telemetry dashboard + black-box logging. Findings:
 - **Lean:** Giga for the full black-box + analytics goal (clean dual-core
   offload, more + natively-accessible storage, removable media, no flashing
   friction). Path A is the no-new-hardware fallback. Decision pending.
+
+## 2026-06-01 — DECISION: stay on UNO R4 WiFi, stock config (Option C)
+
+- Operator chose **no new hardware / no mechanical change**. Giga (Option B)
+  declined. Onboard black-box logging deemed non-essential for now → Option A
+  (custom ESP32-S3 firmware) also declined.
+- **Plan = Option C:** stock firmware, sketch on RA4M1, WiFi via `WiFiS3`,
+  WebSocket telemetry streamed to a client; **client-side logging** + per-
+  connection wall-clock anchor; `millis()`+sequence frame tagging retained.
+- **Caveat:** WebSocket/WiFi serving runs on the RA4M1 control core — must be
+  engineered non-blocking (1-5 Hz, fire-and-forget, time-sliced) so control
+  timing is unaffected. If too jittery under load, fall back to A or Giga.
+- **Optional:** small RA4M1 RAM ring buffer (~tens of seconds) for reconnect
+  gap-tolerance across brief WiFi drops — not a full-session black box.
+- **Accepted tradeoff:** data recorded only while a client is connected; no
+  always-on onboard recording. Acceptable for tuning/monitoring sessions.
+- **Clarification:** "bridge friction" = dev-time only (flashing the ESP32-S3
+  removes the USB upload/Serial bridge until stock firmware is restored);
+  unrelated to telemetry data loss, and NOT incurred under Option C.
