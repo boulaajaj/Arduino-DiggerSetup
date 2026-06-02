@@ -117,3 +117,25 @@ Research for the WiFi telemetry dashboard + black-box logging. Findings:
 - **Clarification:** "bridge friction" = dev-time only (flashing the ESP32-S3
   removes the USB upload/Serial bridge until stock firmware is restored);
   unrelated to telemetry data loss, and NOT incurred under Option C.
+
+## 2026-06-01 — REVISED DECISION: Option A (custom ESP32-S3 firmware)
+
+Black-box recording (buffer + backfill, survives WiFi loss) is required, so
+Option C is insufficient. Chosen path:
+
+- **Option A:** RA4M1 runs control only; ESP32-S3 runs WiFi + WebSocket +
+  backfill + ring buffer on its 8 MB flash. True dual-CPU offload — telemetry
+  feels real-time, no blank spots. No new board; keeps 5 V + sensor shield.
+  (No 5 V alternative exists with this feature set — Giga/ESP32/Teensy are all
+  3.3 V; UNO R4 WiFi is the only 5 V board with a second onboard CPU.)
+- **ESP32-S3 does WiFi AND our app simultaneously** (dual-core 240 MHz) — the
+  WiFi job is unaffected.
+- **Dev-update friction (control sketch / RA4M1):** jumper → restore stock
+  bridge → upload sketch over USB → jumper → re-flash our ESP firmware.
+  Normal RA4M1 sketch upload is automatic over USB and needs NO jumper, but
+  only while the stock bridge is present; flashing custom ESP firmware
+  REQUIRES the GND+Download jumper (physical).
+- **Jumper requires physical access** to the board → mitigated by wiring the
+  GND + Download pins to a **panel-mounted switch/header** on the enclosure.
+  Then the cycle = flip switch + USB + run script (`arduino-cli`/`espflash`),
+  no disassembly. Switch is the only manual step; flashing is scriptable.
