@@ -61,18 +61,26 @@ Updated by session hooks — only technical content, no personal info.
 
 Research for the WiFi telemetry dashboard + black-box logging. Findings:
 
-- **SD card cannot coexist with S.BUS on UNO R4 WiFi.** Hardware SPI is on
-  D11 (MOSI) / D12 (MISO) / D13 (SCK); `sbusUart` (SCI0) is on D11 (TX) /
-  D12 (RX). SD-over-SPI lands on the exact S.BUS pins. No third hardware UART
-  to relocate S.BUS to (Serial1/D0-D1 reserved for X.BUS). So onboard SD is
-  not viable on this board without evicting S.BUS. (Clock/RTC is unaffected —
-  I2C on SDA/SCL, or NTP over WiFi; WiFi is unaffected — ESP32-S3 coprocessor.)
-- **Stock UNO R4 WiFi does NOT offload the WebSocket/server.** The sketch
-  runs on the RA4M1; the ESP32-S3 is a `WiFiS3` network coprocessor only.
-  WebSocket/server libs (e.g. UnoR4WiFi_WebServer / mWebSockets) execute on
-  the RA4M1 — same core as the control loop — and CAN block it. The ESP32-S3's
-  8 MB flash is NOT sketch-accessible in stock mode. (Corrects the assumption
-  in issue #45 that serving a page can't affect control-loop timing.)
+- **An SPI SD-card module cannot coexist with S.BUS on UNO R4 WiFi.** (The
+  board has no onboard SD slot — this is about adding an SPI SD module.)
+  Hardware SPI is on D11 (MOSI) / D12 (MISO) / D13 (SCK); `sbusUart` (SCI0) is
+  on D11 (TX) / D12 (RX). SD-over-SPI lands on the exact S.BUS pins. No third
+  hardware UART to relocate S.BUS to (Serial1/D0-D1 reserved for X.BUS). So an
+  SPI SD card is not viable on this board without evicting S.BUS. (Clock/RTC is
+  unaffected — I2C on SDA/SCL, or NTP over WiFi; WiFi is unaffected — ESP32-S3
+  coprocessor.)
+- **Stock UNO R4 WiFi offloads WiFi/TCP but NOT WebSocket serving from the
+  control core.** The split: the ESP32-S3 runs the WiFi radio + TCP/IP stack
+  (reached via the `WiFiS3` bridge). The RA4M1 runs the Arduino sketch AND the
+  WebSocket layer — HTTP-upgrade handshake, frame (de)masking, ping/pong,
+  server state machine — in libraries like UnoR4WiFi_WebServer / mWebSockets.
+  That WebSocket state machine is serviced inside `loop()` on the RA4M1, the
+  same core as the control loop, so a busy/blocked loop stalls it and vice
+  versa. Net: TCP/WiFi is offloaded; WebSocket serving is not — it shares the
+  control core and CAN perturb control timing. (The WiFiS3 bridge exposes only
+  socket I/O, so the ESP32-S3's 8 MB flash is not addressable as RA4M1 sketch
+  storage without custom ESP firmware. Corrects the assumption in #45 that
+  serving a page can't affect control-loop timing.)
 - **Agreed logging data model:** telemetry frames tagged with `millis()`
   (NOT `micros()` — micros wraps at ~71 min; millis at ~49.7 days) + a
   monotonic integer sequence number for dedup/backfill. Client takes one
@@ -87,19 +95,22 @@ Research for the WiFi telemetry dashboard + black-box logging. Findings:
   by ESP32 flashing. CATCH: the ESP32-S3 is also the USB-serial bridge for
   programming the RA4M1 — overwriting it breaks sketch upload + Serial Monitor
   until the bridge firmware is restored. Recurring dev-loop friction.
-- **Path B — Giga R1 WiFi:** STM32H747 dual-core (M7 480 / M4 240), 1 MB RAM
-  + 8 MB SDRAM, 2 MB MCU flash + 16 MB QSPI NOR (sketch-accessible), USB-A
-  host for thumb-drive mass storage, 4 UARTs, onboard WiFi/BT. Programmed
+- **Path B — Giga R1 WiFi:** STM32H747 dual-core (M7 480 / M4 240). Memory:
+  1 MB RAM, 8 MB SDRAM, 2 MB MCU flash, 16 MB QSPI NOR (sketch-accessible).
+  USB-A host for thumb-drive mass storage, 4 UARTs, onboard WiFi/BT. Programmed
   directly over USB-C (no bridge conflict). True offload of control vs I/O.
   COST: 3.3 V logic only — 5 V joystick needs level-shifting/divider, S.BUS
   inverter output swing must be re-verified; bigger enclosure + re-mount.
 - **Capacity:** compact binary frame ~24-32 B → 8 MB ≈ ~250-300k frames
   ≈ ~15 h at 5 Hz.
-- **Lean:** Giga for the full black-box + analytics goal (clean dual-core
-  offload, more + natively-accessible storage, removable media, no flashing
-  friction). Path A is the no-new-hardware fallback. Decision pending.
+- **Lean (at time of writing):** Giga for the full black-box + analytics goal.
+  Path A is the no-new-hardware fallback. **Superseded — final decision is
+  Option A (custom ESP32-S3 firmware); see the REVISED DECISION below.**
 
-## 2026-06-01 — DECISION: stay on UNO R4 WiFi, stock config (Option C)
+## 2026-06-01 — DECISION: stay on UNO R4 WiFi, stock config (Option C) — SUPERSEDED
+
+> **Superseded** by the REVISED DECISION (Option A) below: black-box recording
+> that survives WiFi drops is required, which stock Option C cannot provide.
 
 - Operator chose **no new hardware / no mechanical change**. Giga (Option B)
   declined. Onboard black-box logging deemed non-essential for now → Option A
