@@ -150,3 +150,38 @@ Option C is insufficient. Chosen path:
   GND + Download pins to a **panel-mounted switch/header** on the enclosure.
   Then the cycle = flip switch + USB + run script (`arduino-cli`/`espflash`),
   no disassembly. Switch is the only manual step; flashing is scriptable.
+
+## 2026-06-11 — Telemetry bring-up bench check (issue #36) — pre-flash baseline
+
+Goal this session: verify X.BUS telemetry comes through from BOTH GL10 ESCs
+on the new (post-migration) circuit, before enabling it over Wi-Fi (#45).
+Scope intentionally limited to docs/memory/issue — no sketch or control changes.
+
+- **Board confirmed:** Arduino UNO R4 WiFi on **COM7** (`arduino-cli board list`).
+  Nano R4 → UNO R4 WiFi migration is complete; CLAUDE.md still lists the old
+  Nano R4 / COM8 (stale, not corrected this session).
+- **Flashed sketch = `rc_test` V7.6 (PWM-only), UNCHANGED.** Working tree clean
+  (only untracked `dashboard/index.html`, unrelated #45 work). No edits to
+  `rc_test.ino` or any control code. Control logic intact.
+- **Live CSV columns are `RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost`.**
+  The trailing `0,0,0` are Gear/Failsafe-count/Lost-frames — **NOT telemetry.**
+  `rc_test` does not poll X.BUS, so nothing reads the telemetry line yet.
+- **Control side healthy:** S.BUS FS=0 / Lost=0 over a multi-second capture;
+  RC channels live, joysticks centered (~8192 on 14-bit ADC), OutL/OutR mixing
+  on D9/D10.
+- **Telemetry NOT yet verified.** The circuit is wired on **D0/D1 (Serial1)**,
+  unchanged through the migration, but cannot be confirmed until a poll sketch
+  is flashed. Verification is the next step (deferred — no flash this session).
+- **#36 "Options to evaluate" (bridge MCU / relocate S.BUS / switch board) are
+  OBSOLETE.** They assumed Nano R4 UART scarcity. On UNO R4 WiFi both hardware
+  UARTs are free: **Serial1 (D0/D1) → X.BUS @ 115200**, **sbusUart (SCI0/D12)
+  → S.BUS**. Go straight to the telemetry scope.
+- **Confirmed telemetry approach (unchanged from plan):** Read Register (func
+  **0x10**), NOT Throttle (0x50 forces BUS_MODE and fights PWM). Registers
+  0x0C VbatBus, 0x20 mos-Tem, 0x22 mot-Tem, 0x02 motSpeed (RPM). 1 Hz
+  alternating per ESC, EMA + freshness watchdog. Note: 0x10 is documented-safe
+  but **not yet confirmed on GL10 hardware** (only 0x50 has been, on breadboard
+  2026-05-23) — flashing a 0x10 poller doubles as that confirmation.
+- **Issue alignment:** work = **#36** (restore telemetry) → **#45** (Wi-Fi
+  dashboard). **#48** (ESP32-S3 / Giga black-box logging architecture) is
+  explicitly set aside — not part of this work.
