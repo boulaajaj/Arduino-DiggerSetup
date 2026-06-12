@@ -56,3 +56,97 @@ Updated by session hooks — only technical content, no personal info.
 - Inverter wiring fix: D12 (output) taps the **collector**; S.BUS-in from the receiver goes through 10 kΩ to the **base**; **emitter** to GND. Initial build had collector/base roles swapped (no signal); corrected.
 - Verified end-to-end: throttle full range, steering, curvatureDrive differential on D9/D10, and Eco reverse cap producing 1375 µs (matches 1500 − (0.625 × 0.40 × 500) = 1375 µs, neutral offset included).
 - X.BUS telemetry NOT active — `rc_test` does not poll it. Telemetry restore tracked in #36; Wi-Fi dashboard in #45.
+
+## 2026-06-01 — Telemetry logging architecture + board-upgrade analysis (V8)
+
+Research for the WiFi telemetry dashboard + black-box logging. Findings:
+
+- **An SPI SD-card module cannot coexist with S.BUS on UNO R4 WiFi.** (The
+  board has no onboard SD slot — this is about adding an SPI SD module.)
+  Hardware SPI is on D11 (MOSI) / D12 (MISO) / D13 (SCK); `sbusUart` (SCI0) is
+  on D11 (TX) / D12 (RX). SD-over-SPI lands on the exact S.BUS pins. No third
+  hardware UART to relocate S.BUS to (Serial1/D0-D1 reserved for X.BUS). So an
+  SPI SD card is not viable on this board without evicting S.BUS. (Clock/RTC is
+  unaffected — I2C on SDA/SCL, or NTP over WiFi; WiFi is unaffected — ESP32-S3
+  coprocessor.)
+- **Stock UNO R4 WiFi offloads WiFi/TCP but NOT WebSocket serving from the
+  control core.** The split: the ESP32-S3 runs the WiFi radio + TCP/IP stack
+  (reached via the `WiFiS3` bridge). The RA4M1 runs the Arduino sketch AND the
+  WebSocket layer — HTTP-upgrade handshake, frame (de)masking, ping/pong,
+  server state machine — in libraries like UnoR4WiFi_WebServer / mWebSockets.
+  That WebSocket state machine is serviced inside `loop()` on the RA4M1, the
+  same core as the control loop, so a busy/blocked loop stalls it and vice
+  versa. Net: TCP/WiFi is offloaded; WebSocket serving is not — it shares the
+  control core and CAN perturb control timing. (The WiFiS3 bridge exposes only
+  socket I/O, so the ESP32-S3's 8 MB flash is not addressable as RA4M1 sketch
+  storage without custom ESP firmware. Corrects the assumption in #45 that
+  serving a page can't affect control-loop timing.)
+- **Agreed logging data model:** telemetry frames tagged with `millis()`
+  (NOT `micros()` — micros wraps at ~71 min; millis at ~49.7 days) + a
+  monotonic integer sequence number for dedup/backfill. Client takes one
+  (arduino-ts, wall-clock) anchor per connection. X.BUS polling must be a
+  non-blocking state machine, not a blocking request/wait.
+- **Path A — custom ESP32-S3 firmware (split-brain):** runs WebSocket +
+  LittleFS ring buffer on the 8 MB flash + dedup/backfill on the ESP32;
+  RA4M1 fire-and-forget streams frames over the internal link. Hardware-safe
+  and fully recoverable (ESP32-S3 mask-ROM bootloader can't be erased; force
+  download mode via GND+Download pins on the 6-pin header, reflash with
+  espflash; Arduino publishes the original bridge firmware). RA4M1 untouched
+  by ESP32 flashing. CATCH: the ESP32-S3 is also the USB-serial bridge for
+  programming the RA4M1 — overwriting it breaks sketch upload + Serial Monitor
+  until the bridge firmware is restored. Recurring dev-loop friction.
+- **Path B — Giga R1 WiFi:** STM32H747 dual-core (M7 480 / M4 240). Memory:
+  1 MB RAM, 8 MB SDRAM, 2 MB MCU flash, 16 MB QSPI NOR (sketch-accessible).
+  USB-A host for thumb-drive mass storage, 4 UARTs, onboard WiFi/BT. Programmed
+  directly over USB-C (no bridge conflict). True offload of control vs I/O.
+  COST: 3.3 V logic only — 5 V joystick needs level-shifting/divider, S.BUS
+  inverter output swing must be re-verified; bigger enclosure + re-mount.
+- **Capacity:** compact binary frame ~24-32 B → 8 MB ≈ ~250-300k frames
+  ≈ ~15 h at 5 Hz.
+- **Lean (at time of writing):** Giga for the full black-box + analytics goal.
+  Path A is the no-new-hardware fallback. **Superseded — final decision is
+  Option A (custom ESP32-S3 firmware); see the REVISED DECISION below.**
+
+## 2026-06-01 — DECISION: stay on UNO R4 WiFi, stock config (Option C) — SUPERSEDED
+
+> **Superseded** by the REVISED DECISION (Option A) below: black-box recording
+> that survives WiFi drops is required, which stock Option C cannot provide.
+
+- Operator chose **no new hardware / no mechanical change**. Giga (Option B)
+  declined. Onboard black-box logging deemed non-essential for now → Option A
+  (custom ESP32-S3 firmware) also declined.
+- **Plan = Option C:** stock firmware, sketch on RA4M1, WiFi via `WiFiS3`,
+  WebSocket telemetry streamed to a client; **client-side logging** + per-
+  connection wall-clock anchor; `millis()`+sequence frame tagging retained.
+- **Caveat:** WebSocket/WiFi serving runs on the RA4M1 control core — must be
+  engineered non-blocking (1-5 Hz, fire-and-forget, time-sliced) so control
+  timing is unaffected. If too jittery under load, fall back to A or Giga.
+- **Optional:** small RA4M1 RAM ring buffer (~tens of seconds) for reconnect
+  gap-tolerance across brief WiFi drops — not a full-session black box.
+- **Accepted tradeoff:** data recorded only while a client is connected; no
+  always-on onboard recording. Acceptable for tuning/monitoring sessions.
+- **Clarification:** "bridge friction" = dev-time only (flashing the ESP32-S3
+  removes the USB upload/Serial bridge until stock firmware is restored);
+  unrelated to telemetry data loss, and NOT incurred under Option C.
+
+## 2026-06-01 — REVISED DECISION: Option A (custom ESP32-S3 firmware)
+
+Black-box recording (buffer + backfill, survives WiFi loss) is required, so
+Option C is insufficient. Chosen path:
+
+- **Option A:** RA4M1 runs control only; ESP32-S3 runs WiFi + WebSocket +
+  backfill + ring buffer on its 8 MB flash. True dual-CPU offload — telemetry
+  feels real-time, no blank spots. No new board; keeps 5 V + sensor shield.
+  (No 5 V alternative exists with this feature set — Giga/ESP32/Teensy are all
+  3.3 V; UNO R4 WiFi is the only 5 V board with a second onboard CPU.)
+- **ESP32-S3 does WiFi AND our app simultaneously** (dual-core 240 MHz) — the
+  WiFi job is unaffected.
+- **Dev-update friction (control sketch / RA4M1):** jumper → restore stock
+  bridge → upload sketch over USB → jumper → re-flash our ESP firmware.
+  Normal RA4M1 sketch upload is automatic over USB and needs NO jumper, but
+  only while the stock bridge is present; flashing custom ESP firmware
+  REQUIRES the GND+Download jumper (physical).
+- **Jumper requires physical access** to the board → mitigated by wiring the
+  GND + Download pins to a **panel-mounted switch/header** on the enclosure.
+  Then the cycle = flip switch + USB + run script (`arduino-cli`/`espflash`),
+  no disassembly. Switch is the only manual step; flashing is scriptable.
