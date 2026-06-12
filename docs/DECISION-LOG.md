@@ -211,3 +211,26 @@ to 0** — never drives motors) to confirm the new circuit. Motors did not move
   is correct.
 - **Flight firmware (`rc_test` V7.6) must be re-flashed** to restore the
   machine after this bench check — `telem_check` is a diagnostic only.
+
+### V7.7 — telemetry integrated into flight firmware (telemetry WITH control)
+
+Added non-blocking X.BUS **Read Register (0x10)** polling into `rc_test`
+(`[TELEMETRY]` module on `Serial1`/D0-D1). Read-only — 0x10 is point-to-point
+service control, never enters BUS_MODE, so PWM/S.BUS control authority is fully
+preserved. Polls ESC0/ESC1 alternately ~6 Hz each (80 ms gap, 12 ms non-blocking
+timeout), EMA-smooths V/I/temps, RPM instantaneous, 5 s per-ESC freshness watchdog.
+
+- **0x10 CONFIRMED WORKING on GL10** (first time — previously only 0x50 was).
+  ESC0 returns clean values: **V=11.9 V, ESC 28 °C, motor 22 °C, RPM tracking
+  throttle (7→38 Hz electrical as stick went 1766→2000 µs).** Per-register 0x10
+  decode also fixes the bogus temp seen via 0x50 — temps now read room-plausible.
+- **Control fully intact alongside telemetry:** FS=0 / Lost=0, OutL/OutR follow
+  the stick. Confirms telemetry-with-control is real (not telemetry-only).
+- **ESC1 still silent** (OK1=0) — same as the read-only bench test. Blocks
+  per-track capture of the 2nd track. Chase: ESC1 X.BUS yellow on the bus node,
+  or distinct X.BUS address (reg 0x05) — both ESCs may be at default addr 0.
+- **Bus current reads 0.0 A** at idle/unloaded — verify under load (reg 0x0D).
+- **CSV format changed** (V7.7): appended `V0dV,I0dA,RPM0,TE0,TM0,OK0` +
+  `…1` columns (integer-scaled). `live_plot.py` / `monitor.py` / dashboard
+  parsers must be updated for the new columns.
+- Firmware flashed to UNO R4 WiFi / COM7 (58.9 KB, 22% flash / 26% RAM).

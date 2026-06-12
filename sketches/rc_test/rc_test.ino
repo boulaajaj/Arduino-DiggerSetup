@@ -15,8 +15,10 @@
 // V7.6 removed the reverse-direction beeper entirely — audible
 // alerts will return as a battery-aware system after the planned
 // Nano R4 → UNO R4 migration (see GitHub issue tracker).
-// Telemetry (X.BUS Read Register) is scaffolded in types.h but
-// not polled — sbusUart (SCI0) is consumed by S.BUS.
+// Telemetry: X.BUS Read Register (func 0x10) is polled non-blocking on
+// Serial1 (D0/D1) — READ-ONLY. 0x10 is service control; it never puts the
+// ESC into BUS_MODE, so PWM control authority is fully preserved. Both
+// ESCs share the one half-duplex X.BUS. See [TELEMETRY].
 //
 // Signal flow:
 //   RC (S.BUS) ──► curvatureDrive ──┐
@@ -31,7 +33,8 @@
 //   [GEAR]       RC CH4 → Eco 40% / Normal 65% / Turbo 100% wheel-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [OUTPUT]     ESC servo PWM
-//   [DEBUG]      10 Hz serial CSV telemetry
+//   [TELEMETRY]  X.BUS Read Register (0x10) on Serial1 — V/I/RPM/temp
+//   [DEBUG]      10 Hz serial CSV (control + telemetry)
 //
 // Pin map:
 //   A0  ← Joystick Y (throttle)        [14-bit ADC]
@@ -41,7 +44,7 @@
 //   D8     (reserved — future battery-aware beeper, V8/UNO R4)
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
-//   D0/D1 → Serial1 hardware UART (currently unused)
+//   D0/D1 → Serial1 (X.BUS half-duplex telemetry bus to both ESCs)
 //   USB-C → USB CDC Serial (debug + firmware upload)
 //
 // S.BUS wiring (unchanged inverter circuit, now lands on D12):
@@ -396,9 +399,165 @@ void outputWrite(int left, int right) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [DEBUG] — 10 Hz serial CSV telemetry
+// [TELEMETRY] — X.BUS Read Register (0x10) on Serial1 (D0/D1)
 // ═══════════════════════════════════════════════════════════════
-// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost
+// Non-blocking, READ-ONLY. Uses func 0x10 (point-to-point service read),
+// NOT 0x50 — so the ESC never enters BUS_MODE and PWM control is fully
+// preserved. One request per ESC returns all registers; we alternate
+// ESC0/ESC1, EMA-smooth the slow signals, keep RPM instantaneous, and run
+// an independent per-ESC freshness watchdog. Both ESCs share the one
+// half-duplex bus on D0/D1 (idle HIGH, standard UART polarity — no inverter).
+
+const uint8_t  XBUS_HDR_MASTER = 0x0F;
+const uint8_t  XBUS_HDR_SLAVE  = 0xF0;
+const uint8_t  XBUS_FUNC_READ  = 0x10;
+const uint8_t  NUM_ESCS        = 2;
+
+// Registers read every poll (one request returns all of them).
+const uint8_t  REG_VBAT   = 0x0C;  // ×0.1 V
+const uint8_t  REG_IBUS   = 0x0D;  // ×0.1 A (signed)
+const uint8_t  REG_MSPEED = 0x02;  // electrical Hz (signed)
+const uint8_t  REG_TESC   = 0x20;  // raw − 40 = °C
+const uint8_t  REG_TMOT   = 0x22;  // raw − 40 = °C
+const uint8_t  TELEM_REGS[] = {REG_VBAT, REG_IBUS, REG_MSPEED, REG_TESC, REG_TMOT};
+const uint8_t  TELEM_NREG    = sizeof(TELEM_REGS);
+
+const uint32_t TELEM_POLL_MS    = 80;     // gap between polls; alternating → ~6 Hz/ESC
+const uint32_t TELEM_TIMEOUT_US = 12000;  // service-read response window (spec 10ms + margin)
+const uint32_t TELEM_STALE_MS   = 5000;   // mark invalid after this long with no good read
+
+// EMA new-sample weights. Slow signals smoothed; RPM is instantaneous.
+const float TELEM_A_VOLT = 0.30f;
+const float TELEM_A_CURR = 0.50f;
+const float TELEM_A_TEMP = 0.10f;
+
+EscTelem telem[NUM_ESCS] = {};
+
+uint8_t  telemEsc        = 0;       // ESC currently being polled
+bool     telemWaiting    = false;   // true = request sent, awaiting response
+uint32_t telemLastPollMs = 0;
+uint32_t telemReqStartUs = 0;
+uint8_t  telRx[64];
+int      telRxLen = 0;
+
+// Checksum = low 8 bits of the sum of bytes [1 .. len-2] (header & checksum
+// excluded). Matches the framing used in the bench-confirmed xbus_master.
+uint8_t xbusChecksum(const uint8_t *f, int len) {
+  uint8_t s = 0;
+  for (int i = 1; i < len - 1; i++) s += f[i];
+  return s;
+}
+
+void telemSendRequest(uint8_t esc) {
+  uint8_t tx[6 + TELEM_NREG];
+  int n = 0;
+  tx[n++] = XBUS_HDR_MASTER;
+  tx[n++] = esc;             // point-to-point slave address
+  tx[n++] = 0x00;            // extra byte — ignored in service control
+  tx[n++] = XBUS_FUNC_READ;
+  tx[n++] = TELEM_NREG;      // data length = number of register addresses
+  for (uint8_t i = 0; i < TELEM_NREG; i++) tx[n++] = TELEM_REGS[i];
+  tx[n] = xbusChecksum(tx, n + 1);
+  n++;
+  while (Serial1.available()) Serial1.read();  // drop stale RX / prior echo
+  Serial1.write(tx, n);                        // non-blocking (no flush())
+  telRxLen = 0;
+}
+
+// Fold one register value into the telem struct for ESC index e.
+void telemApplyReg(uint8_t e, uint8_t reg, uint16_t raw) {
+  EscTelem *t = &telem[e];
+  bool first = !t->valid;
+  switch (reg) {
+    case REG_VBAT: {
+      float v = raw * 0.1f;
+      t->voltage = first ? v : t->voltage + TELEM_A_VOLT * (v - t->voltage);
+      break;
+    }
+    case REG_IBUS: {
+      float a = (int16_t)raw * 0.1f;
+      t->busCurrentA = first ? a : t->busCurrentA + TELEM_A_CURR * (a - t->busCurrentA);
+      break;
+    }
+    case REG_MSPEED:
+      t->rpmHz = (int16_t)raw;                 // instantaneous
+      break;
+    case REG_TESC: {
+      float c = (float)(raw & 0xFF) - 40.0f;   // temp is the low byte, raw − 40
+      t->escTempC = first ? c : t->escTempC + TELEM_A_TEMP * (c - t->escTempC);
+      break;
+    }
+    case REG_TMOT: {
+      float c = (float)(raw & 0xFF) - 40.0f;
+      t->motorTempC = first ? c : t->motorTempC + TELEM_A_TEMP * (c - t->motorTempC);
+      break;
+    }
+  }
+}
+
+// Scan the RX buffer for a valid 0x10 response from `esc`; parse if complete.
+// Skips our own half-duplex TX echo (which starts with 0x0F, not 0xF0).
+bool telemTryParse(uint8_t esc, uint32_t nowMs) {
+  for (int i = 0; i + 6 <= telRxLen; i++) {
+    if (telRx[i]     != XBUS_HDR_SLAVE) continue;
+    if (telRx[i + 1] != esc)            continue;
+    if (telRx[i + 3] != XBUS_FUNC_READ) continue;
+    uint8_t dlen = telRx[i + 4];
+    if (dlen == 0 || dlen % 3 != 0) continue;       // each reg = addr + 2 bytes
+    if (i + 5 + dlen > telRxLen)    continue;        // full data not in yet
+    const uint8_t *d = &telRx[i + 5];
+    for (uint8_t g = 0; g + 3 <= dlen; g += 3) {
+      uint16_t val = d[g + 1] | (d[g + 2] << 8);
+      telemApplyReg(esc, d[g], val);
+    }
+    telem[esc].lastGoodMs = nowMs;
+    telem[esc].valid = true;
+    return true;
+  }
+  return false;
+}
+
+// Call every loop iteration. Sends one request at a time, alternating ESCs,
+// and never blocks: it drains RX across iterations and times out on silence.
+void telemUpdate() {
+  uint32_t nowMs = millis();
+
+  // Drain available bytes every iteration (cheap).
+  while (Serial1.available() && telRxLen < (int)sizeof(telRx)) {
+    telRx[telRxLen++] = Serial1.read();
+  }
+
+  if (telemWaiting) {
+    if (telemTryParse(telemEsc, nowMs)) {
+      telemWaiting = false;
+      telemEsc = (telemEsc + 1) % NUM_ESCS;
+    } else if ((micros() - telemReqStartUs) > TELEM_TIMEOUT_US) {
+      telemWaiting = false;                          // no/late response — move on
+      telemEsc = (telemEsc + 1) % NUM_ESCS;
+    }
+  } else if ((nowMs - telemLastPollMs) >= TELEM_POLL_MS) {
+    telemLastPollMs = nowMs;
+    telemSendRequest(telemEsc);
+    telemReqStartUs = micros();
+    telemWaiting = true;
+  }
+
+  // Per-ESC freshness watchdog.
+  for (uint8_t i = 0; i < NUM_ESCS; i++) {
+    if (telem[i].valid && (nowMs - telem[i].lastGoodMs) > TELEM_STALE_MS) {
+      telem[i].valid = false;
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [DEBUG] — 10 Hz serial CSV (control + telemetry)
+// ═══════════════════════════════════════════════════════════════
+// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,
+//          V0dV,I0dA,RPM0,TE0,TM0,OK0, V1dV,I1dA,RPM1,TE1,TM1,OK1
+// Telemetry columns are integer-scaled: voltage in 0.1 V (dV), current in
+// 0.1 A (dA), RPM in electrical Hz, temps in °C, OK = fresh-telemetry flag.
 
 uint32_t prevPrint = 0;
 
@@ -406,8 +565,8 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.6 — GL10 FOC + S.BUS sbusUart + Gear (beeper removed) ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost");
+    Serial.println("# === Digger V7.7 — GL10 FOC + S.BUS + Gear + X.BUS telemetry (0x10) ===");
+    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
 
@@ -420,12 +579,25 @@ void debugPrint(uint32_t now) {
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
-  char buf[120];
-  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  // Telemetry, integer-scaled so we avoid float printf on this core.
+  int v0 = (int)lroundf(telem[0].voltage    * 10.0f);
+  int i0 = (int)lroundf(telem[0].busCurrentA * 10.0f);
+  int e0 = (int)lroundf(telem[0].escTempC);
+  int m0 = (int)lroundf(telem[0].motorTempC);
+  int v1 = (int)lroundf(telem[1].voltage    * 10.0f);
+  int i1 = (int)lroundf(telem[1].busCurrentA * 10.0f);
+  int e1 = (int)lroundf(telem[1].escTempC);
+  int m1 = (int)lroundf(telem[1].motorTempC);
+
+  char buf[200];
+  snprintf(buf, sizeof(buf),
+           "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
            rcT, rcS, rc4, rc5,
            cachedJoy.rawY, cachedJoy.rawX,
            outL, outR, (int)currentGear,
-           sbusData.failsafe, sbusData.lost_frame);
+           sbusData.failsafe, sbusData.lost_frame,
+           v0, i0, telem[0].rpmHz, e0, m0, telem[0].valid ? 1 : 0,
+           v1, i1, telem[1].rpmHz, e1, m1, telem[1].valid ? 1 : 0);
   Serial.println(buf);
 }
 
@@ -439,6 +611,7 @@ void setup() {
   sbusRx.Begin();
   outputInit();
   debugInit();
+  Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
 }
 
 void loop() {
@@ -468,6 +641,10 @@ void loop() {
   // Acceleration + Drag Force settings, so the Arduino sends the mixed
   // command straight through.
   outputWrite(mix.left, mix.right);
+
+  // 3.5 Telemetry — non-blocking X.BUS Read Register (0x10), read-only.
+  // Never enters BUS_MODE, so it cannot affect the control output above.
+  telemUpdate();
 
   // 4. Debug
   debugPrint(now);
