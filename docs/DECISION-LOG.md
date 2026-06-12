@@ -185,3 +185,29 @@ Scope intentionally limited to docs/memory/issue — no sketch or control change
 - **Issue alignment:** work = **#36** (restore telemetry) → **#45** (Wi-Fi
   dashboard). **#48** (ESP32-S3 / Giga black-box logging architecture) is
   explicitly set aside — not part of this work.
+
+### Telemetry TEST RESULT (flashed `sketches/telem_check`, read-only)
+
+Flashed a read-only telemetry tool (proven 0x50 framing, **throttle hard-wired
+to 0** — never drives motors) to confirm the new circuit. Motors did not move
+(Thr_out=0%, RPM=0 throughout).
+
+- **ESC0: telemetry confirmed working.** V=**11.9 V** (plausible 3S at rest),
+  status flags **BUS_MODE + CAP_CHARGED**, frames steady. The X.BUS link on
+  D0/D1 (Serial1) on the UNO R4 WiFi works.
+- **ESC1: NO RESPONSE** — "no data yet" for the entire run. Good/Bad frame
+  ratio held ~50/50 (every poll targeting ESC1 timed out), confirming exactly
+  one of two ESCs answers.
+- **Likely causes for ESC1 (to chase next):** (a) ESC1's X.BUS yellow not
+  landed on the bus node / cold joint on the new board, or (b) both ESCs share
+  X.BUS address 0 (register 0x05) so ESC1 isn't individually addressable — each
+  ESC needs a distinct X.BUS ID (0 and 1) set in TXC-Link. Breadboard test
+  2026-05-23 had both responding, so a new-circuit wiring fault is the leading
+  suspect.
+- **Decode bug (cosmetic, not hardware):** ESC-temp prints garbage (~15898 °C)
+  because it's decoded as int16 `d[14]|d[15]<<8`. Raw bytes suggest ESC temp is
+  a single byte (~62 → 22 °C ≈ room temp). Fix the telemetry temp decode to
+  1-byte before the real `rc_test` integration; voltage decode (offset 12–13)
+  is correct.
+- **Flight firmware (`rc_test` V7.6) must be re-flashed** to restore the
+  machine after this bench check — `telem_check` is a diagnostic only.
