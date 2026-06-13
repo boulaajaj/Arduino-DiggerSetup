@@ -279,3 +279,27 @@ and rewired `dashboard/index.html` from simulation to live `/data` polling.
 - **Open:** page is opened as a local file for now (laptop). To browse straight
   to 192.168.4.1 from a phone we'd embed the page in firmware (PROGMEM) — next
   step if wanted.
+
+## 2026-06-13 — Dashboard served from board + SSE streaming (perf, #45)
+
+Field-tested on iPhone (browse to 192.168.4.1). Two fixes:
+
+- **Embedded the dashboard in firmware** (`web_page.h`, PROGMEM/flash, served at
+  `/`). Any device — phone included — browses to 192.168.4.1; no local file.
+  Page fetches same-origin so no CORS. Flash 36%, RAM unaffected (page in flash).
+- **Update rate was ~1–2 Hz, not 5 Hz** — root cause: HTTP polling opened a NEW
+  TCP connection every poll, and WiFiS3 per-connection setup is slow. **Switched
+  to Server-Sent Events (SSE):** one persistent connection, server pushes a frame
+  every 100 ms (10 Hz). `EventSource` also **auto-reconnects** after a dropout
+  (helps the breadboard). Endpoint `GET /events` (text/event-stream); `/data`
+  one-shot kept for debugging.
+- **Faster X.BUS polling:** poll gap 80→10 ms, response timeout 12→6 ms, so a
+  silent/flaky ESC barely stalls the healthy one (~30–40 Hz/ESC underlying).
+- **Removed Google Fonts @import** — on the offline AP it stalled first paint
+  (browser waiting on a fetch that can't succeed). Fixed the "loads messed up,
+  then settles after 1–2 s" behavior; system-font fallbacks render instantly.
+
+**Hardware observation (operator):** on the breadboard, one ESC's X.BUS telemetry
+intermittently drops out under vibration (telemetry stops, then returns). Suspected
+loose/unstable breadboard connection. Plan: solder the interface board (#43) to
+stabilize. Not a firmware fault — control + the other ESC keep working through it.

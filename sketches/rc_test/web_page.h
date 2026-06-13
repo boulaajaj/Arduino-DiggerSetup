@@ -6,7 +6,9 @@ const char INDEX_HTML[] PROGMEM = R"DIGGER(
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Malaki SuperTracks</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+/* Web fonts omitted on purpose: the digger AP has no internet, so an @import
+   here only stalls first paint while the browser waits for a fetch that can
+   never succeed. System fallbacks (below) render instantly. */
 *{margin:0;padding:0;box-sizing:border-box}
 
 body{background:#0a0b0f;color:#fff;font-family:'Rajdhani',sans-serif;overflow:hidden;
@@ -391,10 +393,9 @@ body{background:#0a0b0f;color:#fff;font-family:'Rajdhani',sans-serif;overflow:hi
 // When the page is served BY the Arduino (http://192.168.4.1/) it uses a
 // relative URL; when opened as a local file it targets the AP IP directly.
 const AP_IP = '192.168.4.1';
-const DATA_URL = (location.protocol === 'http:' && location.host)
-  ? '/data' : 'http://' + AP_IP + '/data';
-const POLL_MS = 200;          // 5 Hz dashboard refresh
-const STALE_MS = 1500;        // no data this long → NO LINK
+const SAME_ORIGIN = (location.protocol === 'http:' && location.host);
+const EVENTS_URL = SAME_ORIGIN ? '/events' : 'http://' + AP_IP + '/events';
+const STALE_MS = 2000;        // no data this long → NO LINK
 
 const MR=6000, GR=20, WC=0.95, a=0.30;   // RPM full-scale, gear ratio, wheel circ., needle smoothing
 const gn=['ECO','NORMAL','TURBO'], gcl=['g-eco','g-norm','g-turbo'];
@@ -474,21 +475,26 @@ function setConn(ok){
   if(dot){dot.style.background=ok?'#0f0':'#f44';dot.style.boxShadow='0 0 6px '+(ok?'#0f0':'#f44');}
 }
 
-async function poll(){
-  try{
-    const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),POLL_MS+300);
-    const r=await fetch(DATA_URL,{cache:'no-store',signal:ctl.signal});
-    clearTimeout(to);
-    const d=await r.json();
-    lastRx=Date.now(); if(!uptime0) uptime0=lastRx;
-    applyData(d); setConn(true);
-    const up=Math.floor((Date.now()-uptime0)/1000);
-    set('curTotR',Math.floor(up/60)+':'+String(up%60).padStart(2,'0'));
-  }catch(e){ setConn(false); }
+// One persistent SSE stream (auto-reconnects on a dropout — good for the
+// breadboard). Far faster than re-opening a connection every poll.
+function startStream(){
+  set('conn','CONNECTING');
+  let es;
+  try{ es = new EventSource(EVENTS_URL); }
+  catch(e){ setConn(false); return; }
+  es.onmessage = (ev)=>{
+    try{
+      const d = JSON.parse(ev.data);
+      lastRx = Date.now(); if(!uptime0) uptime0 = lastRx;
+      applyData(d); setConn(true);
+      const up = Math.floor((Date.now()-uptime0)/1000);
+      set('curTotR', Math.floor(up/60)+':'+String(up%60).padStart(2,'0'));
+    }catch(e){}
+  };
+  es.onerror = ()=>{ setConn(false); };   // browser retries the stream automatically
 }
-setInterval(poll, POLL_MS);
+startStream();
 setInterval(()=>{ if(Date.now()-lastRx>STALE_MS) setConn(false); }, 500);
-poll();
 </script>
 </body>
 </html>

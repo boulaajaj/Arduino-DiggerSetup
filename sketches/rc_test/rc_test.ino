@@ -424,8 +424,9 @@ const uint8_t  REG_TMOT   = 0x22;  // raw − 40 = °C
 const uint8_t  TELEM_REGS[] = {REG_VBAT, REG_IBUS, REG_MSPEED, REG_TESC, REG_TMOT};
 const uint8_t  TELEM_NREG    = sizeof(TELEM_REGS);
 
-const uint32_t TELEM_POLL_MS    = 80;     // gap between polls; alternating → ~6 Hz/ESC
-const uint32_t TELEM_TIMEOUT_US = 12000;  // service-read response window (spec 10ms + margin)
+const uint32_t TELEM_POLL_MS    = 10;     // short gap; alternating → ~30-40 Hz/ESC
+const uint32_t TELEM_TIMEOUT_US = 6000;   // GL10 replies in ~2-3ms; 6ms = margin + fast give-up
+                                          // on a silent ESC (so a flaky one barely stalls the good one)
 const uint32_t TELEM_STALE_MS   = 5000;   // mark invalid after this long with no good read
 
 // EMA new-sample weights. Slow signals smoothed; RPM is instantaneous.
@@ -570,6 +571,13 @@ WiFiServer wifiServer(80);
 bool     wifiUp  = false;
 uint32_t wifiSeq = 0;
 
+// Server-Sent Events: one persistent connection streams telemetry, instead of
+// the browser opening a fresh (slow) connection every poll. This is the big
+// update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
+WiFiClient     sseClient;
+uint32_t       sseLastMs = 0;
+const uint32_t SSE_INTERVAL_MS = 100;   // push live telemetry at 10 Hz
+
 // Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
 int wifiMode() {
   if (!sbusValid) return 0;
@@ -608,10 +616,11 @@ void wifiDebug(uint32_t nowUs) {
   Serial.print(" clients_seq="); Serial.println(wifiSeq);
 }
 
-void wifiSendData(WiFiClient &client) {
+// Build the telemetry JSON into body; returns its length. Shared by the
+// one-shot /data endpoint and the SSE stream.
+int buildTelemJson(char *body, size_t cap) {
   wifiSeq++;
-  char body[360];
-  int n = snprintf(body, sizeof(body),
+  return snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
     "\"outL\":%d,\"outR\":%d,"
     "\"e0\":{\"ok\":%d,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
@@ -625,7 +634,11 @@ void wifiSendData(WiFiClient &client) {
     telem[1].valid ? 1 : 0, (long)telem[1].rpmHz * 30,
     (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
     (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
+}
 
+void wifiSendData(WiFiClient &client) {
+  char body[360];
+  int n = buildTelemJson(body, sizeof(body));
   client.print(F("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                  "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
   client.print(n);
@@ -651,30 +664,52 @@ void wifiSendPage(WiFiClient &client) {
   }
 }
 
-// Non-blocking: handle at most one client per call, bounded read window.
+// Non-blocking. Accepts at most one new client per call (bounded request read),
+// and pushes a telemetry frame to the live SSE stream on its interval.
 void wifiUpdate() {
   if (!wifiUp) return;
-  WiFiClient client = wifiServer.available();
-  if (!client) return;
 
-  char line[48];
-  int  li = 0;
-  uint32_t t0 = millis();
-  bool done = false;
-  while (!done && (millis() - t0) < 20) {       // read only the request line
-    while (client.available()) {
-      char c = client.read();
-      if (c == '\n') { done = true; break; }
-      if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
+  WiFiClient client = wifiServer.available();
+  if (client) {
+    char line[48];
+    int  li = 0;
+    uint32_t t0 = millis();
+    bool done = false;
+    while (!done && (millis() - t0) < 20) {     // read only the request line
+      while (client.available()) {
+        char c = client.read();
+        if (c == '\n') { done = true; break; }
+        if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
+      }
+    }
+    line[li] = '\0';
+
+    if (strstr(line, "/events")) {
+      // Upgrade to a persistent Server-Sent Events stream.
+      if (sseClient.connected()) sseClient.stop();   // replace any stale stream
+      sseClient = client;
+      sseClient.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                        "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
+      sseLastMs = 0;                                   // push first frame immediately
+    } else if (strstr(line, "/data")) {
+      wifiSendData(client); client.flush(); client.stop();
+    } else {
+      wifiSendPage(client); client.flush(); client.stop();
     }
   }
-  line[li] = '\0';
 
-  if (strstr(line, "/data")) wifiSendData(client);
-  else                       wifiSendPage(client);   // "/" → embedded dashboard
-
-  client.flush();
-  client.stop();
+  // Stream live telemetry to the dashboard over the open SSE connection.
+  if (sseClient.connected()) {
+    uint32_t now = millis();
+    if (now - sseLastMs >= SSE_INTERVAL_MS) {
+      sseLastMs = now;
+      char body[360];
+      int n = buildTelemJson(body, sizeof(body));
+      sseClient.print(F("data: "));
+      sseClient.write((const uint8_t *)body, n);
+      sseClient.print(F("\n\n"));
+    }
+  }
 }
 
 
