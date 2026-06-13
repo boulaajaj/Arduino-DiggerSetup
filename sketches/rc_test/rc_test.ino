@@ -651,7 +651,7 @@ void wifiSendData(WiFiClient &client) {
 void wifiSendPage(WiFiClient &client) {
   size_t len = strlen(INDEX_HTML);
   client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-                 "Connection: close\r\nContent-Length: "));
+                 "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: "));
   client.print(len);
   client.print(F("\r\n\r\n"));
   const char *p = INDEX_HTML;

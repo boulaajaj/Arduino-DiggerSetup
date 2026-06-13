@@ -303,3 +303,16 @@ Field-tested on iPhone (browse to 192.168.4.1). Two fixes:
 intermittently drops out under vibration (telemetry stops, then returns). Suspected
 loose/unstable breadboard connection. Plan: solder the interface board (#43) to
 stabilize. Not a firmware fault — control + the other ESC keep working through it.
+
+### Dashboard responsiveness + direction (operator feedback)
+
+- **Value lag fixed:** numbers (RPM/speed/current) eased down slowly after stick
+  release because the dashboard applied its OWN EMA on top of the firmware's. The
+  firmware already smooths V/I/temps and sends RPM raw, so the client EMA was pure
+  lag — removed; values now render directly from the 10 Hz stream.
+- **no-store on the page** so the iPhone always loads the latest dashboard build.
+- **Direction indicators (open):** operator reports L/R arrows show the same
+  direction during a pivot (counter-rotation). Dashboard already derives each
+  arrow per-track from its own commanded output (outL→L, outR→R), which should
+  differ in a pivot — to be diagnosed against live OutL/OutR + RPM-sign data
+  before changing logic (is RPM signed on the GL10 in reverse?).

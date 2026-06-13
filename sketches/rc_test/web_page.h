@@ -445,8 +445,10 @@ function applyDir(outL,outR){
 
 function applyData(d){
   const s=v=>v/10;
-  if(d.e0.ok){eL.r=em(eL.r,d.e0.rpm);eL.c=em(eL.c,s(d.e0.cur));eL.b=em(eL.b,s(d.e0.v));eL.tE=d.e0.tE;eL.tM=d.e0.tM;}
-  if(d.e1.ok){eR.r=em(eR.r,d.e1.rpm);eR.c=em(eR.c,s(d.e1.cur));eR.b=em(eR.b,s(d.e1.v));eR.tE=d.e1.tE;eR.tM=d.e1.tM;}
+  // Render values directly — the firmware already EMA-smooths voltage/current/
+  // temps and sends RPM raw, so a second client-side EMA only adds lag.
+  if(d.e0.ok){eL.r=d.e0.rpm;eL.c=s(d.e0.cur);eL.b=s(d.e0.v);eL.tE=d.e0.tE;eL.tM=d.e0.tM;}
+  if(d.e1.ok){eR.r=d.e1.rpm;eR.c=s(d.e1.cur);eR.b=s(d.e1.v);eR.tE=d.e1.tE;eR.tM=d.e1.tM;}
 
   const gb=document.getElementById('gearBadge');
   if(gb){gb.textContent=gn[d.gear]||'--';gb.className='gear-badge '+(gcl[d.gear]||'g-norm');}
