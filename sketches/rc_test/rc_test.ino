@@ -57,6 +57,7 @@
 #include <WiFiS3.h>
 #include "sbus.h"
 #include "types.h"
+#include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -632,13 +633,22 @@ void wifiSendData(WiFiClient &client) {
   client.write((const uint8_t *)body, n);
 }
 
-void wifiSendInfo(WiFiClient &client) {
-  static const char msg[] = "Digger telemetry server up. Dashboard fetches /data (JSON).";
-  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-                 "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
-  client.print((int)(sizeof(msg) - 1));
+// Serve the embedded dashboard. Sent in chunks so one big write doesn't hog
+// the loop; the page then fetches /data itself (same origin — no CORS needed).
+void wifiSendPage(WiFiClient &client) {
+  size_t len = strlen(INDEX_HTML);
+  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+                 "Connection: close\r\nContent-Length: "));
+  client.print(len);
   client.print(F("\r\n\r\n"));
-  client.print(msg);
+  const char *p = INDEX_HTML;
+  size_t remaining = len;
+  while (remaining) {
+    size_t chunk = remaining > 1024 ? 1024 : remaining;
+    size_t w = client.write((const uint8_t *)p, chunk);
+    if (w == 0) break;          // client went away
+    p += w; remaining -= w;
+  }
 }
 
 // Non-blocking: handle at most one client per call, bounded read window.
@@ -661,7 +671,7 @@ void wifiUpdate() {
   line[li] = '\0';
 
   if (strstr(line, "/data")) wifiSendData(client);
-  else                       wifiSendInfo(client);
+  else                       wifiSendPage(client);   // "/" → embedded dashboard
 
   client.flush();
   client.stop();
