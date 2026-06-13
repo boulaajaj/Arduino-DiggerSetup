@@ -234,3 +234,23 @@ timeout), EMA-smooths V/I/temps, RPM instantaneous, 5 s per-ESC freshness watchd
   `…1` columns (integer-scaled). `live_plot.py` / `monitor.py` / dashboard
   parsers must be updated for the new columns.
 - Firmware flashed to UNO R4 WiFi / COM7 (58.9 KB, 22% flash / 26% RAM).
+
+## 2026-06-13 — BOTH ESCs telemetry confirmed under load (V7.7)
+
+After a **full power cycle** of the board (USB/board power removed + reset,
+not just the reset button), **ESC1 telemetry now responds** — both ESCs report.
+
+- Full-throttle Turbo, both tracks driven: **ESC0** V=11.7 V, I=3.3 A,
+  RPM=200 Hz, ESC 25 °C, motor 22 °C; **ESC1** V=11.7 V, I=3.2 A, RPM=197 Hz,
+  ESC 23 °C, motor 21 °C. OK0=OK1=1.
+- **Good left/right symmetry** at matched command (200 vs 197 Hz, 3.3 vs 3.2 A)
+  — bears on the open track-asymmetry item; looks balanced here.
+- **Bus current (reg 0x0D) works under load** (~3.2–3.3 A). The earlier 0.0 A
+  was genuine no-load idle, not a decode bug.
+- **RPM tracks throttle on both ESCs** (ESC0 76→200, ESC1 56→197 during ramp).
+- ESC1's prior silence was a transient bad state (likely leftover BUS_MODE from
+  the earlier 0x50 misstep), cleared by the power cycle — NOT confirmed as a
+  permanent wiring/address fix. If ESC1 goes silent again, check its X.BUS
+  yellow on the bus node and X.BUS address (reg 0x05).
+- Op note: after USB unplug, the UNO R4 WiFi only re-enumerated as COM7 after a
+  full power cycle of the ESP32-S3 USB bridge (RA4M1 reset alone didn't).
