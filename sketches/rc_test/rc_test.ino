@@ -54,6 +54,7 @@
 
 #include <Arduino.h>
 #include <Servo.h>
+#include <WiFiS3.h>
 #include "sbus.h"
 #include "types.h"
 
@@ -552,6 +553,122 @@ void telemUpdate() {
 
 
 // ═══════════════════════════════════════════════════════════════
+// [WIFI] — AP + HTTP telemetry server (WiFiS3, stock UNO R4 WiFi)
+// ═══════════════════════════════════════════════════════════════
+// Hosts a Wi-Fi access point and serves telemetry as JSON at /data for
+// the dashboard (dashboard/index.html). MONITORING ONLY — no control
+// inputs are ever accepted over Wi-Fi (safety). Engineered non-blocking:
+// one short client transaction per loop pass, a bounded request-read
+// timeout, and a tiny payload, so it doesn't disturb the control loop.
+// The Servo PWM is hardware-timed, so even a brief loop stall (e.g. a
+// client connect) cannot glitch the ESC output.
+
+const char WIFI_SSID[] = "Digger-Telemetry";
+const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
+WiFiServer wifiServer(80);
+bool     wifiUp  = false;
+uint32_t wifiSeq = 0;
+
+// Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
+int wifiMode() {
+  if (!sbusValid) return 0;
+  int ovr = rcOverride();
+  if (ovr < OVR_LO) return 0;
+  if (ovr > OVR_HI) return 2;
+  return 1;
+}
+
+void wifiInit() {
+  if (WiFi.status() == WL_NO_MODULE) {
+    if (Serial) Serial.println("# WiFi: NO MODULE — ESP32-S3 radio not responding");
+    return;
+  }
+  if (Serial) { Serial.print("# WiFi fw version: "); Serial.println(WiFi.firmwareVersion()); }
+  uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS);
+  if (Serial) { Serial.print("# beginAP returned status="); Serial.println(st); }
+  if (st == WL_AP_LISTENING) {
+    wifiUp = true;
+    wifiServer.begin();
+    if (Serial) { Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
+                  Serial.print("' UP — http://"); Serial.println(WiFi.localIP()); }
+  } else if (Serial) {
+    Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
+    Serial.println("' FAILED to start");
+  }
+}
+
+// Periodic Wi-Fi status line (every ~3 s) for bench diagnostics.
+uint32_t wifiDbgPrev = 0;
+void wifiDebug(uint32_t nowUs) {
+  if (!Serial || (nowUs - wifiDbgPrev) < 3000000UL) return;
+  wifiDbgPrev = nowUs;
+  Serial.print("# WIFI up="); Serial.print(wifiUp);
+  Serial.print(" status="); Serial.print(WiFi.status());
+  Serial.print(" clients_seq="); Serial.println(wifiSeq);
+}
+
+void wifiSendData(WiFiClient &client) {
+  wifiSeq++;
+  char body[360];
+  int n = snprintf(body, sizeof(body),
+    "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
+    "\"outL\":%d,\"outR\":%d,"
+    "\"e0\":{\"ok\":%d,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
+    "\"e1\":{\"ok\":%d,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
+    (unsigned long)millis(), (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
+    sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
+    outL, outR,
+    telem[0].valid ? 1 : 0, (long)telem[0].rpmHz * 30,
+    (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
+    (int)lroundf(telem[0].escTempC), (int)lroundf(telem[0].motorTempC),
+    telem[1].valid ? 1 : 0, (long)telem[1].rpmHz * 30,
+    (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
+    (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
+
+  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                 "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
+  client.print(n);
+  client.print(F("\r\n\r\n"));
+  client.write((const uint8_t *)body, n);
+}
+
+void wifiSendInfo(WiFiClient &client) {
+  static const char msg[] = "Digger telemetry server up. Dashboard fetches /data (JSON).";
+  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                 "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
+  client.print((int)(sizeof(msg) - 1));
+  client.print(F("\r\n\r\n"));
+  client.print(msg);
+}
+
+// Non-blocking: handle at most one client per call, bounded read window.
+void wifiUpdate() {
+  if (!wifiUp) return;
+  WiFiClient client = wifiServer.available();
+  if (!client) return;
+
+  char line[48];
+  int  li = 0;
+  uint32_t t0 = millis();
+  bool done = false;
+  while (!done && (millis() - t0) < 20) {       // read only the request line
+    while (client.available()) {
+      char c = client.read();
+      if (c == '\n') { done = true; break; }
+      if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
+    }
+  }
+  line[li] = '\0';
+
+  if (strstr(line, "/data")) wifiSendData(client);
+  else                       wifiSendInfo(client);
+
+  client.flush();
+  client.stop();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // [DEBUG] — 10 Hz serial CSV (control + telemetry)
 // ═══════════════════════════════════════════════════════════════
 // Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,
@@ -565,7 +682,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.7 — GL10 FOC + S.BUS + Gear + X.BUS telemetry (0x10) ===");
+    Serial.println("# === Digger V7.8 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -612,6 +729,7 @@ void setup() {
   outputInit();
   debugInit();
   Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
+  wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
 }
 
 void loop() {
@@ -645,6 +763,10 @@ void loop() {
   // 3.5 Telemetry — non-blocking X.BUS Read Register (0x10), read-only.
   // Never enters BUS_MODE, so it cannot affect the control output above.
   telemUpdate();
+
+  // 3.6 Wi-Fi — serve telemetry JSON to the dashboard (monitoring only).
+  wifiUpdate();
+  wifiDebug(now);
 
   // 4. Debug
   debugPrint(now);

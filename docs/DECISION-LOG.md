@@ -254,3 +254,28 @@ not just the reset button), **ESC1 telemetry now responds** — both ESCs report
   yellow on the bus node and X.BUS address (reg 0x05).
 - Op note: after USB unplug, the UNO R4 WiFi only re-enumerated as COM7 after a
   full power cycle of the ESP32-S3 USB bridge (RA4M1 reset alone didn't).
+
+## 2026-06-13 — Wi-Fi telemetry dashboard live (V7.8, #45)
+
+Added a Wi-Fi AP + HTTP telemetry server to `rc_test` ([WIFI] module, WiFiS3)
+and rewired `dashboard/index.html` from simulation to live `/data` polling.
+
+- **AP mode** SSID `Digger-Telemetry`, pass `digger12345` (WPA2), IP
+  **192.168.4.1**. `WiFi.beginAP` returns status 7 (WL_AP_LISTENING) on boot —
+  AP confirmed broadcasting; telemetry both ESCs OK while AP up.
+- **Server:** `GET /data` → compact JSON (millis `t`, `seq`, gear, mode, fs,
+  lost, outL/outR, per-ESC ok/rpm/cur/v/tE/tM, integer-scaled). CORS `*`.
+  `GET /` → plain-text info line. **Monitoring only — no control input over
+  Wi-Fi** (safety, matches #45 decision).
+- **Non-blocking design:** one client transaction per loop pass, 20 ms bounded
+  request-read window, tiny payload. Servo PWM is hardware-timed so a brief
+  loop stall can't glitch ESC output. (Heeds the RA4M1-shares-control-core
+  caveat from the 2026-06-01 analysis — kept light, ~5 Hz client poll.)
+- **Dashboard:** auto-targets `/data` when served by the board, else
+  `http://192.168.4.1/data` when opened as a local file; 5 Hz poll, NO-LINK
+  staleness watchdog, dims a stale ESC panel. RPM sent as electrical Hz ×30.
+- Flash 26% / RAM 28% (WiFiS3 included). `wifiDebug()` prints a 3 s status
+  comment line over USB during bring-up (remove once stable).
+- **Open:** page is opened as a local file for now (laptop). To browse straight
+  to 192.168.4.1 from a phone we'd embed the page in firmware (PROGMEM) — next
+  step if wanted.
