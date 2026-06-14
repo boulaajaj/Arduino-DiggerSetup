@@ -387,22 +387,24 @@ body{background:#0a0b0f;color:#fff;font-family:'Rajdhani',sans-serif;overflow:hi
 </svg>
 
 <script>
-// ── Live telemetry client ───────────────────────────────────────────
-// Polls the Arduino's /data JSON endpoint and renders both tracks.
-// When the page is served BY the Arduino (http://192.168.4.1/) it uses a
-// relative URL; when opened as a local file it targets the AP IP directly.
+// ── Live telemetry client — robust SSE with watchdog + explicit recovery ──
 const AP_IP = '192.168.4.1';
 const SAME_ORIGIN = (location.protocol === 'http:' && location.host);
 const EVENTS_URL = SAME_ORIGIN ? '/events' : 'http://' + AP_IP + '/events';
-const STALE_MS = 2000;        // no data this long → NO LINK
+const STALE_MS = 1500;          // no frame → flip to OFFLINE
+const WATCHDOG_MS = 3000;       // silent SSE → force reconnect (defeats Safari stall)
+const RECONNECT_DELAY_MS = 1500;
+const ESC_STALE_AGE_MS = 1500;  // per-ESC freshness threshold
 
-const MR=6000, GR=20, WC=0.95, a=0.30;   // RPM full-scale, gear ratio, wheel circ., needle smoothing
+const MR=6000, GR=20, WC=0.95;
 const gn=['ECO','NORMAL','TURBO'], gcl=['g-eco','g-norm','g-turbo'];
 
 let eL={r:0,c:0,b:11.4,tM:25,tE:25}, eR={r:0,c:0,b:11.2,tM:25,tE:25};
-let lastRx=0, uptime0=0;
+let outL=1500, outR=1500;
+let lastRx=0, lastFrameAt=0, uptime0=0;
+let es=null, connState='INIT', reconnectTimer=null;
+let rafScheduled=false;
 
-function em(p,n){return p+a*(n-p)}
 function bp(v){return Math.max(0,Math.min(100,((v-9)/(12.6-9))*100))}
 function bc(p){return p>50?'linear-gradient(90deg,#0c6,#4f8)':p>25?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
 function ndl(id,val,max){const e=document.getElementById(id);
@@ -410,19 +412,48 @@ function ndl(id,val,max){const e=document.getElementById(id);
 function tc(t){return t<55?'#0c6':t<80?'#fc0':'#f44'}
 function set(id,txt){const e=document.getElementById(id); if(e) e.textContent=txt;}
 
+// ── Connection state machine ──────────────────────────────────────────
+const STATE_TEXT = {INIT:'INIT', CONNECTING:'CONNECTING…', LIVE:'LIVE',
+  RECONNECTING:'RECONNECTING…', OFFLINE:'OFFLINE', ERROR:'ERROR'};
+const STATE_COLOR = {CONNECTING:'#fc0', LIVE:'#0f0', RECONNECTING:'#fa0',
+  OFFLINE:'#f44', ERROR:'#f44'};
+
+function setConnState(state, msg){
+  if(connState===state && !msg) return;
+  connState = state;
+  set('conn', STATE_TEXT[state]||state);
+  const dot=document.querySelector('.dot-live');
+  if(dot){const c=STATE_COLOR[state]||'#888';
+    dot.style.background=c; dot.style.boxShadow='0 0 6px '+c;}
+  if(msg) showBanner(msg, state==='LIVE'?'ok':'err'); else if(state==='LIVE') hideBanner();
+}
+
+function showBanner(msg, kind){
+  let b=document.getElementById('errBanner');
+  if(!b){
+    b=document.createElement('div'); b.id='errBanner';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;color:#fff;padding:6px 10px;'+
+      'font:11px sans-serif;text-align:center;z-index:9999;letter-spacing:1px';
+    document.body.appendChild(b);
+  }
+  b.style.background = kind==='ok' ? '#1f6f8b' : '#c0392b';
+  b.textContent = msg;
+  b.style.display = 'block';
+}
+function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.style.display='none';}
+
+// ── Render (rAF-throttled to avoid layout thrash if frames bunch up) ──
 function render(){
+  rafScheduled=false;
   ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c,50);
   ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c,50);
-
   set('vEL',eL.tE.toFixed(0)+'°');set('vML',eL.tM.toFixed(0)+'°');
   set('vRL',Math.round(eL.r));set('vCL',eL.c.toFixed(1)+'A');
   set('vER',eR.tE.toFixed(0)+'°');set('vMR',eR.tM.toFixed(0)+'°');
   set('vRR',Math.round(eR.r));set('vCR',eR.c.toFixed(1)+'A');
   [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
-
   set('spd',((eL.r+eR.r)/2/GR*WC*60/1000).toFixed(1));
-
   const bL=bp(eL.b),bR=bp(eR.b),bMin=Math.min(bL,bR);
   const fL=document.getElementById('batLFill'),fR=document.getElementById('batRFill');
   if(fL){fL.style.width=bL+'%';fL.style.background=bc(bL);}
@@ -430,10 +461,17 @@ function render(){
   set('batLV',eL.b.toFixed(1)+'V');set('batRV',eR.b.toFixed(1)+'V');
   set('batPct',bMin.toFixed(0)+'%');
   const bpEl=document.getElementById('batPct'); if(bpEl) bpEl.style.color=bMin>50?'#0c6':bMin>25?'#fc0':'#f44';
+  // Throttle + total + power are derived from outL/outR (always present) and
+  // current ESC EMA — recompute here so they update at render rate too.
+  set('thrL',Math.round((outL-1500)/5)+'%');
+  set('thrR',Math.round((outR-1500)/5)+'%');
+  set('curTot',(eL.c+eR.c).toFixed(1)+'A');
+  set('pwrTot',Math.round(eL.c*eL.b+eR.c*eR.b)+'W');
 }
+function scheduleRender(){if(!rafScheduled){rafScheduled=true; requestAnimationFrame(render);}}
 
-function dirArrow(out){return out>1530?1:(out<1470?-1:0);}
-function applyDir(outL,outR){
+function dirArrow(o){return o>1530?1:(o<1470?-1:0);}
+function applyDir(){
   [['dirL',dirArrow(outL)],['dirR',dirArrow(outR)]].forEach(([id,d])=>{
     const e=document.getElementById(id); if(!e) return;
     e.className='dir-arrows '+(d>0?'fwd':d<0?'rev':'off');
@@ -444,58 +482,91 @@ function applyDir(outL,outR){
 
 function applyData(d){
   const s=v=>v/10;
-  // Render values directly — the firmware already EMA-smooths voltage/current/
-  // temps and sends RPM raw, so a second client-side EMA only adds lag.
-  if(d.e0.ok){eL.r=d.e0.rpm;eL.c=s(d.e0.cur);eL.b=s(d.e0.v);eL.tE=d.e0.tE;eL.tM=d.e0.tM;}
-  if(d.e1.ok){eR.r=d.e1.rpm;eR.c=s(d.e1.cur);eR.b=s(d.e1.v);eR.tE=d.e1.tE;eR.tM=d.e1.tM;}
+  // Use the firmware-provided age field (ms) for per-ESC freshness — falls
+  // back to 0 if missing (older firmware).
+  const e0Fresh = d.e0 && d.e0.ok && (d.e0.age||0) < ESC_STALE_AGE_MS;
+  const e1Fresh = d.e1 && d.e1.ok && (d.e1.age||0) < ESC_STALE_AGE_MS;
+  if(e0Fresh){eL.r=d.e0.rpm; eL.c=s(d.e0.cur); eL.b=s(d.e0.v); eL.tE=d.e0.tE; eL.tM=d.e0.tM;}
+  if(e1Fresh){eR.r=d.e1.rpm; eR.c=s(d.e1.cur); eR.b=s(d.e1.v); eR.tE=d.e1.tE; eR.tM=d.e1.tM;}
+  outL=d.outL; outR=d.outR;
 
   const gb=document.getElementById('gearBadge');
-  if(gb){gb.textContent=gn[d.gear]||'--';gb.className='gear-badge '+(gcl[d.gear]||'g-norm');}
-
+  if(gb){gb.textContent=gn[d.gear]||'--'; gb.className='gear-badge '+(gcl[d.gear]||'g-norm');}
   const mp=document.getElementById('mRC'); if(mp) mp.className='mode-pill'+(d.mode===0?' on-rc':'');
   const mj=document.getElementById('mJoy'); if(mj) mj.className='mode-pill'+(d.mode===1?' on-joy':'');
   const mb=document.getElementById('mBlend'); if(mb) mb.className='mode-pill'+(d.mode===2?' on-blend':'');
 
-  applyDir(d.outL,d.outR);
-  set('thrL',Math.round((d.outL-1500)/5)+'%');
-  set('thrR',Math.round((d.outR-1500)/5)+'%');
-  set('curTot',(eL.c+eR.c).toFixed(1)+'A');
-  set('pwrTot',Math.round(eL.c*eL.b+eR.c*eR.b)+'W');
+  applyDir();
 
-  // Per-ESC freshness reflected on the panels (dim a stale side).
+  // Per-ESC freshness shown on the panels with last-update age (seconds)
   const pL=document.querySelector('.track-left'), pR=document.querySelector('.track-right');
-  if(pL) pL.style.opacity=d.e0.ok?'1':'0.35';
-  if(pR) pR.style.opacity=d.e1.ok?'1':'0.35';
+  if(pL){pL.style.opacity = e0Fresh?'1':'0.35';
+    pL.title = e0Fresh ? 'ESC0 live' : ('ESC0 stale '+((d.e0?.age||0)/1000).toFixed(1)+'s');}
+  if(pR){pR.style.opacity = e1Fresh?'1':'0.35';
+    pR.title = e1Fresh ? 'ESC1 live' : ('ESC1 stale '+((d.e1?.age||0)/1000).toFixed(1)+'s');}
 
-  render();
+  scheduleRender();
 }
 
-function setConn(ok){
-  set('conn', ok?'LIVE':'NO LINK');
-  const dot=document.querySelector('.dot-live');
-  if(dot){dot.style.background=ok?'#0f0':'#f44';dot.style.boxShadow='0 0 6px '+(ok?'#0f0':'#f44');}
+function handleFrame(text){
+  let d;
+  try{ d = JSON.parse(text); }
+  catch(e){ showBanner('JSON parse error: '+e.message, 'err'); return; }
+  try{
+    lastRx = Date.now(); lastFrameAt = lastRx;
+    if(!uptime0) uptime0 = lastRx;
+    applyData(d);
+    if(connState !== 'LIVE') setConnState('LIVE');
+    const up = Math.floor((Date.now()-uptime0)/1000);
+    set('curTotR', Math.floor(up/60)+':'+String(up%60).padStart(2,'0'));
+  }catch(e){ showBanner('Render error: '+(e.message||e), 'err'); }
 }
 
-// One persistent SSE stream (auto-reconnects on a dropout — good for the
-// breadboard). Far faster than re-opening a connection every poll.
-function startStream(){
-  set('conn','CONNECTING');
-  let es;
+// ── SSE connection management ─────────────────────────────────────────
+function cleanupES(){
+  if(es){ try{es.close();}catch(_){} es=null; }
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
+}
+function scheduleReconnect(){
+  if(reconnectTimer) return;
+  reconnectTimer = setTimeout(()=>{ reconnectTimer=null; connect(); }, RECONNECT_DELAY_MS);
+}
+function connect(){
+  cleanupES();
+  setConnState('CONNECTING');
   try{ es = new EventSource(EVENTS_URL); }
-  catch(e){ setConn(false); return; }
-  es.onmessage = (ev)=>{
-    try{
-      const d = JSON.parse(ev.data);
-      lastRx = Date.now(); if(!uptime0) uptime0 = lastRx;
-      applyData(d); setConn(true);
-      const up = Math.floor((Date.now()-uptime0)/1000);
-      set('curTotR', Math.floor(up/60)+':'+String(up%60).padStart(2,'0'));
-    }catch(e){}
-  };
-  es.onerror = ()=>{ setConn(false); };   // browser retries the stream automatically
+  catch(e){ setConnState('ERROR','EventSource failed: '+e.message); scheduleReconnect(); return; }
+  es.onmessage = (ev)=>handleFrame(ev.data);
+  es.onerror = ()=>{ setConnState('RECONNECTING','Connection lost. Reconnecting in '+(RECONNECT_DELAY_MS/1000)+'s…'); scheduleReconnect(); };
 }
-startStream();
-setInterval(()=>{ if(Date.now()-lastRx>STALE_MS) setConn(false); }, 500);
+
+// ── Watchdogs ─────────────────────────────────────────────────────────
+function watchdog(){
+  if(es && lastFrameAt && (Date.now()-lastFrameAt > WATCHDOG_MS)){
+    showBanner('No data for '+((Date.now()-lastFrameAt)/1000).toFixed(1)+'s — forcing reconnect', 'err');
+    cleanupES(); connect();
+  }
+}
+function staleWatch(){
+  if(connState==='LIVE' && Date.now()-lastRx > STALE_MS){
+    setConnState('OFFLINE','Stream went quiet — waiting for next frame…');
+  }
+}
+
+// ── Manual reconnect button (bottom-right) ────────────────────────────
+(function addReconnectBtn(){
+  const btn = document.createElement('button');
+  btn.textContent = '⟳ Reconnect';
+  btn.style.cssText = 'position:fixed;bottom:8px;right:8px;padding:6px 12px;background:#1f6f8b;'+
+    'color:#fff;border:1px solid #2c8db0;border-radius:5px;font:11px sans-serif;'+
+    'letter-spacing:1px;cursor:pointer;z-index:9998';
+  btn.onclick = ()=>{ hideBanner(); cleanupES(); connect(); };
+  document.body.appendChild(btn);
+})();
+
+connect();
+setInterval(staleWatch, 500);
+setInterval(watchdog, 1000);
 </script>
 </body>
 </html>

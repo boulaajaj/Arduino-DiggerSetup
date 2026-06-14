@@ -447,6 +447,14 @@ uint32_t telemReqStartUs = 0;
 uint8_t  telRx[64];
 int      telRxLen = 0;
 
+// ---- X.BUS RX byte-level diagnostics (temporary, post-solder bring-up) ----
+uint32_t telDbgRxTotal    = 0;  // total bytes ever seen on D0 (Serial1 RX)
+uint32_t telDbgEchoCount  = 0;  // count of 0x0F bytes (our own TX seen on bus)
+uint32_t telDbgSlaveCount = 0;  // count of 0xF0 bytes (ESC response header)
+uint8_t  telDbgSnap[16]   = {0};
+int      telDbgSnapLen    = 0;
+uint32_t telDbgPrintPrevMs = 0;
+
 // Checksum = low 8 bits of the sum of bytes [1 .. len-2] (header & checksum
 // excluded). Matches the framing used in the bench-confirmed xbus_master.
 uint8_t xbusChecksum(const uint8_t *f, int len) {
@@ -531,7 +539,12 @@ void telemUpdate() {
 
   // Drain available bytes every iteration (cheap).
   while (Serial1.available() && telRxLen < (int)sizeof(telRx)) {
-    telRx[telRxLen++] = Serial1.read();
+    uint8_t b = Serial1.read();
+    telRx[telRxLen++] = b;
+    telDbgRxTotal++;                                   // any byte on D0
+    if (b == XBUS_HDR_MASTER) telDbgEchoCount++;       // 0x0F = our own TX echo
+    if (b == XBUS_HDR_SLAVE)  telDbgSlaveCount++;      // 0xF0 = ESC reply
+    if (telDbgSnapLen < 16) telDbgSnap[telDbgSnapLen++] = b;
   }
 
   if (telemWaiting) {
@@ -618,24 +631,39 @@ void wifiDebug(uint32_t nowUs) {
   Serial.print("# WIFI up="); Serial.print(wifiUp);
   Serial.print(" status="); Serial.print(WiFi.status());
   Serial.print(" clients_seq="); Serial.println(wifiSeq);
+
+  // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
+  Serial.print("# XBUS rx_total="); Serial.print(telDbgRxTotal);
+  Serial.print(" echo(0x0F)=");     Serial.print(telDbgEchoCount);
+  Serial.print(" slave(0xF0)=");    Serial.print(telDbgSlaveCount);
+  Serial.print(" snap=[");
+  for (int i = 0; i < telDbgSnapLen; i++) {
+    char hex[4]; snprintf(hex, sizeof(hex), "%02X ", telDbgSnap[i]); Serial.print(hex);
+  }
+  Serial.println("]");
+  telDbgSnapLen = 0;   // reset for next window's snapshot
 }
 
 // Build the telemetry JSON into body; returns its length. Shared by the
 // one-shot /data endpoint and the SSE stream.
 int buildTelemJson(char *body, size_t cap) {
   wifiSeq++;
+  uint32_t nowMs = millis();
+  // Per-ESC age (ms since last good frame). 0 if never received.
+  uint32_t age0 = telem[0].lastGoodMs ? (nowMs - telem[0].lastGoodMs) : 999999UL;
+  uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
   return snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
     "\"outL\":%d,\"outR\":%d,"
-    "\"e0\":{\"ok\":%d,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
-    "\"e1\":{\"ok\":%d,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
-    (unsigned long)millis(), (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
+    "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
+    "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
+    (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
     sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
     outL, outR,
-    telem[0].valid ? 1 : 0, (long)telem[0].rpmHz * 30,
+    telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
     (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
     (int)lroundf(telem[0].escTempC), (int)lroundf(telem[0].motorTempC),
-    telem[1].valid ? 1 : 0, (long)telem[1].rpmHz * 30,
+    telem[1].valid ? 1 : 0, (unsigned long)age1, (long)telem[1].rpmHz * 30,
     (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
     (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
 }
@@ -703,13 +731,16 @@ void wifiUpdate() {
   }
 
   // Stream live telemetry to the dashboard over the open SSE connection.
+  // Each push starts with an SSE comment line ": hb\n" — this is a no-op for
+  // the EventSource client but exercises the TCP socket and helps prevent
+  // Safari/iOS from parking the connection in a stalled state.
   if (sseClient.connected()) {
     uint32_t now = millis();
     if (now - sseLastMs >= SSE_INTERVAL_MS) {
       sseLastMs = now;
       char body[360];
       int n = buildTelemJson(body, sizeof(body));
-      sseClient.print(F("data: "));
+      sseClient.print(F(": hb\ndata: "));
       sseClient.write((const uint8_t *)body, n);
       sseClient.print(F("\n\n"));
     }
