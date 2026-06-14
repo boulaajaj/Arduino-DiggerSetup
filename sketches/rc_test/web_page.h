@@ -101,13 +101,17 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 .vd-label{font-family:'Orbitron';font-size:0.5em;letter-spacing:2px;color:#664}
 
 /* Bottom bar */
-.bottom-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px;
-  padding:4px 8px;background:linear-gradient(180deg,#111214,#0d0e10);
+.bottom-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px;
+  padding:10px 14px;background:linear-gradient(180deg,#111214,#0d0e10);
   border-top:1px solid #2a2520}
-.bot-cell{text-align:center;padding:4px;border-radius:4px;
-  background:rgba(255,255,255,0.02);border:1px solid #1a1a1a}
-.bot-val{font-family:'Orbitron';font-size:1.1em;font-weight:700}
-.bot-label{font-family:'Orbitron';font-size:0.45em;letter-spacing:2px;color:#555;margin-top:1px}
+.bot-cell{text-align:center;padding:8px 6px;border-radius:6px;
+  background:rgba(255,255,255,0.03);border:1px solid #2a2a2a;
+  display:flex;flex-direction:column;align-items:center;gap:4px}
+.bot-val{font-family:'Orbitron';font-size:2.1em;font-weight:900;line-height:1}
+.bot-label{font-family:'Orbitron';font-size:0.6em;letter-spacing:3px;color:#888;margin-top:2px}
+.bot-bar{width:90%;height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden;
+  border:1px solid #2a2a2a;margin-top:2px}
+.bot-bar-fill{height:100%;width:0%;border-radius:3px;transition:width .15s linear}
 
 /* Battery */
 .bat-gauge{width:60px;height:28px;border:2px solid #444;border-radius:3px;
@@ -366,11 +370,30 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 </div>
 
 <div class="bottom-bar">
-  <div class="bot-cell"><div class="bot-val" id="thrL" style="color:#0cf">65%</div><div class="bot-label">THROTTLE L</div></div>
-  <div class="bot-cell"><div class="bot-val" id="curTot" style="color:#f80">46A</div><div class="bot-label">TOTAL AMPS</div></div>
-  <div class="bot-cell"><div class="bot-val" id="pwrTot" style="color:#fc0">520W</div><div class="bot-label">POWER</div></div>
-  <div class="bot-cell"><div class="bot-val" id="curTotR" style="color:#f80">--</div><div class="bot-label">UPTIME</div></div>
-  <div class="bot-cell"><div class="bot-val" id="thrR" style="color:#c8f">68%</div><div class="bot-label">THROTTLE R</div></div>
+  <div class="bot-cell">
+    <div class="bot-val" id="thrL" style="color:#0cf">0%</div>
+    <div class="bot-bar"><div class="bot-bar-fill" id="thrLBar" style="background:linear-gradient(90deg,#1f6f8b,#0cf)"></div></div>
+    <div class="bot-label">THROTTLE L</div>
+  </div>
+  <div class="bot-cell">
+    <div class="bot-val" id="curTot" style="color:#f80">0A</div>
+    <div class="bot-bar"><div class="bot-bar-fill" id="curTotBar" style="background:linear-gradient(90deg,#f80,#fc0)"></div></div>
+    <div class="bot-label">TOTAL AMPS</div>
+  </div>
+  <div class="bot-cell">
+    <div class="bot-val" id="pwrTot" style="color:#fc0">0W</div>
+    <div class="bot-bar"><div class="bot-bar-fill" id="pwrTotBar" style="background:linear-gradient(90deg,#fc0,#f44)"></div></div>
+    <div class="bot-label">TOTAL POWER</div>
+  </div>
+  <div class="bot-cell">
+    <div class="bot-val" id="curTotR" style="color:#aaa">0:00</div>
+    <div class="bot-label" style="margin-top:8px">UPTIME</div>
+  </div>
+  <div class="bot-cell">
+    <div class="bot-val" id="thrR" style="color:#c8f">0%</div>
+    <div class="bot-bar"><div class="bot-bar-fill" id="thrRBar" style="background:linear-gradient(90deg,#7a3f8a,#c8f)"></div></div>
+    <div class="bot-label">THROTTLE R</div>
+  </div>
 </div>
 
 </div>
@@ -473,12 +496,20 @@ function render(){
   set('batLPct',bL.toFixed(0)+'%'); set('batRPct',bR.toFixed(0)+'%');
   const lpEl=document.getElementById('batLPct'); if(lpEl) lpEl.style.color=batColor(bL);
   const rpEl=document.getElementById('batRPct'); if(rpEl) rpEl.style.color=batColor(bR);
-  // Throttle + total + power are derived from outL/outR (always present) and
-  // current ESC EMA — recompute here so they update at render rate too.
-  set('thrL',Math.round((outL-1500)/5)+'%');
-  set('thrR',Math.round((outR-1500)/5)+'%');
-  set('curTot',(eL.c+eR.c).toFixed(1)+'A');
-  set('pwrTot',Math.round(eL.c*eL.b+eR.c*eR.b)+'W');
+  // Bottom row — values + bar gauges. Throttle is signed (-100..+100), bar
+  // fills by magnitude. Amps/Watts scaled to typical driving range.
+  const tL = Math.round((outL-1500)/5), tR = Math.round((outR-1500)/5);
+  set('thrL', tL+'%'); set('thrR', tR+'%');
+  const AMPS_MAX = 60, WATTS_MAX = 1500;
+  const amps = eL.c+eR.c, watts = eL.c*eL.b + eR.c*eR.b;
+  set('curTot', amps.toFixed(1)+'A');
+  set('pwrTot', Math.round(watts)+'W');
+  const setBar=(id,pct)=>{const e=document.getElementById(id);
+    if(e) e.style.width = Math.max(0,Math.min(100,pct))+'%';};
+  setBar('thrLBar', Math.abs(tL));
+  setBar('thrRBar', Math.abs(tR));
+  setBar('curTotBar', amps/AMPS_MAX*100);
+  setBar('pwrTotBar', watts/WATTS_MAX*100);
 }
 function scheduleRender(){if(!rafScheduled){rafScheduled=true; requestAnimationFrame(render);}}
 
