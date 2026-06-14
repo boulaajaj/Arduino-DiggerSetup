@@ -120,6 +120,10 @@ const float EXPO_THROTTLE_CUBIC  = 0.6f;
 const float EXPO_STEER_LINEAR    = 0.7f;
 const float EXPO_STEER_CUBIC     = 0.3f;
 
+// Joystick steering polarity: -1.0f to flip left/right (set after the
+// operator-side cable was rewired and right-stick produced a left turn).
+const float JOY_STEER_DIR = -1.0f;
+
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
@@ -341,7 +345,7 @@ void updateJoystick(uint32_t now) {
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
-  cachedJoy.zRotation = signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
+  cachedJoy.zRotation = JOY_STEER_DIR * signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;

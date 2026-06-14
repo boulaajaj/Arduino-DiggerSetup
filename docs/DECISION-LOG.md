@@ -316,3 +316,26 @@ stabilize. Not a firmware fault — control + the other ESC keep working through
   arrow per-track from its own commanded output (outL→L, outR→R), which should
   differ in a pivot — to be diagnosed against live OutL/OutR + RPM-sign data
   before changing logic (is RPM signed on the GL10 in reverse?).
+
+## 2026-06-14 — Interface board soldered + back together
+
+- **Solder build complete.** Machine reassembled with the soldered interface
+  board (replaces the breadboard). Standalone power confirmed: Left ESC BEC
+  (7.4 V) → 9-pin cable yellow thick wire → Arduino barrel jack → buck →
+  board powers up without USB.
+- **S.BUS inverter circuit confirmed working** on the soldered board with
+  R3 = **1 kΩ** (NOT the documented 10 kΩ; field-verified working). Math:
+  drives Q1 base ~2.6 mA vs 0.26 mA at 10 k — well above saturation needs,
+  storage-time slowdown at 100 kbaud S.BUS is negligible. 10 kΩ preferred
+  on new builds (lighter receiver load); current 1 kΩ acceptable to keep.
+- **X.BUS telemetry confirmed working** on the soldered board: both ESCs
+  reporting (V0=11.6 V, V1=11.5 V; RPM tracking; temps 22–25 °C; OK0=OK1=1).
+- **2N3904 orientation confirmed** for this build: flat side **facing AWAY**
+  from operator → from operator's view, legs L→R are **C / B / E**.
+- **Joystick cable rewiring:** Y axis cable flipped on board side to correct
+  forward/backward polarity (was reading ~5100 instead of ~8192 at rest;
+  re-orientation restored ~8192 center). After Y fix, X (steering) was
+  inverted.
+- **JOY_STEER_DIR = -1.0f** added to `rc_test.ino` `[CONFIG]` and applied
+  to joystick X (steering only — RC steering unchanged). Right stick now
+  turns right. Field-verified by operator.
