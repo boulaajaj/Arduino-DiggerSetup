@@ -134,8 +134,8 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
   text-shadow:0 0 15px rgba(255,255,255,0.3)}
 
 /* Gear badge */
-.gear-badge{display:inline-block;padding:2px 10px;font-family:'Orbitron';font-size:0.55em;
-  font-weight:700;letter-spacing:2px;border:1px solid;border-radius:2px;margin-top:1px}
+.gear-badge{display:inline-block;padding:6px 18px;font-family:'Orbitron';font-size:1.2em;
+  font-weight:900;letter-spacing:4px;border:2px solid;border-radius:4px;margin-top:6px}
 .g-eco{color:#0c6;border-color:#0c6;background:rgba(0,200,100,0.08)}
 .g-norm{color:#fc0;border-color:#fc0;background:rgba(255,200,0,0.08)}
 .g-turbo{color:#f44;border-color:#f44;background:rgba(255,60,60,0.08);animation:tp .5s infinite}
