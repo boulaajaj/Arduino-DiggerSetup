@@ -277,12 +277,15 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
       <div style="display:flex;gap:10px;justify-content:center;align-items:center">
         <div>
           <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#555;margin-top:1px">L <span id="batLV">11.4V</span></div>
+          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
+            L · <span id="batLV">11.4V</span> · <span id="batLPct" style="color:#0c6;font-weight:900;font-size:1.4em">82%</span>
+          </div>
         </div>
-        <div style="font-family:Orbitron;font-size:1.4em;font-weight:900;color:#0c6" id="batPct">82%</div>
         <div>
           <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#555;margin-top:1px">R <span id="batRV">11.2V</span></div>
+          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
+            R · <span id="batRV">11.2V</span> · <span id="batRPct" style="color:#0c6;font-weight:900;font-size:1.4em">78%</span>
+          </div>
         </div>
       </div>
       <div style="font-family:Orbitron;font-size:0.45em;color:#553;letter-spacing:2px;margin-top:2px">BATTERY</div>
@@ -453,14 +456,22 @@ function render(){
   set('vRR',Math.round(eR.r));set('vCR',eR.c.toFixed(1)+'A');
   [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
-  set('spd',((eL.r+eR.r)/2/GR*WC*60/1000).toFixed(1));
-  const bL=bp(eL.b),bR=bp(eR.b),bMin=Math.min(bL,bR);
-  const fL=document.getElementById('batLFill'),fR=document.getElementById('batRFill');
-  if(fL){fL.style.width=bL+'%';fL.style.background=bc(bL);}
-  if(fR){fR.style.width=bR+'%';fR.style.background=bc(bR);}
-  set('batLV',eL.b.toFixed(1)+'V');set('batRV',eR.b.toFixed(1)+'V');
-  set('batPct',bMin.toFixed(0)+'%');
-  const bpEl=document.getElementById('batPct'); if(bpEl) bpEl.style.color=bMin>50?'#0c6':bMin>25?'#fc0':'#f44';
+  // Vehicle speed — average of SIGNED per-track velocities. A 360 pivot
+  // (one track fwd, one rev) averages to ~0; 30%+100% fwd averages to ~65%.
+  const sL = outL>1530?1:(outL<1470?-1:0), sR = outR>1530?1:(outR<1470?-1:0);
+  const vehKmh = Math.abs((eL.r*sL + eR.r*sR)/2 / GR * WC * 60/1000);
+  set('spd', vehKmh.toFixed(1));
+
+  // Per-battery percentages — each gets its own number and indicator color
+  const bL=bp(eL.b), bR=bp(eR.b);
+  const batColor = p => p>50?'#0c6' : p>25?'#fc0' : '#f44';
+  const fL=document.getElementById('batLFill'), fR=document.getElementById('batRFill');
+  if(fL){fL.style.width=bL+'%'; fL.style.background=bc(bL);}
+  if(fR){fR.style.width=bR+'%'; fR.style.background=bc(bR);}
+  set('batLV',eL.b.toFixed(1)+'V'); set('batRV',eR.b.toFixed(1)+'V');
+  set('batLPct',bL.toFixed(0)+'%'); set('batRPct',bR.toFixed(0)+'%');
+  const lpEl=document.getElementById('batLPct'); if(lpEl) lpEl.style.color=batColor(bL);
+  const rpEl=document.getElementById('batRPct'); if(rpEl) rpEl.style.color=batColor(bR);
   // Throttle + total + power are derived from outL/outR (always present) and
   // current ESC EMA — recompute here so they update at render rate too.
   set('thrL',Math.round((outL-1500)/5)+'%');
