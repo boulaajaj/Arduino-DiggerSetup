@@ -11,11 +11,16 @@ const char INDEX_HTML[] PROGMEM = R"DIGGER(
    never succeed. System fallbacks (below) render instantly. */
 *{margin:0;padding:0;box-sizing:border-box}
 
-body{background:#0a0b0f;color:#fff;font-family:'Rajdhani',sans-serif;overflow:hidden;
-  height:100vh;width:100vw;display:flex;flex-direction:column}
+/* Fixed-ratio dashboard: 1280x720 stage scaled to fit viewport (letterbox in
+   portrait, fill in landscape). NOT responsive — internal layout is locked. */
+html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',sans-serif;
+  overflow:hidden;height:100vh;width:100vw;
+  display:flex;align-items:center;justify-content:center}
 
-/* Metallic dark panel background via CSS gradient */
-.dash-frame{flex:1;position:relative;
+.dash-frame{
+  width:1280px;height:720px;flex:none;position:relative;
+  transform-origin:center center;          /* JS sets transform:scale(...) */
+  display:flex;flex-direction:column;
   background:
     radial-gradient(ellipse at 50% 0%, rgba(60,50,30,0.15) 0%, transparent 50%),
     linear-gradient(180deg, #111214 0%, #0d0e10 30%, #0a0b0d 100%);
@@ -133,12 +138,7 @@ body{background:#0a0b0f;color:#fff;font-family:'Rajdhani',sans-serif;overflow:hi
 @keyframes tp{50%{box-shadow:0 0 12px rgba(255,60,60,0.4)}}
 
 /* Responsive */
-@media(max-width:700px){
-  .main{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}
-  .center-col{grid-column:1/-1;grid-row:1;flex-direction:row;justify-content:center;gap:20px}
-  .gauge-wrap{width:90px;height:90px}
-  .bottom-bar{grid-template-columns:1fr 1fr 1fr}
-}
+/* Responsive media query removed — stage is fixed 1280x720, viewport-scaled. */
 </style>
 </head>
 <body>
@@ -398,7 +398,7 @@ const RECONNECT_DELAY_MS = 1500;
 const ESC_STALE_AGE_MS = 1500;  // per-ESC freshness threshold
 
 const MR=6000, GR=20, WC=0.95;
-const gn=['ECO','NORMAL','TURBO'], gcl=['g-eco','g-norm','g-turbo'];
+const gn=['ECO','NORMAL','BOOST'], gcl=['g-eco','g-norm','g-turbo'];
 
 let eL={r:0,c:0,b:11.4,tM:25,tE:25}, eR={r:0,c:0,b:11.2,tM:25,tE:25};
 let outL=1500, outR=1500;
@@ -568,6 +568,21 @@ function staleWatch(){
 connect();
 setInterval(staleWatch, 500);
 setInterval(watchdog, 1000);
+
+// ── Fixed-ratio stage fitter ─────────────────────────────────────────
+// The .dash-frame is fixed at 1280x720. We scale it uniformly so the
+// shorter viewport dimension fits, then center it. Landscape fills the
+// screen; portrait shrinks to fit the width and leaves empty space top/bot.
+function fitStage(){
+  const stage = document.querySelector('.dash-frame');
+  if(!stage) return;
+  const BW=1280, BH=720;
+  const s = Math.min(window.innerWidth/BW, window.innerHeight/BH);
+  stage.style.transform = 'scale(' + s + ')';
+}
+window.addEventListener('resize', fitStage);
+window.addEventListener('orientationchange', ()=>setTimeout(fitStage, 50));
+fitStage();
 </script>
 </body>
 </html>

@@ -132,9 +132,9 @@ const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 //   MID  → 70% wheel speed cap   (normal driving)
 //   HIGH → 100% wheel speed cap  (full throttle authority)
 // Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
-const float GEAR_LOW_SCALE  = 0.40f;  // Eco
-const float GEAR_MID_SCALE  = 0.65f;  // Normal
-const float GEAR_HIGH_SCALE = 1.00f;  // Turbo
+const float GEAR_LOW_SCALE  = 0.55f;  // Eco   (was 0.40 — bumped 2026-06-14 for low-end torque)
+const float GEAR_MID_SCALE  = 0.70f;  // Normal (was 0.65)
+const float GEAR_HIGH_SCALE = 1.00f;  // Boost
 
 // Eco gets +5pp authority on reverse and pivot caps so the operator can
 // still maneuver in tight spaces. Forward stays at GEAR_LOW_SCALE (40%).
