@@ -339,3 +339,27 @@ stabilize. Not a firmware fault — control + the other ESC keep working through
 - **JOY_STEER_DIR = -1.0f** added to `rc_test.ino` `[CONFIG]` and applied
   to joystick X (steering only — RC steering unchanged). Right stick now
   turns right. Field-verified by operator.
+
+## 2026-06-15 — Wi-Fi self-drive root cause + telemetry-dropout discriminator
+
+- **Committed flight firmware (`rc_test` V7.8, PR #50) has NO Wi-Fi→motor
+  path.** Code trace: the only writes to the ESCs (`outputWrite` →
+  `escL/escR.writeMicroseconds`) are fed solely by S.BUS (RC) and the
+  joystick ADC. `wifiUpdate()` serves `/`, `/data`, `/events` (SSE) only and
+  never touches motor output; the dashboard pages contain no command/POST
+  code. Failsafe holds neutral (SVC) when S.BUS is invalid.
+- **Reported "digger moves by itself when the dashboard opens" came from an
+  uncommitted local build**, not in git and not in FIRMWARE-UPLOAD-LOG (last
+  logged flash = 0875a87, monitoring-only). Remediation: reflash the committed
+  monitoring-only firmware from PR #50 (check out the branch first — the
+  dangerous build may still be in the working copy).
+- **Telemetry-dropout discriminator:** when control-derived fields
+  (throttle/dir/gear/mode) keep updating in the dashboard while only
+  RPM/temp/V/I go stale (panels dim to 0.35), the SSE/Wi-Fi link is healthy
+  and the **X.BUS half-duplex bus (D0/D1) is dropping** — not Wi-Fi. A Wi-Fi
+  loss would freeze the whole stream and trip the OFFLINE banner. Confirms the
+  #43 breadboard-vibration X.BUS dropout; fix is the interface-board solder,
+  not firmware.
+- **DECISION: Wi-Fi telemetry stays monitoring-only, permanently.** No path
+  from Wi-Fi to motor output. PR #50 to be hardened (single-source page, debug
+  cruft removed) after it merges to main.
