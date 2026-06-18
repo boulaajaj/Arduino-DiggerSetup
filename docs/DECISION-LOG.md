@@ -150,3 +150,242 @@ Option C is insufficient. Chosen path:
   GND + Download pins to a **panel-mounted switch/header** on the enclosure.
   Then the cycle = flip switch + USB + run script (`arduino-cli`/`espflash`),
   no disassembly. Switch is the only manual step; flashing is scriptable.
+
+## 2026-06-11 — Telemetry bring-up bench check (issue #36) — pre-flash baseline
+
+Goal this session: verify X.BUS telemetry comes through from BOTH GL10 ESCs
+on the new (post-migration) circuit, before enabling it over Wi-Fi (#45).
+Scope intentionally limited to docs/memory/issue — no sketch or control changes.
+
+- **Board confirmed:** Arduino UNO R4 WiFi on **COM7** (`arduino-cli board list`).
+  Nano R4 → UNO R4 WiFi migration is complete; CLAUDE.md still lists the old
+  Nano R4 / COM8 (stale, not corrected this session).
+- **Flashed sketch = `rc_test` V7.6 (PWM-only), UNCHANGED.** Working tree clean
+  (only untracked `dashboard/index.html`, unrelated #45 work). No edits to
+  `rc_test.ino` or any control code. Control logic intact.
+- **Live CSV columns are `RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost`.**
+  The trailing `0,0,0` are Gear/Failsafe-count/Lost-frames — **NOT telemetry.**
+  `rc_test` does not poll X.BUS, so nothing reads the telemetry line yet.
+- **Control side healthy:** S.BUS FS=0 / Lost=0 over a multi-second capture;
+  RC channels live, joysticks centered (~8192 on 14-bit ADC), OutL/OutR mixing
+  on D9/D10.
+- **Telemetry NOT yet verified.** The circuit is wired on **D0/D1 (Serial1)**,
+  unchanged through the migration, but cannot be confirmed until a poll sketch
+  is flashed. Verification is the next step (deferred — no flash this session).
+- **#36 "Options to evaluate" (bridge MCU / relocate S.BUS / switch board) are
+  OBSOLETE.** They assumed Nano R4 UART scarcity. On UNO R4 WiFi both hardware
+  UARTs are free: **Serial1 (D0/D1) → X.BUS @ 115200**, **sbusUart (SCI0/D12)
+  → S.BUS**. Go straight to the telemetry scope.
+- **Confirmed telemetry approach (unchanged from plan):** Read Register (func
+  **0x10**), NOT Throttle (0x50 forces BUS_MODE and fights PWM). Registers
+  0x0C VbatBus, 0x20 mos-Tem, 0x22 mot-Tem, 0x02 motSpeed (RPM). 1 Hz
+  alternating per ESC, EMA + freshness watchdog. Note: 0x10 is documented-safe
+  but **not yet confirmed on GL10 hardware** (only 0x50 has been, on breadboard
+  2026-05-23) — flashing a 0x10 poller doubles as that confirmation.
+- **Issue alignment:** work = **#36** (restore telemetry) → **#45** (Wi-Fi
+  dashboard). **#48** (ESP32-S3 / Giga black-box logging architecture) is
+  explicitly set aside — not part of this work.
+
+### Telemetry TEST RESULT (flashed `sketches/telem_check`, read-only)
+
+Flashed a read-only telemetry tool (proven 0x50 framing, **throttle hard-wired
+to 0** — never drives motors) to confirm the new circuit. Motors did not move
+(Thr_out=0%, RPM=0 throughout).
+
+- **ESC0: telemetry confirmed working.** V=**11.9 V** (plausible 3S at rest),
+  status flags **BUS_MODE + CAP_CHARGED**, frames steady. The X.BUS link on
+  D0/D1 (Serial1) on the UNO R4 WiFi works.
+- **ESC1: NO RESPONSE** — "no data yet" for the entire run. Good/Bad frame
+  ratio held ~50/50 (every poll targeting ESC1 timed out), confirming exactly
+  one of two ESCs answers.
+- **Likely causes for ESC1 (to chase next):** (a) ESC1's X.BUS yellow not
+  landed on the bus node / cold joint on the new board, or (b) both ESCs share
+  X.BUS address 0 (register 0x05) so ESC1 isn't individually addressable — each
+  ESC needs a distinct X.BUS ID (0 and 1) set in TXC-Link. Breadboard test
+  2026-05-23 had both responding, so a new-circuit wiring fault is the leading
+  suspect.
+- **Decode bug (cosmetic, not hardware):** ESC-temp prints garbage (~15898 °C)
+  because it's decoded as int16 `d[14]|d[15]<<8`. Raw bytes suggest ESC temp is
+  a single byte (~62 → 22 °C ≈ room temp). Fix the telemetry temp decode to
+  1-byte before the real `rc_test` integration; voltage decode (offset 12–13)
+  is correct.
+- **Flight firmware (`rc_test` V7.6) must be re-flashed** to restore the
+  machine after this bench check — `telem_check` is a diagnostic only.
+
+### V7.7 — telemetry integrated into flight firmware (telemetry WITH control)
+
+Added non-blocking X.BUS **Read Register (0x10)** polling into `rc_test`
+(`[TELEMETRY]` module on `Serial1`/D0-D1). Read-only — 0x10 is point-to-point
+service control, never enters BUS_MODE, so PWM/S.BUS control authority is fully
+preserved. Polls ESC0/ESC1 alternately ~6 Hz each (80 ms gap, 12 ms non-blocking
+timeout), EMA-smooths V/I/temps, RPM instantaneous, 5 s per-ESC freshness watchdog.
+
+- **0x10 CONFIRMED WORKING on GL10** (first time — previously only 0x50 was).
+  ESC0 returns clean values: **V=11.9 V, ESC 28 °C, motor 22 °C, RPM tracking
+  throttle (7→38 Hz electrical as stick went 1766→2000 µs).** Per-register 0x10
+  decode also fixes the bogus temp seen via 0x50 — temps now read room-plausible.
+- **Control fully intact alongside telemetry:** FS=0 / Lost=0, OutL/OutR follow
+  the stick. Confirms telemetry-with-control is real (not telemetry-only).
+- **ESC1 still silent** (OK1=0) — same as the read-only bench test. Blocks
+  per-track capture of the 2nd track. Chase: ESC1 X.BUS yellow on the bus node,
+  or distinct X.BUS address (reg 0x05) — both ESCs may be at default addr 0.
+- **Bus current reads 0.0 A** at idle/unloaded — verify under load (reg 0x0D).
+- **CSV format changed** (V7.7): appended `V0dV,I0dA,RPM0,TE0,TM0,OK0` +
+  `…1` columns (integer-scaled). `live_plot.py` / `monitor.py` / dashboard
+  parsers must be updated for the new columns.
+- Firmware flashed to UNO R4 WiFi / COM7 (58.9 KB, 22% flash / 26% RAM).
+
+## 2026-06-13 — BOTH ESCs telemetry confirmed under load (V7.7)
+
+After a **full power cycle** of the board (USB/board power removed + reset,
+not just the reset button), **ESC1 telemetry now responds** — both ESCs report.
+
+- Full-throttle Turbo, both tracks driven: **ESC0** V=11.7 V, I=3.3 A,
+  RPM=200 Hz, ESC 25 °C, motor 22 °C; **ESC1** V=11.7 V, I=3.2 A, RPM=197 Hz,
+  ESC 23 °C, motor 21 °C. OK0=OK1=1.
+- **Good left/right symmetry** at matched command (200 vs 197 Hz, 3.3 vs 3.2 A)
+  — bears on the open track-asymmetry item; looks balanced here.
+- **Bus current (reg 0x0D) works under load** (~3.2–3.3 A). The earlier 0.0 A
+  was genuine no-load idle, not a decode bug.
+- **RPM tracks throttle on both ESCs** (ESC0 76→200, ESC1 56→197 during ramp).
+- ESC1's prior silence was a transient bad state (likely leftover BUS_MODE from
+  the earlier 0x50 misstep), cleared by the power cycle — NOT confirmed as a
+  permanent wiring/address fix. If ESC1 goes silent again, check its X.BUS
+  yellow on the bus node and X.BUS address (reg 0x05).
+- Op note: after USB unplug, the UNO R4 WiFi only re-enumerated as COM7 after a
+  full power cycle of the ESP32-S3 USB bridge (RA4M1 reset alone didn't).
+
+## 2026-06-13 — Wi-Fi telemetry dashboard live (V7.8, #45)
+
+Added a Wi-Fi AP + HTTP telemetry server to `rc_test` ([WIFI] module, WiFiS3)
+and rewired `dashboard/index.html` from simulation to live `/data` polling.
+
+- **AP mode** SSID `Digger-Telemetry`, pass `digger12345` (WPA2), IP
+  **192.168.4.1**. `WiFi.beginAP` returns status 7 (WL_AP_LISTENING) on boot —
+  AP confirmed broadcasting; telemetry both ESCs OK while AP up.
+- **Server:** `GET /data` → compact JSON (millis `t`, `seq`, gear, mode, fs,
+  lost, outL/outR, per-ESC ok/rpm/cur/v/tE/tM, integer-scaled). CORS `*`.
+  `GET /` → plain-text info line. **Monitoring only — no control input over
+  Wi-Fi** (safety, matches #45 decision).
+- **Non-blocking design:** one client transaction per loop pass, 20 ms bounded
+  request-read window, tiny payload. Servo PWM is hardware-timed so a brief
+  loop stall can't glitch ESC output. (Heeds the RA4M1-shares-control-core
+  caveat from the 2026-06-01 analysis — kept light, ~5 Hz client poll.)
+- **Dashboard:** auto-targets `/data` when served by the board, else
+  `http://192.168.4.1/data` when opened as a local file; 5 Hz poll, NO-LINK
+  staleness watchdog, dims a stale ESC panel. RPM sent as electrical Hz ×30.
+- Flash 26% / RAM 28% (WiFiS3 included). `wifiDebug()` prints a 3 s status
+  comment line over USB during bring-up (remove once stable).
+- **Open:** page is opened as a local file for now (laptop). To browse straight
+  to 192.168.4.1 from a phone we'd embed the page in firmware (PROGMEM) — next
+  step if wanted.
+
+## 2026-06-13 — Dashboard served from board + SSE streaming (perf, #45)
+
+Field-tested on iPhone (browse to 192.168.4.1). Two fixes:
+
+- **Embedded the dashboard in firmware** (`web_page.h`, PROGMEM/flash, served at
+  `/`). Any device — phone included — browses to 192.168.4.1; no local file.
+  Page fetches same-origin so no CORS. Flash 36%, RAM unaffected (page in flash).
+- **Update rate was ~1–2 Hz, not 5 Hz** — root cause: HTTP polling opened a NEW
+  TCP connection every poll, and WiFiS3 per-connection setup is slow. **Switched
+  to Server-Sent Events (SSE):** one persistent connection, server pushes a frame
+  every 100 ms (10 Hz). `EventSource` also **auto-reconnects** after a dropout
+  (helps the breadboard). Endpoint `GET /events` (text/event-stream); `/data`
+  one-shot kept for debugging.
+- **Faster X.BUS polling:** poll gap 80→10 ms, response timeout 12→6 ms, so a
+  silent/flaky ESC barely stalls the healthy one (~30–40 Hz/ESC underlying).
+- **Removed Google Fonts @import** — on the offline AP it stalled first paint
+  (browser waiting on a fetch that can't succeed). Fixed the "loads messed up,
+  then settles after 1–2 s" behavior; system-font fallbacks render instantly.
+
+**Hardware observation (operator):** on the breadboard, one ESC's X.BUS telemetry
+intermittently drops out under vibration (telemetry stops, then returns). Suspected
+loose/unstable breadboard connection. Plan: solder the interface board (#43) to
+stabilize. Not a firmware fault — control + the other ESC keep working through it.
+
+### Dashboard responsiveness + direction (operator feedback)
+
+- **Value lag fixed:** numbers (RPM/speed/current) eased down slowly after stick
+  release because the dashboard applied its OWN EMA on top of the firmware's. The
+  firmware already smooths V/I/temps and sends RPM raw, so the client EMA was pure
+  lag — removed; values now render directly from the 10 Hz stream.
+- **no-store on the page** so the iPhone always loads the latest dashboard build.
+- **Direction indicators (open):** operator reports L/R arrows show the same
+  direction during a pivot (counter-rotation). Dashboard already derives each
+  arrow per-track from its own commanded output (outL→L, outR→R), which should
+  differ in a pivot — to be diagnosed against live OutL/OutR + RPM-sign data
+  before changing logic (is RPM signed on the GL10 in reverse?).
+
+## 2026-06-14 — Interface board soldered + back together
+
+- **Solder build complete.** Machine reassembled with the soldered interface
+  board (replaces the breadboard). Standalone power confirmed: Left ESC BEC
+  (7.4 V) → 9-pin cable yellow thick wire → Arduino barrel jack → buck →
+  board powers up without USB.
+- **S.BUS inverter circuit confirmed working** on the soldered board with
+  R3 = **1 kΩ** (NOT the documented 10 kΩ; field-verified working). Math:
+  drives Q1 base ~2.6 mA vs 0.26 mA at 10 k — well above saturation needs,
+  storage-time slowdown at 100 kbaud S.BUS is negligible. 10 kΩ preferred
+  on new builds (lighter receiver load); current 1 kΩ acceptable to keep.
+- **X.BUS telemetry confirmed working** on the soldered board: both ESCs
+  reporting (V0=11.6 V, V1=11.5 V; RPM tracking; temps 22–25 °C; OK0=OK1=1).
+- **2N3904 orientation confirmed** for this build: flat side **facing AWAY**
+  from operator → from operator's view, legs L→R are **C / B / E**.
+- **Joystick cable rewiring:** Y axis cable flipped on board side to correct
+  forward/backward polarity (was reading ~5100 instead of ~8192 at rest;
+  re-orientation restored ~8192 center). After Y fix, X (steering) was
+  inverted.
+- **JOY_STEER_DIR = -1.0f** added to `rc_test.ino` `[CONFIG]` and applied
+  to joystick X (steering only — RC steering unchanged). Right stick now
+  turns right. Field-verified by operator.
+
+## 2026-06-15 — Wi-Fi self-drive root cause + telemetry-dropout discriminator
+
+- **Committed flight firmware (`rc_test` V7.8, PR #50) has NO Wi-Fi→motor
+  path.** Code trace: the only writes to the ESCs (`outputWrite` →
+  `escL/escR.writeMicroseconds`) are fed solely by S.BUS (RC) and the
+  joystick ADC. `wifiUpdate()` serves `/`, `/data`, `/events` (SSE) only and
+  never touches motor output; the dashboard pages contain no command/POST
+  code. Failsafe holds neutral (SVC) when S.BUS is invalid.
+- **Reported "digger moves by itself when the dashboard opens" came from an
+  uncommitted local build**, not in git and not in FIRMWARE-UPLOAD-LOG (last
+  logged flash = 0875a87, monitoring-only). Remediation: reflash the committed
+  monitoring-only firmware from PR #50 (check out the branch first — the
+  dangerous build may still be in the working copy).
+- **Telemetry-dropout discriminator:** when control-derived fields
+  (throttle/dir/gear/mode) keep updating in the dashboard while only
+  RPM/temp/V/I go stale (panels dim to 0.35), the SSE/Wi-Fi link is healthy
+  and the **X.BUS half-duplex bus (D0/D1) is dropping** — not Wi-Fi. A Wi-Fi
+  loss would freeze the whole stream and trip the OFFLINE banner. Confirms the
+  #43 breadboard-vibration X.BUS dropout; fix is the interface-board solder,
+  not firmware.
+- **DECISION: Wi-Fi telemetry stays monitoring-only, permanently.** No path
+  from Wi-Fi to motor output. PR #50 to be hardened (single-source page, debug
+  cruft removed) after it merges to main.
+
+## 2026-06-18 — PR #50 lint/safety pass (zero-risk only; driving untouched)
+
+Cleared the 3 failing CI lint checks + 2 review-bot findings WITHOUT changing
+any tested driving behavior. Both sketches recompile clean (rc_test 39% flash /
+29% RAM; telem_check 20%).
+
+- **`rc_test.ino` (flight) — only 2 edits, both behavior-neutral:**
+  (1) 3× `(const uint8_t *)` → `reinterpret_cast<const uint8_t *>` in the Wi-Fi
+  `client.write`/`sseClient.write` calls (cppcheck cstyleCast; identical machine
+  code). (2) `snprintf` return clamped in `buildTelemJson()` so callers never
+  read past the 360 B buffer (CodeRabbit "critical"; a no-op unless a frame ever
+  overflows — it currently does not). **No change to control loop, mixing, expo,
+  gear caps, S.BUS, joystick, servo PWM, X.BUS polling, or telemetry values.**
+- **`telem_check.ino` (bench tool, never flashed to the machine):** fixed
+  garbage ESC-temp display (2-byte → 1-byte `d[14]`, per 2026-06-11 finding) +
+  cpplint whitespace reformatting. Display/format only.
+- **`INTERFACE-BOARD-PERFBOARD.md`:** blank lines for markdownlint.
+- **DEFERRED (NOT changed), with reasons:** (a) X.BUS checksum validation —
+  protocol checksum is officially ambiguous and the 0x10-response checksum was
+  never hardware-verified; hard rejection could silently kill working telemetry,
+  so verify during #54 hardware bring-up first. (b) Dashboard `s==0`-forward
+  arrow — needs hardware diagnosis (2026-06-13). (c) `wifiUpdate()` blocking /
+  SSE coalescing — that is issue #54, gated on hardware inspection.
+- **Re-test:** flight edits are behavior-neutral, so driving cannot change; a
+  quick re-flash smoke check is cheap insurance but not required for control.

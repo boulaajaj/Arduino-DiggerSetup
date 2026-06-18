@@ -27,13 +27,15 @@ struct ServoOutput {
   int right;
 };
 
-// Telemetry sample from one ESC (via X.BUS read register)
+// Telemetry sample from one ESC (via X.BUS Read Register 0x10)
 struct EscTelem {
   float    voltage;     // V (battery / bus voltage, EMA smoothed)
+  float    busCurrentA;  // A (bus current, EMA smoothed)
+  int16_t  rpmHz;       // electrical Hz (instantaneous; ~×30 = mech RPM)
   float    motorTempC;  // degC (EMA smoothed)
   float    escTempC;    // degC (EMA smoothed)
   uint32_t lastGoodMs;  // millis() of last successful read
-  bool     valid;       // has at least one good reading
+  bool     valid;       // fresh reading within the staleness window
 };
 
 // CH4 gear position. Caps the post-curvatureDrive wheel speeds; the

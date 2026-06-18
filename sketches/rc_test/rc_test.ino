@@ -15,8 +15,10 @@
 // V7.6 removed the reverse-direction beeper entirely — audible
 // alerts will return as a battery-aware system after the planned
 // Nano R4 → UNO R4 migration (see GitHub issue tracker).
-// Telemetry (X.BUS Read Register) is scaffolded in types.h but
-// not polled — sbusUart (SCI0) is consumed by S.BUS.
+// Telemetry: X.BUS Read Register (func 0x10) is polled non-blocking on
+// Serial1 (D0/D1) — READ-ONLY. 0x10 is service control; it never puts the
+// ESC into BUS_MODE, so PWM control authority is fully preserved. Both
+// ESCs share the one half-duplex X.BUS. See [TELEMETRY].
 //
 // Signal flow:
 //   RC (S.BUS) ──► curvatureDrive ──┐
@@ -31,7 +33,8 @@
 //   [GEAR]       RC CH4 → Eco 40% / Normal 65% / Turbo 100% wheel-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [OUTPUT]     ESC servo PWM
-//   [DEBUG]      10 Hz serial CSV telemetry
+//   [TELEMETRY]  X.BUS Read Register (0x10) on Serial1 — V/I/RPM/temp
+//   [DEBUG]      10 Hz serial CSV (control + telemetry)
 //
 // Pin map:
 //   A0  ← Joystick Y (throttle)        [14-bit ADC]
@@ -41,7 +44,7 @@
 //   D8     (reserved — future battery-aware beeper, V8/UNO R4)
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
-//   D0/D1 → Serial1 hardware UART (currently unused)
+//   D0/D1 → Serial1 (X.BUS half-duplex telemetry bus to both ESCs)
 //   USB-C → USB CDC Serial (debug + firmware upload)
 //
 // S.BUS wiring (unchanged inverter circuit, now lands on D12):
@@ -51,8 +54,10 @@
 
 #include <Arduino.h>
 #include <Servo.h>
+#include <WiFiS3.h>
 #include "sbus.h"
 #include "types.h"
+#include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -115,6 +120,10 @@ const float EXPO_THROTTLE_CUBIC  = 0.6f;
 const float EXPO_STEER_LINEAR    = 0.7f;
 const float EXPO_STEER_CUBIC     = 0.3f;
 
+// Joystick steering polarity: -1.0f to flip left/right (set after the
+// operator-side cable was rewired and right-stick produced a left turn).
+const float JOY_STEER_DIR = -1.0f;
+
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
@@ -123,9 +132,9 @@ const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 //   MID  → 70% wheel speed cap   (normal driving)
 //   HIGH → 100% wheel speed cap  (full throttle authority)
 // Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
-const float GEAR_LOW_SCALE  = 0.40f;  // Eco
-const float GEAR_MID_SCALE  = 0.65f;  // Normal
-const float GEAR_HIGH_SCALE = 1.00f;  // Turbo
+const float GEAR_LOW_SCALE  = 0.55f;  // Eco   (was 0.40 — bumped 2026-06-14 for low-end torque)
+const float GEAR_MID_SCALE  = 0.70f;  // Normal (was 0.65)
+const float GEAR_HIGH_SCALE = 1.00f;  // Boost
 
 // Eco gets +5pp authority on reverse and pivot caps so the operator can
 // still maneuver in tight spaces. Forward stays at GEAR_LOW_SCALE (40%).
@@ -336,7 +345,7 @@ void updateJoystick(uint32_t now) {
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
-  cachedJoy.zRotation = signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
+  cachedJoy.zRotation = JOY_STEER_DIR * signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
   float xSpeed = cachedJoy.xSpeed;
   float zRotation = cachedJoy.zRotation;
@@ -396,9 +405,375 @@ void outputWrite(int left, int right) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [DEBUG] — 10 Hz serial CSV telemetry
+// [TELEMETRY] — X.BUS Read Register (0x10) on Serial1 (D0/D1)
 // ═══════════════════════════════════════════════════════════════
-// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost
+// Non-blocking, READ-ONLY. Uses func 0x10 (point-to-point service read),
+// NOT 0x50 — so the ESC never enters BUS_MODE and PWM control is fully
+// preserved. One request per ESC returns all registers; we alternate
+// ESC0/ESC1, EMA-smooth the slow signals, keep RPM instantaneous, and run
+// an independent per-ESC freshness watchdog. Both ESCs share the one
+// half-duplex bus on D0/D1 (idle HIGH, standard UART polarity — no inverter).
+
+const uint8_t  XBUS_HDR_MASTER = 0x0F;
+const uint8_t  XBUS_HDR_SLAVE  = 0xF0;
+const uint8_t  XBUS_FUNC_READ  = 0x10;
+const uint8_t  NUM_ESCS        = 2;
+
+// Registers read every poll (one request returns all of them).
+const uint8_t  REG_VBAT   = 0x0C;  // ×0.1 V
+const uint8_t  REG_IBUS   = 0x0D;  // ×0.1 A (signed)
+const uint8_t  REG_MSPEED = 0x02;  // electrical Hz (signed)
+const uint8_t  REG_TESC   = 0x20;  // raw − 40 = °C
+const uint8_t  REG_TMOT   = 0x22;  // raw − 40 = °C
+const uint8_t  TELEM_REGS[] = {REG_VBAT, REG_IBUS, REG_MSPEED, REG_TESC, REG_TMOT};
+const uint8_t  TELEM_NREG    = sizeof(TELEM_REGS);
+
+const uint32_t TELEM_POLL_MS    = 10;     // short gap; alternating → ~30-40 Hz/ESC
+const uint32_t TELEM_TIMEOUT_US = 6000;   // GL10 replies in ~2-3ms; 6ms = margin + fast give-up
+                                          // on a silent ESC (so a flaky one barely stalls the good one)
+const uint32_t TELEM_STALE_MS   = 5000;   // mark invalid after this long with no good read
+
+// EMA new-sample weights. Slow signals smoothed; RPM is instantaneous.
+const float TELEM_A_VOLT = 0.30f;
+const float TELEM_A_CURR = 0.50f;
+const float TELEM_A_TEMP = 0.10f;
+
+EscTelem telem[NUM_ESCS] = {};
+
+uint8_t  telemEsc        = 0;       // ESC currently being polled
+bool     telemWaiting    = false;   // true = request sent, awaiting response
+uint32_t telemLastPollMs = 0;
+uint32_t telemReqStartUs = 0;
+uint8_t  telRx[64];
+int      telRxLen = 0;
+
+// ---- X.BUS RX byte-level diagnostics (temporary, post-solder bring-up) ----
+uint32_t telDbgRxTotal    = 0;  // total bytes ever seen on D0 (Serial1 RX)
+uint32_t telDbgEchoCount  = 0;  // count of 0x0F bytes (our own TX seen on bus)
+uint32_t telDbgSlaveCount = 0;  // count of 0xF0 bytes (ESC response header)
+uint8_t  telDbgSnap[16]   = {0};
+int      telDbgSnapLen    = 0;
+uint32_t telDbgPrintPrevMs = 0;
+
+// Checksum = low 8 bits of the sum of bytes [1 .. len-2] (header & checksum
+// excluded). Matches the framing used in the bench-confirmed xbus_master.
+uint8_t xbusChecksum(const uint8_t *f, int len) {
+  uint8_t s = 0;
+  for (int i = 1; i < len - 1; i++) s += f[i];
+  return s;
+}
+
+void telemSendRequest(uint8_t esc) {
+  uint8_t tx[6 + TELEM_NREG];
+  int n = 0;
+  tx[n++] = XBUS_HDR_MASTER;
+  tx[n++] = esc;             // point-to-point slave address
+  tx[n++] = 0x00;            // extra byte — ignored in service control
+  tx[n++] = XBUS_FUNC_READ;
+  tx[n++] = TELEM_NREG;      // data length = number of register addresses
+  for (uint8_t i = 0; i < TELEM_NREG; i++) tx[n++] = TELEM_REGS[i];
+  tx[n] = xbusChecksum(tx, n + 1);
+  n++;
+  while (Serial1.available()) Serial1.read();  // drop stale RX / prior echo
+  Serial1.write(tx, n);                        // non-blocking (no flush())
+  telRxLen = 0;
+}
+
+// Fold one register value into the telem struct for ESC index e.
+void telemApplyReg(uint8_t e, uint8_t reg, uint16_t raw) {
+  EscTelem *t = &telem[e];
+  bool first = !t->valid;
+  switch (reg) {
+    case REG_VBAT: {
+      float v = raw * 0.1f;
+      t->voltage = first ? v : t->voltage + TELEM_A_VOLT * (v - t->voltage);
+      break;
+    }
+    case REG_IBUS: {
+      float a = (int16_t)raw * 0.1f;
+      t->busCurrentA = first ? a : t->busCurrentA + TELEM_A_CURR * (a - t->busCurrentA);
+      break;
+    }
+    case REG_MSPEED:
+      t->rpmHz = (int16_t)raw;                 // instantaneous
+      break;
+    case REG_TESC: {
+      float c = (float)(raw & 0xFF) - 40.0f;   // temp is the low byte, raw − 40
+      t->escTempC = first ? c : t->escTempC + TELEM_A_TEMP * (c - t->escTempC);
+      break;
+    }
+    case REG_TMOT: {
+      float c = (float)(raw & 0xFF) - 40.0f;
+      t->motorTempC = first ? c : t->motorTempC + TELEM_A_TEMP * (c - t->motorTempC);
+      break;
+    }
+  }
+}
+
+// Scan the RX buffer for a valid 0x10 response from `esc`; parse if complete.
+// Skips our own half-duplex TX echo (which starts with 0x0F, not 0xF0).
+bool telemTryParse(uint8_t esc, uint32_t nowMs) {
+  for (int i = 0; i + 6 <= telRxLen; i++) {
+    if (telRx[i]     != XBUS_HDR_SLAVE) continue;
+    if (telRx[i + 1] != esc)            continue;
+    if (telRx[i + 3] != XBUS_FUNC_READ) continue;
+    uint8_t dlen = telRx[i + 4];
+    if (dlen == 0 || dlen % 3 != 0) continue;       // each reg = addr + 2 bytes
+    if (i + 5 + dlen > telRxLen)    continue;        // full data not in yet
+    const uint8_t *d = &telRx[i + 5];
+    for (uint8_t g = 0; g + 3 <= dlen; g += 3) {
+      uint16_t val = d[g + 1] | (d[g + 2] << 8);
+      telemApplyReg(esc, d[g], val);
+    }
+    telem[esc].lastGoodMs = nowMs;
+    telem[esc].valid = true;
+    return true;
+  }
+  return false;
+}
+
+// Call every loop iteration. Sends one request at a time, alternating ESCs,
+// and never blocks: it drains RX across iterations and times out on silence.
+void telemUpdate() {
+  uint32_t nowMs = millis();
+
+  // Drain available bytes every iteration (cheap).
+  while (Serial1.available() && telRxLen < (int)sizeof(telRx)) {
+    uint8_t b = Serial1.read();
+    telRx[telRxLen++] = b;
+    telDbgRxTotal++;                                   // any byte on D0
+    if (b == XBUS_HDR_MASTER) telDbgEchoCount++;       // 0x0F = our own TX echo
+    if (b == XBUS_HDR_SLAVE)  telDbgSlaveCount++;      // 0xF0 = ESC reply
+    if (telDbgSnapLen < 16) telDbgSnap[telDbgSnapLen++] = b;
+  }
+
+  if (telemWaiting) {
+    if (telemTryParse(telemEsc, nowMs)) {
+      telemWaiting = false;
+      telemEsc = (telemEsc + 1) % NUM_ESCS;
+    } else if ((micros() - telemReqStartUs) > TELEM_TIMEOUT_US) {
+      telemWaiting = false;                          // no/late response — move on
+      telemEsc = (telemEsc + 1) % NUM_ESCS;
+    }
+  } else if ((nowMs - telemLastPollMs) >= TELEM_POLL_MS) {
+    telemLastPollMs = nowMs;
+    telemSendRequest(telemEsc);
+    telemReqStartUs = micros();
+    telemWaiting = true;
+  }
+
+  // Per-ESC freshness watchdog.
+  for (uint8_t i = 0; i < NUM_ESCS; i++) {
+    if (telem[i].valid && (nowMs - telem[i].lastGoodMs) > TELEM_STALE_MS) {
+      telem[i].valid = false;
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [WIFI] — AP + HTTP telemetry server (WiFiS3, stock UNO R4 WiFi)
+// ═══════════════════════════════════════════════════════════════
+// Hosts a Wi-Fi access point and serves telemetry as JSON at /data for
+// the dashboard (dashboard/index.html). MONITORING ONLY — no control
+// inputs are ever accepted over Wi-Fi (safety). Engineered non-blocking:
+// one short client transaction per loop pass, a bounded request-read
+// timeout, and a tiny payload, so it doesn't disturb the control loop.
+// The Servo PWM is hardware-timed, so even a brief loop stall (e.g. a
+// client connect) cannot glitch the ESC output.
+
+const char WIFI_SSID[] = "Digger-Telemetry";
+const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
+WiFiServer wifiServer(80);
+bool     wifiUp  = false;
+uint32_t wifiSeq = 0;
+
+// Server-Sent Events: one persistent connection streams telemetry, instead of
+// the browser opening a fresh (slow) connection every poll. This is the big
+// update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
+WiFiClient     sseClient;
+uint32_t       sseLastMs = 0;
+const uint32_t SSE_INTERVAL_MS = 100;   // push live telemetry at 10 Hz
+
+// Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
+int wifiMode() {
+  if (!sbusValid) return 0;
+  int ovr = rcOverride();
+  if (ovr < OVR_LO) return 0;
+  if (ovr > OVR_HI) return 2;
+  return 1;
+}
+
+void wifiInit() {
+  if (WiFi.status() == WL_NO_MODULE) {
+    if (Serial) Serial.println("# WiFi: NO MODULE — ESP32-S3 radio not responding");
+    return;
+  }
+  if (Serial) {
+    Serial.print("# WiFi fw version: ");
+    Serial.println(WiFi.firmwareVersion());
+  }
+  uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS);
+  if (Serial) {
+    Serial.print("# beginAP returned status=");
+    Serial.println(st);
+  }
+  if (st == WL_AP_LISTENING) {
+    wifiUp = true;
+    wifiServer.begin();
+    if (Serial) {
+      Serial.print("# WiFi AP '");
+      Serial.print(WIFI_SSID);
+      Serial.print("' UP — http://");
+      Serial.println(WiFi.localIP());
+    }
+  } else if (Serial) {
+    Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
+    Serial.println("' FAILED to start");
+  }
+}
+
+// Periodic Wi-Fi status line (every ~3 s) for bench diagnostics.
+uint32_t wifiDbgPrev = 0;
+void wifiDebug(uint32_t nowUs) {
+  if (!Serial || (nowUs - wifiDbgPrev) < 3000000UL) return;
+  wifiDbgPrev = nowUs;
+  Serial.print("# WIFI up="); Serial.print(wifiUp);
+  Serial.print(" status="); Serial.print(WiFi.status());
+  Serial.print(" clients_seq="); Serial.println(wifiSeq);
+
+  // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
+  Serial.print("# XBUS rx_total="); Serial.print(telDbgRxTotal);
+  Serial.print(" echo(0x0F)=");     Serial.print(telDbgEchoCount);
+  Serial.print(" slave(0xF0)=");    Serial.print(telDbgSlaveCount);
+  Serial.print(" snap=[");
+  for (int i = 0; i < telDbgSnapLen; i++) {
+    char hex[4]; snprintf(hex, sizeof(hex), "%02X ", telDbgSnap[i]); Serial.print(hex);
+  }
+  Serial.println("]");
+  telDbgSnapLen = 0;   // reset for next window's snapshot
+}
+
+// Build the telemetry JSON into body; returns its length. Shared by the
+// one-shot /data endpoint and the SSE stream.
+int buildTelemJson(char *body, size_t cap) {
+  wifiSeq++;
+  uint32_t nowMs = millis();
+  // Per-ESC age (ms since last good frame). 0 if never received.
+  uint32_t age0 = telem[0].lastGoodMs ? (nowMs - telem[0].lastGoodMs) : 999999UL;
+  uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
+  int n = snprintf(body, cap,
+    "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
+    "\"outL\":%d,\"outR\":%d,"
+    "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
+    "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
+    (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
+    sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
+    outL, outR,
+    telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
+    (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
+    (int)lroundf(telem[0].escTempC), (int)lroundf(telem[0].motorTempC),
+    telem[1].valid ? 1 : 0, (unsigned long)age1, (long)telem[1].rpmHz * 30,
+    (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
+    (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
+  // snprintf returns the length it WOULD have written; clamp to the buffer so
+  // callers never read past `body` (Content-Length and write length stay valid
+  // even if a frame were ever to overflow `cap`).
+  if (n < 0) return 0;
+  if ((size_t)n >= cap) n = (int)cap - 1;
+  return n;
+}
+
+void wifiSendData(WiFiClient &client) {
+  char body[360];
+  int n = buildTelemJson(body, sizeof(body));
+  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                 "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
+  client.print(n);
+  client.print(F("\r\n\r\n"));
+  client.write(reinterpret_cast<const uint8_t *>(body), n);
+}
+
+// Serve the embedded dashboard. Sent in chunks so one big write doesn't hog
+// the loop; the page then fetches /data itself (same origin — no CORS needed).
+void wifiSendPage(WiFiClient &client) {
+  size_t len = strlen(INDEX_HTML);
+  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+                 "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: "));
+  client.print(len);
+  client.print(F("\r\n\r\n"));
+  const char *p = INDEX_HTML;
+  size_t remaining = len;
+  while (remaining) {
+    size_t chunk = remaining > 1024 ? 1024 : remaining;
+    size_t w = client.write(reinterpret_cast<const uint8_t *>(p), chunk);
+    if (w == 0) break;          // client went away
+    p += w; remaining -= w;
+  }
+}
+
+// Non-blocking. Accepts at most one new client per call (bounded request read),
+// and pushes a telemetry frame to the live SSE stream on its interval.
+void wifiUpdate() {
+  if (!wifiUp) return;
+
+  WiFiClient client = wifiServer.available();
+  if (client) {
+    char line[48];
+    int  li = 0;
+    uint32_t t0 = millis();
+    bool done = false;
+    while (!done && (millis() - t0) < 20) {     // read only the request line
+      while (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          done = true;
+          break;
+        }
+        if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
+      }
+    }
+    line[li] = '\0';
+
+    if (strstr(line, "/events")) {
+      // Upgrade to a persistent Server-Sent Events stream.
+      if (sseClient.connected()) sseClient.stop();   // replace any stale stream
+      sseClient = client;
+      sseClient.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                        "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
+      sseLastMs = 0;                                   // push first frame immediately
+    } else if (strstr(line, "/data")) {
+      wifiSendData(client); client.flush(); client.stop();
+    } else {
+      wifiSendPage(client); client.flush(); client.stop();
+    }
+  }
+
+  // Stream live telemetry to the dashboard over the open SSE connection.
+  // Each push starts with an SSE comment line ": hb\n" — this is a no-op for
+  // the EventSource client but exercises the TCP socket and helps prevent
+  // Safari/iOS from parking the connection in a stalled state.
+  if (sseClient.connected()) {
+    uint32_t now = millis();
+    if (now - sseLastMs >= SSE_INTERVAL_MS) {
+      sseLastMs = now;
+      char body[360];
+      int n = buildTelemJson(body, sizeof(body));
+      sseClient.print(F(": hb\ndata: "));
+      sseClient.write(reinterpret_cast<const uint8_t *>(body), n);
+      sseClient.print(F("\n\n"));
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [DEBUG] — 10 Hz serial CSV (control + telemetry)
+// ═══════════════════════════════════════════════════════════════
+// Columns: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,
+//          V0dV,I0dA,RPM0,TE0,TM0,OK0, V1dV,I1dA,RPM1,TE1,TM1,OK1
+// Telemetry columns are integer-scaled: voltage in 0.1 V (dV), current in
+// 0.1 A (dA), RPM in electrical Hz, temps in °C, OK = fresh-telemetry flag.
 
 uint32_t prevPrint = 0;
 
@@ -406,8 +781,8 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.6 — GL10 FOC + S.BUS sbusUart + Gear (beeper removed) ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost");
+    Serial.println("# === Digger V7.8 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP ===");
+    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
 
@@ -420,12 +795,25 @@ void debugPrint(uint32_t now) {
   int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR])  : SVC;
   int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
 
-  char buf[120];
-  snprintf(buf, sizeof(buf), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+  // Telemetry, integer-scaled so we avoid float printf on this core.
+  int v0 = (int)lroundf(telem[0].voltage    * 10.0f);
+  int i0 = (int)lroundf(telem[0].busCurrentA * 10.0f);
+  int e0 = (int)lroundf(telem[0].escTempC);
+  int m0 = (int)lroundf(telem[0].motorTempC);
+  int v1 = (int)lroundf(telem[1].voltage    * 10.0f);
+  int i1 = (int)lroundf(telem[1].busCurrentA * 10.0f);
+  int e1 = (int)lroundf(telem[1].escTempC);
+  int m1 = (int)lroundf(telem[1].motorTempC);
+
+  char buf[200];
+  snprintf(buf, sizeof(buf),
+           "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
            rcT, rcS, rc4, rc5,
            cachedJoy.rawY, cachedJoy.rawX,
            outL, outR, (int)currentGear,
-           sbusData.failsafe, sbusData.lost_frame);
+           sbusData.failsafe, sbusData.lost_frame,
+           v0, i0, telem[0].rpmHz, e0, m0, telem[0].valid ? 1 : 0,
+           v1, i1, telem[1].rpmHz, e1, m1, telem[1].valid ? 1 : 0);
   Serial.println(buf);
 }
 
@@ -439,6 +827,8 @@ void setup() {
   sbusRx.Begin();
   outputInit();
   debugInit();
+  Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
+  wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
 }
 
 void loop() {
@@ -468,6 +858,14 @@ void loop() {
   // Acceleration + Drag Force settings, so the Arduino sends the mixed
   // command straight through.
   outputWrite(mix.left, mix.right);
+
+  // 3.5 Telemetry — non-blocking X.BUS Read Register (0x10), read-only.
+  // Never enters BUS_MODE, so it cannot affect the control output above.
+  telemUpdate();
+
+  // 3.6 Wi-Fi — serve telemetry JSON to the dashboard (monitoring only).
+  wifiUpdate();
+  wifiDebug(now);
 
   // 4. Debug
   debugPrint(now);
