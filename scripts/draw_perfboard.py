@@ -5,7 +5,7 @@ Two-sided layout:
   RIGHT side = OUTPUTS to Arduino (D0 RX, D1 TX, D12 inv. S.BUS)
   MIDDLE     = components (R1, R2, R3, R4, Q1) — signal flow left -> right.
 
-Run: python tools/draw_perfboard.py
+Run: python scripts/draw_perfboard.py
 See: docs/INTERFACE-BOARD-PERFBOARD.md (the written guide).
 """
 from PIL import Image, ImageDraw, ImageFont
@@ -149,13 +149,16 @@ for c in (1, 4, 7, 18, 21, 24):
 wire((13, 'E'), (13, 'G'), BLK)
 # XBUS_TX jumper: R2 right (col 11) -> J3.sig (col 19)
 wire((11, 'C'), (19, 'C'), BLU)
-join_dot(11, 'C', BLU); join_dot(19, 'C', BLU)
+join_dot(11, 'C', BLU)
+join_dot(19, 'C', BLU)
 # SBUS_IN jumper: J5.sig (col 9) -> R3 left anchor (col 12)
 wire((9, 'C'), (12, 'C'), "#c97c2a")
-join_dot(9, 'C', "#c97c2a"); join_dot(12, 'C', "#c97c2a")
+join_dot(9, 'C', "#c97c2a")
+join_dot(12, 'C', "#c97c2a")
 # SBUS_OUT jumper: Q1.C / R4 anchor (col 15) -> J6.sig (col 22)
 wire((15, 'C'), (22, 'C'), "#7a3f8a")
-join_dot(15, 'C', "#7a3f8a"); join_dot(22, 'C', "#7a3f8a")
+join_dot(15, 'C', "#7a3f8a")
+join_dot(22, 'C', "#7a3f8a")
 
 
 # ---------------- resistors ----------------

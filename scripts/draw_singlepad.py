@@ -116,7 +116,8 @@ wire((3, 18), (4, 18), PUR, w=4)      # J6.SIG to SBUS_OUT ext
 # -------- COMPONENTS --------
 
 def res_v(c, r1, r2, ref_val):
-    x1, y1 = xy(c, r1); x2, y2 = xy(c, r2)
+    x1, y1 = xy(c, r1)
+    x2, y2 = xy(c, r2)
     d.line((x1, y1, x2, y2), fill=TAN, width=4)
     cy = (y1 + y2) // 2
     d.rounded_rectangle((x1 - 38, cy - 13, x1 + 38, cy + 13), radius=6,
@@ -125,7 +126,8 @@ def res_v(c, r1, r2, ref_val):
 
 
 def res_h(c1, c2, r, ref_val):
-    x1, y1 = xy(c1, r); x2, y2 = xy(c2, r)
+    x1, y1 = xy(c1, r)
+    x2, y2 = xy(c2, r)
     d.line((x1, y1, x2, y2), fill=TAN, width=4)
     cx = (x1 + x2) // 2
     d.rounded_rectangle((cx - 38, y1 - 13, cx + 38, y1 + 13), radius=6,
@@ -161,7 +163,8 @@ HEADERS = [
 ]
 for name, r, powered, note in HEADERS:
     # bracket around 3 pins
-    x1, y1 = xy(1, r); x3, y3 = xy(3, r)
+    x1, y1 = xy(1, r)
+    x3, y3 = xy(3, r)
     d.rounded_rectangle((x1 - 22, y1 - 22, x3 + 22, y3 + 22), radius=10,
                         outline="#222", width=2)
     text((x3 + 45, y1 - 12), name, FS, "#222", "lm")
@@ -186,7 +189,8 @@ text((X0 - 110, xy(1, 28)[1]), "GND rail", FB, BLK, "rm")
 # -------- LEGEND on the right --------
 lx = X0 + COLS * PITCH + 60
 ly = Y0 + 20
-text((lx, ly), "Legend", FB, "#222", "lm"); ly += 28
+text((lx, ly), "Legend", FB, "#222", "lm")
+ly += 28
 items = [
     ("+5V wire / rail",         RED),
     ("GND wire / rail",         BLK),
@@ -203,7 +207,8 @@ for s, c in items:
 
 # Build notes
 ly += 18
-text((lx, ly), "Build notes", FB, "#222", "lm"); ly += 24
+text((lx, ly), "Build notes", FB, "#222", "lm")
+ly += 24
 notes = [
     "* Lay the bare-wire rails FIRST",
     "  (+5V along row 1, GND along row 28).",
@@ -217,7 +222,8 @@ notes = [
     "* Estimated joints: ~30.",
 ]
 for s in notes:
-    text((lx, ly), s, FXS, "#333", "lm"); ly += 18
+    text((lx, ly), s, FXS, "#333", "lm")
+    ly += 18
 
 img.save("docs/interface-board-singlepad-layout.png")
 print("saved docs/interface-board-singlepad-layout.png", img.size)
