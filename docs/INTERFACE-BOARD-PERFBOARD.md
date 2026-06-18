@@ -63,6 +63,7 @@ You have three. For this circuit:
 ## 3. Schematic
 
 ### X.BUS merge
+
 ```text
               +5V
                │
@@ -76,6 +77,7 @@ You have three. For this circuit:
 ```
 
 ### S.BUS inverter (2N3904)
+
 ```text
               +5V
                │
@@ -136,6 +138,7 @@ Rails: top = **+5V**, bottom = **GND**. Jump shield 5V → +rail, shield GND →
 ```
 
 Practical notes:
+
 - **XBUS_BUS (C2)** has exactly 5 members (R1, R2, J1, J2, J4) → fits one
   5-hole column. Land R1/R2 legs there and run a short jumper from each of
   J1.sig, J2.sig, J4.sig into C2.
@@ -198,6 +201,7 @@ the UNO R4 WiFi. (This is the change from the old Nano R4 one-at-a-time note.)
 
 The flight firmware already polls X.BUS (0x10) and reads S.BUS — no special test
 sketch needed.
+
 1. Power + plug J3→D1, J4→D0, J6→D12, ESC PWM→D9/D10.
 2. Open the dashboard (192.168.4.1) or USB serial CSV.
 3. Confirm S.BUS healthy (FS=0/Lost=0) and **both** ESCs report (OK0=1, OK1=1).

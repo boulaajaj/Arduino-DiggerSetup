@@ -363,3 +363,29 @@ stabilize. Not a firmware fault — control + the other ESC keep working through
 - **DECISION: Wi-Fi telemetry stays monitoring-only, permanently.** No path
   from Wi-Fi to motor output. PR #50 to be hardened (single-source page, debug
   cruft removed) after it merges to main.
+
+## 2026-06-18 — PR #50 lint/safety pass (zero-risk only; driving untouched)
+
+Cleared the 3 failing CI lint checks + 2 review-bot findings WITHOUT changing
+any tested driving behavior. Both sketches recompile clean (rc_test 39% flash /
+29% RAM; telem_check 20%).
+
+- **`rc_test.ino` (flight) — only 2 edits, both behavior-neutral:**
+  (1) 3× `(const uint8_t *)` → `reinterpret_cast<const uint8_t *>` in the Wi-Fi
+  `client.write`/`sseClient.write` calls (cppcheck cstyleCast; identical machine
+  code). (2) `snprintf` return clamped in `buildTelemJson()` so callers never
+  read past the 360 B buffer (CodeRabbit "critical"; a no-op unless a frame ever
+  overflows — it currently does not). **No change to control loop, mixing, expo,
+  gear caps, S.BUS, joystick, servo PWM, X.BUS polling, or telemetry values.**
+- **`telem_check.ino` (bench tool, never flashed to the machine):** fixed
+  garbage ESC-temp display (2-byte → 1-byte `d[14]`, per 2026-06-11 finding) +
+  cpplint whitespace reformatting. Display/format only.
+- **`INTERFACE-BOARD-PERFBOARD.md`:** blank lines for markdownlint.
+- **DEFERRED (NOT changed), with reasons:** (a) X.BUS checksum validation —
+  protocol checksum is officially ambiguous and the 0x10-response checksum was
+  never hardware-verified; hard rejection could silently kill working telemetry,
+  so verify during #54 hardware bring-up first. (b) Dashboard `s==0`-forward
+  arrow — needs hardware diagnosis (2026-06-13). (c) `wifiUpdate()` blocking /
+  SSE coalescing — that is issue #54, gated on hardware inspection.
+- **Re-test:** flight edits are behavior-neutral, so driving cannot change; a
+  quick re-flash smoke check is cheap insurance but not required for control.

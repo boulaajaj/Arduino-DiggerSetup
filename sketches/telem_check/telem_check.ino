@@ -27,7 +27,7 @@ const uint8_t  TELEM_DATA_LEN  = 17;   // Length field reported by ESC
 const uint8_t  TELEM_FRAME_LEN = 22;   // total on-wire bytes
 const uint32_t TELEM_TIMEOUT_US = 5000;
 const uint32_t POLL_PERIOD_MS   = 50;  // 20 Hz poll, alternating ESCs
-const uint32_t PRINT_PERIOD_MS  = 500; // 2 Hz print
+const uint32_t PRINT_PERIOD_MS  = 500;  // 2 Hz print
 
 struct ESCTelemetry {
   int16_t  rpmHz, busCurrent, phaseCurrent;
@@ -60,7 +60,10 @@ void sendZeroThrottle(uint8_t target) {
   txBuf[2] = target;            // telemetry responder
   txBuf[3] = FUNC_THROTTLE;
   txBuf[4] = dataLen;
-  for (uint8_t i = 0; i < NUM_ESCS; i++) { txBuf[5 + i*2] = 0x00; txBuf[6 + i*2] = 0x00; } // throttle 0
+  for (uint8_t i = 0; i < NUM_ESCS; i++) {   // throttle 0 for every ESC
+    txBuf[5 + i * 2] = 0x00;
+    txBuf[6 + i * 2] = 0x00;
+  }
   txBuf[frameLen - 1] = checksumFull(txBuf, frameLen);
   while (Serial1.available()) Serial1.read();
   Serial1.write(txBuf, frameLen);
@@ -78,12 +81,20 @@ bool receiveTelemetry(uint8_t esc) {
   while ((micros() - start) < TELEM_TIMEOUT_US) {
     while (Serial1.available() && rxLen < (int)sizeof(rxBuf)) rxBuf[rxLen++] = Serial1.read();
     for (int i = 0; i + TELEM_FRAME_LEN <= rxLen; i++)
-      if (rxBuf[i]==HEADER_SLAVE && rxBuf[i+1]==ADDR_BROADCAST && rxBuf[i+3]==FUNC_THROTTLE) { start = 0; break; }
+      if (rxBuf[i] == HEADER_SLAVE && rxBuf[i + 1] == ADDR_BROADCAST &&
+          rxBuf[i + 3] == FUNC_THROTTLE) {
+        start = 0;
+        break;
+      }
     if (start == 0) break;
   }
   int fs = -1;
   for (int i = 0; i + TELEM_FRAME_LEN <= rxLen; i++)
-    if (rxBuf[i]==HEADER_SLAVE && rxBuf[i+1]==ADDR_BROADCAST && rxBuf[i+3]==FUNC_THROTTLE) { fs = i; break; }
+    if (rxBuf[i] == HEADER_SLAVE && rxBuf[i + 1] == ADDR_BROADCAST &&
+        rxBuf[i + 3] == FUNC_THROTTLE) {
+      fs = i;
+      break;
+    }
   if (fs < 0 || (rxLen - fs) < TELEM_FRAME_LEN) return false;
   uint8_t *f = &rxBuf[fs];
   if (f[4] != TELEM_DATA_LEN) return false;
@@ -98,15 +109,22 @@ bool receiveTelemetry(uint8_t esc) {
   t->receivedThrottle = (int16_t)(d[8]  | (d[9]  << 8));
   t->outputThrottle   = (int16_t)(d[10] | (d[11] << 8));
   t->busVoltage       = (int16_t)(d[12] | (d[13] << 8));
-  t->escTempRaw       = (int16_t)(d[14] | (d[15] << 8));
+  t->escTempRaw       = d[14];   // ESC temp is one byte (printed as raw − 40); d[15] is a separate field
   t->valid = true; t->timestamp = micros();
   return true;
 }
 
 void printRawRX() {
-  if (rxLen == 0) { Serial.println("# RAW RX: (nothing)"); return; }
+  if (rxLen == 0) {
+    Serial.println("# RAW RX: (nothing)");
+    return;
+  }
   Serial.print("# RAW RX ("); Serial.print(rxLen); Serial.print("B): ");
-  for (int i = 0; i < min(rxLen, 32); i++) { char h[4]; snprintf(h, sizeof(h), "%02X ", rxBuf[i]); Serial.print(h); }
+  for (int i = 0; i < min(rxLen, 32); i++) {
+    char h[4];
+    snprintf(h, sizeof(h), "%02X ", rxBuf[i]);
+    Serial.print(h);
+  }
   Serial.println();
 }
 
@@ -133,7 +151,10 @@ void loop() {
     sendZeroThrottle(telemTarget);
     if (receiveTelemetry(telemTarget)) {
       goodFrames++;
-      if (firstGood) { Serial.println("# >>> FIRST TELEMETRY RECEIVED — link is working <<<"); firstGood = false; }
+      if (firstGood) {
+        Serial.println("# >>> FIRST TELEMETRY RECEIVED — link is working <<<");
+        firstGood = false;
+      }
       if (telem[telemTarget].status & (1 << 3)) lastBusModeMs = now;  // BUS_MODE bit
     } else {
       badFrames++;
@@ -154,7 +175,10 @@ void loop() {
     for (uint8_t i = 0; i < NUM_ESCS; i++) {
       ESCTelemetry *t = &telem[i];
       Serial.print("#  ESC"); Serial.print(i); Serial.print(": ");
-      if (!t->valid) { Serial.println("no data yet"); continue; }
+      if (!t->valid) {
+        Serial.println("no data yet");
+        continue;
+      }
       Serial.print("V="); Serial.print(t->busVoltage * 0.1f, 1);
       Serial.print(" I_bus="); Serial.print(t->busCurrent * 0.1f, 1);
       Serial.print("A RPM="); Serial.print(t->rpmHz * 30);

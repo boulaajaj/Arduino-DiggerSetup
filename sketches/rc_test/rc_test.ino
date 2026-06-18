@@ -652,7 +652,7 @@ int buildTelemJson(char *body, size_t cap) {
   // Per-ESC age (ms since last good frame). 0 if never received.
   uint32_t age0 = telem[0].lastGoodMs ? (nowMs - telem[0].lastGoodMs) : 999999UL;
   uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
-  return snprintf(body, cap,
+  int n = snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
     "\"outL\":%d,\"outR\":%d,"
     "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
@@ -666,6 +666,12 @@ int buildTelemJson(char *body, size_t cap) {
     telem[1].valid ? 1 : 0, (unsigned long)age1, (long)telem[1].rpmHz * 30,
     (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
     (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
+  // snprintf returns the length it WOULD have written; clamp to the buffer so
+  // callers never read past `body` (Content-Length and write length stay valid
+  // even if a frame were ever to overflow `cap`).
+  if (n < 0) return 0;
+  if ((size_t)n >= cap) n = (int)cap - 1;
+  return n;
 }
 
 void wifiSendData(WiFiClient &client) {
@@ -675,7 +681,7 @@ void wifiSendData(WiFiClient &client) {
                  "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
   client.print(n);
   client.print(F("\r\n\r\n"));
-  client.write((const uint8_t *)body, n);
+  client.write(reinterpret_cast<const uint8_t *>(body), n);
 }
 
 // Serve the embedded dashboard. Sent in chunks so one big write doesn't hog
@@ -690,7 +696,7 @@ void wifiSendPage(WiFiClient &client) {
   size_t remaining = len;
   while (remaining) {
     size_t chunk = remaining > 1024 ? 1024 : remaining;
-    size_t w = client.write((const uint8_t *)p, chunk);
+    size_t w = client.write(reinterpret_cast<const uint8_t *>(p), chunk);
     if (w == 0) break;          // client went away
     p += w; remaining -= w;
   }
@@ -741,7 +747,7 @@ void wifiUpdate() {
       char body[360];
       int n = buildTelemJson(body, sizeof(body));
       sseClient.print(F(": hb\ndata: "));
-      sseClient.write((const uint8_t *)body, n);
+      sseClient.write(reinterpret_cast<const uint8_t *>(body), n);
       sseClient.print(F("\n\n"));
     }
   }
