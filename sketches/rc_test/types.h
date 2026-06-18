@@ -30,7 +30,7 @@ struct ServoOutput {
 // Telemetry sample from one ESC (via X.BUS Read Register 0x10)
 struct EscTelem {
   float    voltage;     // V (battery / bus voltage, EMA smoothed)
-  float    busCurrentA; // A (bus current, EMA smoothed)
+  float    busCurrentA;  // A (bus current, EMA smoothed)
   int16_t  rpmHz;       // electrical Hz (instantaneous; ~×30 = mech RPM)
   float    motorTempC;  // degC (EMA smoothed)
   float    escTempC;    // degC (EMA smoothed)

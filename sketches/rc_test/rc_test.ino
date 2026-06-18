@@ -609,14 +609,24 @@ void wifiInit() {
     if (Serial) Serial.println("# WiFi: NO MODULE — ESP32-S3 radio not responding");
     return;
   }
-  if (Serial) { Serial.print("# WiFi fw version: "); Serial.println(WiFi.firmwareVersion()); }
+  if (Serial) {
+    Serial.print("# WiFi fw version: ");
+    Serial.println(WiFi.firmwareVersion());
+  }
   uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS);
-  if (Serial) { Serial.print("# beginAP returned status="); Serial.println(st); }
+  if (Serial) {
+    Serial.print("# beginAP returned status=");
+    Serial.println(st);
+  }
   if (st == WL_AP_LISTENING) {
     wifiUp = true;
     wifiServer.begin();
-    if (Serial) { Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
-                  Serial.print("' UP — http://"); Serial.println(WiFi.localIP()); }
+    if (Serial) {
+      Serial.print("# WiFi AP '");
+      Serial.print(WIFI_SSID);
+      Serial.print("' UP — http://");
+      Serial.println(WiFi.localIP());
+    }
   } else if (Serial) {
     Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
     Serial.println("' FAILED to start");
@@ -716,7 +726,10 @@ void wifiUpdate() {
     while (!done && (millis() - t0) < 20) {     // read only the request line
       while (client.available()) {
         char c = client.read();
-        if (c == '\n') { done = true; break; }
+        if (c == '\n') {
+          done = true;
+          break;
+        }
         if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
       }
     }
