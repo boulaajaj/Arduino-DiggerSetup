@@ -3,7 +3,7 @@ const char INDEX_HTML[] PROGMEM = R"DIGGER(
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Malaki SuperTracks</title>
 <!-- Installable home-screen app: launches standalone (no browser chrome) on iOS/iPadOS. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
