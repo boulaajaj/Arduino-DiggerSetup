@@ -583,6 +583,10 @@ void telemUpdate() {
 
 const char WIFI_SSID[] = "Digger-Telemetry";
 const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
+// Pin the AP to 2.4 GHz channel 11 to sit clear of the common 1/6 home-router
+// occupancy (issue #54). FHSS RC (RC6GS) is unaffected; this only helps the
+// dashboard's Wi-Fi link, not the control radio.
+const uint8_t WIFI_AP_CHANNEL = 11;
 WiFiServer wifiServer(80);
 bool     wifiUp  = false;
 uint32_t wifiSeq = 0;
@@ -592,7 +596,9 @@ uint32_t wifiSeq = 0;
 // update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
 WiFiClient     sseClient;
 uint32_t       sseLastMs = 0;
-const uint32_t SSE_INTERVAL_MS = 100;   // push live telemetry at 10 Hz
+const uint32_t SSE_INTERVAL_MS = 200;   // push live telemetry at 5 Hz (issue #54:
+                                        // halve Wi-Fi push load; X.BUS poll rate
+                                        // is independent and unchanged)
 
 // Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
 int wifiMode() {
@@ -612,7 +618,7 @@ void wifiInit() {
     Serial.print("# WiFi fw version: ");
     Serial.println(WiFi.firmwareVersion());
   }
-  uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS);
+  uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS, WIFI_AP_CHANNEL);
   if (Serial) {
     Serial.print("# beginAP returned status=");
     Serial.println(st);
@@ -716,6 +722,15 @@ void wifiSendPage(WiFiClient &client) {
 void wifiUpdate() {
   if (!wifiUp) return;
 
+  // Cap how long ANY Wi-Fi/modem call below may block this loop pass. The
+  // WiFiS3 default is MODEM_TIMEOUT = 10 000 ms — a stalled iPhone TCP window
+  // (Safari backgrounded, weak signal) can otherwise freeze loop() for seconds,
+  // starving servo + S.BUS updates. 50 ms bounds the worst-case stall; the cost
+  // is an occasionally dropped telemetry frame, the right trade for a vehicle
+  // controller (issue #54). Restored to the default before returning so AP
+  // bring-up and other modem users keep the full timeout.
+  modem.timeout(50);
+
   WiFiClient client = wifiServer.available();
   if (client) {
     char line[48];
@@ -756,13 +771,24 @@ void wifiUpdate() {
     uint32_t now = millis();
     if (now - sseLastMs >= SSE_INTERVAL_MS) {
       sseLastMs = now;
-      char body[360];
-      int n = buildTelemJson(body, sizeof(body));
-      sseClient.print(F(": hb\ndata: "));
-      sseClient.write(reinterpret_cast<const uint8_t *>(body), n);
-      sseClient.print(F("\n\n"));
+      // Build the whole SSE frame — heartbeat comment, data line, terminator —
+      // into one buffer and ship it in a SINGLE write(). That is one AT
+      // round-trip to the ESP32 bridge per push instead of three, cutting the
+      // blocking modem calls 3:1 (issue #54). 384 B comfortably holds the
+      // 11-byte prefix + ~250-byte JSON + 2-byte terminator.
+      char frame[384];
+      int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
+      // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body can
+      // never crowd it out; buildTelemJson clamps its own length to the cap we
+      // pass, keeping `len` provably within `frame` for any payload size.
+      len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
+      frame[len++] = '\n';
+      frame[len++] = '\n';
+      sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
     }
   }
+
+  modem.timeout(MODEM_TIMEOUT);   // restore default 10 s timeout on the way out
 }
 
 
@@ -780,7 +806,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.8 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP ===");
+    Serial.println("# === Digger V7.9 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
