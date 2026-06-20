@@ -590,6 +590,10 @@ const uint8_t WIFI_AP_CHANNEL = 11;
 WiFiServer wifiServer(80);
 bool     wifiUp  = false;
 uint32_t wifiSeq = 0;
+// ETag for the static dashboard. Filled in wifiInit() from the page length +
+// firmware tag, so browsers can cache the HTML and a refresh returns 304 instead
+// of re-downloading ~33 KB through the blocking Wi-Fi modem (issue #54).
+char pageEtag[24] = "\"d0\"";
 
 // Server-Sent Events: one persistent connection streams telemetry, instead of
 // the browser opening a fresh (slow) connection every poll. This is the big
@@ -626,6 +630,9 @@ void wifiInit() {
   if (st == WL_AP_LISTENING) {
     wifiUp = true;
     wifiServer.begin();
+    // Build the dashboard ETag once. Length + firmware tag, so it changes
+    // whenever the embedded page changes and stale caches auto-invalidate.
+    snprintf(pageEtag, sizeof(pageEtag), "\"d%uv710\"", (unsigned)strlen(INDEX_HTML));
     if (Serial) {
       Serial.print("# WiFi AP '");
       Serial.print(WIFI_SSID);
@@ -699,12 +706,24 @@ void wifiSendData(WiFiClient &client) {
   client.write(reinterpret_cast<const uint8_t *>(body), n);
 }
 
-// Serve the embedded dashboard. Sent in chunks so one big write doesn't hog
-// the loop; the page then fetches /data itself (same origin — no CORS needed).
-void wifiSendPage(WiFiClient &client) {
+// Serve the embedded dashboard. The page is static, so it carries an ETag and
+// Cache-Control: no-cache (store-but-revalidate): the first visit downloads it
+// once, then every refresh sends If-None-Match and gets a tiny 304 here instead
+// of re-streaming ~33 KB through the blocking Wi-Fi modem (issue #54). Live
+// values arrive separately over SSE, so the HTML itself never reloads in normal
+// use. The 200 body is chunked so one big write doesn't hog the loop.
+void wifiSendPage(WiFiClient &client, bool notModified) {
+  if (notModified) {
+    client.print(F("HTTP/1.1 304 Not Modified\r\nETag: "));
+    client.print(pageEtag);
+    client.print(F("\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"));
+    return;
+  }
   size_t len = strlen(INDEX_HTML);
   client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-                 "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: "));
+                 "Cache-Control: no-cache\r\nETag: "));
+  client.print(pageEtag);
+  client.print(F("\r\nConnection: close\r\nContent-Length: "));
   client.print(len);
   client.print(F("\r\n\r\n"));
   const char *p = INDEX_HTML;
@@ -733,33 +752,33 @@ void wifiUpdate() {
 
   WiFiClient client = wifiServer.available();
   if (client) {
-    char line[48];
-    int  li = 0;
+    // Read the request line + headers into one bounded buffer (cap + 25 ms) so
+    // we can route on the first line AND honor a conditional-GET If-None-Match
+    // for the cached dashboard. 512 B comfortably holds an iOS Safari header set.
+    char req[512];
+    int  ri = 0;
     uint32_t t0 = millis();
-    bool done = false;
-    while (!done && (millis() - t0) < 20) {     // read only the request line
-      while (client.available()) {
-        char c = client.read();
-        if (c == '\n') {
-          done = true;
-          break;
-        }
-        if (c != '\r' && li < (int)sizeof(line) - 1) line[li++] = c;
-      }
+    while ((millis() - t0) < 25 && ri < (int)sizeof(req) - 1) {
+      while (client.available() && ri < (int)sizeof(req) - 1) req[ri++] = client.read();
+      if (ri >= 4 && req[ri - 4] == '\r' && req[ri - 3] == '\n' &&
+                     req[ri - 2] == '\r' && req[ri - 1] == '\n') break;  // end of headers
     }
-    line[li] = '\0';
+    req[ri] = '\0';
 
-    if (strstr(line, "/events")) {
+    if (strstr(req, "/events")) {
       // Upgrade to a persistent Server-Sent Events stream.
       if (sseClient.connected()) sseClient.stop();   // replace any stale stream
       sseClient = client;
       sseClient.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
                         "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
       sseLastMs = 0;                                   // push first frame immediately
-    } else if (strstr(line, "/data")) {
+    } else if (strstr(req, "/data")) {
       wifiSendData(client); client.flush(); client.stop();
     } else {
-      wifiSendPage(client); client.flush(); client.stop();
+      // Static dashboard. If the browser already holds our ETag, reply 304 and
+      // skip the ~33 KB transfer entirely (issue #54).
+      bool cached = strstr(req, "If-None-Match") && strstr(req, pageEtag);
+      wifiSendPage(client, cached); client.flush(); client.stop();
     }
   }
 
@@ -806,7 +825,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.9 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP ===");
+    Serial.println("# === Digger V7.10 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP (cached page) ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
