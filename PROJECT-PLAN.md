@@ -50,7 +50,7 @@ executes it.** Two chips, two jobs:
 | 2 | Battery (x2) | OVONIC 3S LiPo 15000 mAh 130C | 11.1 V, EC5 |
 | 3 | ESC (x2) | **XC GL10 80A FOC** | Standard 50 Hz servo PWM in, internal FOC, IP67 |
 | 4 | Motor (x2) | **XC GL540L** | Sensored brushless, paired with GL10 |
-| 5 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, S.BUS, transmitter does tank mixing |
+| 5 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, S.BUS; gun-style (trigger = throttle, wheel = steering) — the **Arduino** does the tank mixing |
 | 6 | Joystick | Genie 101174GT dual-axis | 5 V, 0-5 V analog, hall-effect (direct to ADC) |
 
 > **History:** the project previously ran XC sensored ESCs/motors with an

@@ -222,8 +222,9 @@ shield D9/D10 headers. No components needed — just plug in.
 
 > **UNO R4 WiFi — both UARTs free:** X.BUS telemetry lands on Serial1
 > (D0/D1) and S.BUS on `sbusUart` (SCI0, D11/D12), so both run at once
-> with no contention. (On the old Nano R4 there was only one usable
-> hardware UART, forcing a one-at-a-time D0 swap — no longer the case.)
+> with no contention. (The earlier D0 conflict came from a single-UART
+> wiring where S.BUS and X.BUS both shared Serial1, before the SCI0
+> second UART was adopted — no longer the case.)
 
 ---
 

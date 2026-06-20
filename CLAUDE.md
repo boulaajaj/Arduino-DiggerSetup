@@ -22,7 +22,7 @@ dashboard (monitoring only).
 | ESC (x2) | XC GL10 80A FOC | Standard 50 Hz servo PWM input, internal FOC compensation, IP67 |
 | Motor (x2) | XC GL540L | Sensored brushless, paired with GL10 |
 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
-| RC System | Radiolink RC6GS V3 + R7FG | 6CH, transmitter does tank mixing |
+| RC System | Radiolink RC6GS V3 + R7FG | 6CH gun-style (trigger = throttle, wheel = steering); the Arduino does the tank mixing |
 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect (direct to ADC — 5V tolerant) |
 
 **Hardware history:** previously ran XC sensored ESCs/motors with an
