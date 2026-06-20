@@ -484,9 +484,9 @@ function render(){
   ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c*eL.b,PWR_MAX);
   ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c*eR.b,PWR_MAX);
   set('vEL',eL.tE.toFixed(0)+'°');set('vML',eL.tM.toFixed(0)+'°');
-  set('vRL',Math.round(eL.r));set('vCL',Math.round(eL.c*eL.b)+'W');
+  set('vRL',Math.round(eL.r));set('vCL',Math.round(Math.max(0,eL.c*eL.b))+'W');
   set('vER',eR.tE.toFixed(0)+'°');set('vMR',eR.tM.toFixed(0)+'°');
-  set('vRR',Math.round(eR.r));set('vCR',Math.round(eR.c*eR.b)+'W');
+  set('vRR',Math.round(eR.r));set('vCR',Math.round(Math.max(0,eR.c*eR.b))+'W');
   [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
   // Vehicle speed — average of SIGNED per-track velocities. A 360 pivot
