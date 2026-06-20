@@ -33,6 +33,7 @@
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [OUTPUT]     ESC servo PWM
 //   [TELEMETRY]  X.BUS Read Register (0x10) on Serial1 — V/I/RPM/temp
+//   [BEEPER]     Active piezo on D8 — horn (RC SWD/CH7) + beep patterns
 //   [DEBUG]      10 Hz serial CSV (control + telemetry)
 //
 // Pin map:
@@ -79,7 +80,7 @@ const uint8_t PIN_JOY_Y  = A0;  // Throttle
 const uint8_t PIN_JOY_X  = A1;  // Steering
 const uint8_t PIN_ESC_L  = 9;   // Left ESC PWM (50 Hz, 1000-2000 us)
 const uint8_t PIN_ESC_R  = 10;  // Right ESC PWM
-// D8 reserved for the future battery-aware beeper (deferred to V8 / UNO R4)
+const uint8_t PIN_BEEPER = 8;   // D8 — active piezo (digital HIGH = beep)
 
 // S.BUS channel mapping (0-indexed). Confirmed by live capture while
 // the operator moved each control independently on the RC6GS V3:
@@ -88,10 +89,12 @@ const uint8_t SBUS_CH_THR   = 1;  // trigger → throttle (forward/back)
 const uint8_t SBUS_CH_STEER = 0;  // wheel   → steering (left/right)
 const uint8_t SBUS_CH_GEAR  = 3;  // CH4 = gear selector (3-pos switch)
 const uint8_t SBUS_CH_OVR   = 4;  // CH5 = override switch (3-pos switch)
+const uint8_t SBUS_CH_HORN  = 6;  // CH7 = SWD button → horn (beep at +100%)
 
 // S.BUS value range (raw 172-1811, center ~992)
 const int SBUS_MIN = 172;
 const int SBUS_MAX = 1811;
+const int HORN_ON_RAW = 1400;  // SWD raw above this = horn ON (toward +100% ~1811)
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -579,6 +582,37 @@ void telemUpdate() {
 
 
 // ═══════════════════════════════════════════════════════════════
+// [BEEPER] — active piezo on D8: horn (RC SWD, held) + queued patterns
+// ═══════════════════════════════════════════════════════════════
+// Non-blocking. Horn = continuous tone while the RC SWD button (CH7) is held.
+// Patterns = a short on/off sequence (e.g. Wi-Fi-ready beep-beep). Both share
+// D8; the horn ORs over any pattern. UX/alert only — no control-path impact.
+
+bool hornActive = false;                             // set each loop from the RC horn channel
+const uint16_t BEEP_WIFI_READY[] = {180, 140, 180};  // on, off, on (ms) → "beep beep"
+const uint16_t* beepSeq = nullptr;
+int      beepLen = 0, beepIdx = -1;
+uint32_t beepPhaseMs = 0;
+
+void beeperInit() { pinMode(PIN_BEEPER, OUTPUT); digitalWrite(PIN_BEEPER, LOW); }
+
+// Queue a non-blocking on/off pattern (durations in ms, starting with ON).
+void beepStart(const uint16_t *seq, int len) {
+  beepSeq = seq; beepLen = len; beepIdx = 0; beepPhaseMs = millis();
+}
+
+// Call every loop. Drives D8 from the horn (held) OR the active pattern.
+void beeperUpdate() {
+  bool patternOn = false;
+  if (beepIdx >= 0 && beepIdx < beepLen) {
+    if (millis() - beepPhaseMs >= beepSeq[beepIdx]) { beepIdx++; beepPhaseMs = millis(); }
+    patternOn = (beepIdx >= 0 && beepIdx < beepLen) && (beepIdx % 2 == 0);
+  }
+  digitalWrite(PIN_BEEPER, (hornActive || patternOn) ? HIGH : LOW);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // [WIFI] — AP + HTTP telemetry server (WiFiS3, stock UNO R4 WiFi)
 // ═══════════════════════════════════════════════════════════════
 // Hosts a Wi-Fi access point and serves telemetry as JSON at /data for
@@ -635,7 +669,8 @@ void wifiInit() {
     wifiServer.begin();
     // Build the dashboard ETag once. Length + firmware tag, so it changes
     // whenever the embedded page changes and stale caches auto-invalidate.
-    snprintf(pageEtag, sizeof(pageEtag), "\"d%uv710\"", (unsigned)strlen(INDEX_HTML));
+    snprintf(pageEtag, sizeof(pageEtag), "\"d%uv711\"", (unsigned)strlen(INDEX_HTML));
+    beepStart(BEEP_WIFI_READY, 3);   // "beep beep" — Wi-Fi AP is up/ready
     if (Serial) {
       Serial.print("# WiFi AP '");
       Serial.print(WIFI_SSID);
@@ -830,7 +865,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.10 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP (cached page) ===");
+    Serial.println("# === Digger V7.11 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/horn ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -875,6 +910,7 @@ void setup() {
   analogReadResolution(14);
   sbusRx.Begin();
   outputInit();
+  beeperInit();
   debugInit();
   Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
   wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
@@ -890,6 +926,7 @@ void loop() {
     sbusValid = !sbusData.failsafe;
   }
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
+  hornActive = sbusValid && (sbusData.ch[SBUS_CH_HORN] > HORN_ON_RAW);
   updateGear();
   updateJoystick(now);
 
@@ -915,6 +952,7 @@ void loop() {
   // 3.6 Wi-Fi — serve telemetry JSON to the dashboard (monitoring only).
   wifiUpdate();
   wifiDebug(now);
+  beeperUpdate();   // horn (RC SWD) + any queued beep pattern (D8)
 
   // 4. Debug
   debugPrint(now);
