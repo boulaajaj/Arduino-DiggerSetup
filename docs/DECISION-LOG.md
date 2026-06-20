@@ -5,6 +5,29 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-20 — Dashboard page-load froze control loop; fixed by HTTP caching
+
+- **Confirmed via USB-serial capture:** with no Wi-Fi client, loop runs clean
+  ~10 Hz, both ESCs telemetry OK (12.4–12.5 V), X.BUS solid after the interface-
+  board resolder (rx_total climbs steadily).
+- **Confirmed problem:** loading/refreshing the dashboard froze the loop 1–2 s
+  (24 stalls in 35 s, up to ~2 s), starving S.BUS reads, servo updates, and X.BUS
+  polling (rx_total nearly flat during stalls).
+- **Root cause:** 33 KB dashboard HTML served `Cache-Control: no-store` →
+  re-downloaded every refresh as ~33 sequential 1 KB blocking modem writes. The
+  SSE telemetry path was already numbers-only and fine.
+- **V7.9 (SHA dabfbf1):** AP channel 11, SSE 10→5 Hz, coalesced SSE writes,
+  `modem.timeout(50)` around `wifiUpdate()`. Caps each modem call at 50 ms but a
+  full page is ~33 calls → still ~2 s per load.
+- **V7.10 (SHA 4197350) — field-confirmed fix:** serve `/` with `ETag` +
+  `Cache-Control: no-cache`; parse `If-None-Match`; reply `304` on match. Refreshes
+  no longer re-download the page or freeze the loop. First load still ~2 s once
+  (inherent to serving 33 KB on the RA4M1); eliminating that is the V9 ESP32-S3
+  offload (#55).
+- **Safety note:** during any Wi-Fi-induced loop freeze, servo PWM holds its last
+  value and RC/joystick/failsafe are not serviced — do not load the dashboard
+  while driving until #55 lands.
+
 ## 2026-04-14 — X.BUS protocol confirmed
 
 - X.BUS is single-wire half-duplex, 115200 8N1, non-inverted (idle HIGH).
