@@ -76,6 +76,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 .g-cap{fill:radial-gradient(circle,#333,#111);stroke:#444;stroke-width:1}
 .gauge-val{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
   font-family:'Orbitron';font-size:1.3em;font-weight:700;text-shadow:0 0 10px currentColor}
+.gauge-val.big{font-size:1.9em;bottom:16px}
 .gauge-label{font-family:'Orbitron';font-size:0.5em;letter-spacing:2px;color:#555;margin-top:2px}
 
 /* Center column */
@@ -114,9 +115,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 .bot-bar-fill{height:100%;width:0%;border-radius:3px;transition:width .15s linear}
 
 /* Battery */
-.bat-gauge{width:60px;height:28px;border:2px solid #444;border-radius:3px;
+.bat-gauge{width:72px;height:34px;border:2px solid #444;border-radius:3px;
   position:relative;display:inline-block;vertical-align:middle}
-.bat-gauge::after{content:'';position:absolute;right:-5px;top:7px;width:4px;height:10px;
+.bat-gauge::after{content:'';position:absolute;right:-6px;top:10px;width:5px;height:13px;
   background:#444;border-radius:0 2px 2px 0}
 .bat-fill{position:absolute;inset:2px;border-radius:1px;transition:width 0.5s ease}
 
@@ -218,7 +219,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlRL" points="49,20 51,20 50.5,52 49.5,52" fill="#ff4444" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="6" fill="#1a1c22" stroke="#444" stroke-width="1.5"/>
         </svg>
-        <div class="gauge-val" id="vRL" style="color:#0cf">1280</div>
+        <div class="gauge-val big" id="vRL" style="color:#0cf">1280</div>
       </div>
       <div class="gauge-label">RPM</div>
     </div>
@@ -234,9 +235,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlCL" points="49,22 51,22 50.5,52 49.5,52" fill="#0cf" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="5" fill="#1a1c22" stroke="#333" stroke-width="1"/>
         </svg>
-        <div class="gauge-val" id="vCL" style="color:#0cf">22A</div>
+        <div class="gauge-val" id="vCL" style="color:#0cf">0W</div>
       </div>
-      <div class="gauge-label">CURRENT</div>
+      <div class="gauge-label">POWER</div>
     </div>
   </div>
 
@@ -283,13 +284,13 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
         <div>
           <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
           <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            L · <span id="batLV">11.4V</span> · <span id="batLPct" style="color:#0c6;font-weight:900;font-size:1.4em">82%</span>
+            L · <span id="batLV">11.4V</span> · <span id="batLPct" style="color:#0c6;font-weight:900;font-size:1.65em">82%</span>
           </div>
         </div>
         <div>
           <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
           <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            R · <span id="batRV">11.2V</span> · <span id="batRPct" style="color:#0c6;font-weight:900;font-size:1.4em">78%</span>
+            R · <span id="batRV">11.2V</span> · <span id="batRPct" style="color:#0c6;font-weight:900;font-size:1.65em">78%</span>
           </div>
         </div>
       </div>
@@ -345,7 +346,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlRR" points="49,20 51,20 50.5,52 49.5,52" fill="#ff4444" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="6" fill="#1a1c22" stroke="#444" stroke-width="1.5"/>
         </svg>
-        <div class="gauge-val" id="vRR" style="color:#f80">1315</div>
+        <div class="gauge-val big" id="vRR" style="color:#f80">1315</div>
       </div>
       <div class="gauge-label">RPM</div>
     </div>
@@ -361,9 +362,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlCR" points="49,22 51,22 50.5,52 49.5,52" fill="#f80" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="5" fill="#1a1c22" stroke="#333" stroke-width="1"/>
         </svg>
-        <div class="gauge-val" id="vCR" style="color:#f80">24A</div>
+        <div class="gauge-val" id="vCR" style="color:#f80">0W</div>
       </div>
-      <div class="gauge-label">CURRENT</div>
+      <div class="gauge-label">POWER</div>
     </div>
   </div>
 
@@ -423,7 +424,7 @@ const WATCHDOG_MS = 3000;       // silent SSE → force reconnect (defeats Safar
 const RECONNECT_DELAY_MS = 1500;
 const ESC_STALE_AGE_MS = 1500;  // per-ESC freshness threshold
 
-const MR=6000, GR=20, WC=0.95;
+const MR=6000, GR=20, WC=0.95, PWR_MAX=750;
 const gn=['ECO','NORMAL','BOOST'], gcl=['g-eco','g-norm','g-turbo'];
 
 let eL={r:0,c:0,b:11.4,tM:25,tE:25}, eR={r:0,c:0,b:11.2,tM:25,tE:25};
@@ -472,12 +473,12 @@ function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.styl
 // ── Render (rAF-throttled to avoid layout thrash if frames bunch up) ──
 function render(){
   rafScheduled=false;
-  ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c,50);
-  ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c,50);
+  ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c*eL.b,PWR_MAX);
+  ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c*eR.b,PWR_MAX);
   set('vEL',eL.tE.toFixed(0)+'°');set('vML',eL.tM.toFixed(0)+'°');
-  set('vRL',Math.round(eL.r));set('vCL',eL.c.toFixed(1)+'A');
+  set('vRL',Math.round(eL.r));set('vCL',Math.round(eL.c*eL.b)+'W');
   set('vER',eR.tE.toFixed(0)+'°');set('vMR',eR.tM.toFixed(0)+'°');
-  set('vRR',Math.round(eR.r));set('vCR',eR.c.toFixed(1)+'A');
+  set('vRR',Math.round(eR.r));set('vCR',Math.round(eR.c*eR.b)+'W');
   [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
   // Vehicle speed — average of SIGNED per-track velocities. A 360 pivot
