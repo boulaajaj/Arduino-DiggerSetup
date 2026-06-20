@@ -121,12 +121,17 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
   border:1px solid #2a2a2a;margin-top:2px}
 .bot-bar-fill{height:100%;width:0%;border-radius:3px;transition:width .15s linear}
 
-/* Battery */
-.bat-gauge{width:72px;height:34px;border:2px solid #444;border-radius:3px;
+/* Battery — one large gauge per track, in that track's panel footer */
+.bat-gauge{width:150px;height:48px;border:3px solid #555;border-radius:4px;
   position:relative;display:inline-block;vertical-align:middle}
-.bat-gauge::after{content:'';position:absolute;right:-6px;top:10px;width:5px;height:13px;
-  background:#444;border-radius:0 2px 2px 0}
-.bat-fill{position:absolute;inset:2px;border-radius:1px;transition:width 0.5s ease}
+.bat-gauge::after{content:'';position:absolute;right:-7px;top:16px;width:6px;height:16px;
+  background:#555;border-radius:0 2px 2px 0}
+.bat-fill{position:absolute;inset:3px;border-radius:2px;transition:width 0.5s ease}
+.bat-footer{grid-column:1/-1;text-align:center;margin-top:10px;
+  border-top:1px solid #2a2520;padding-top:8px}
+.bat-cap{font-family:'Orbitron';font-size:1.2em;font-weight:900;margin-top:6px}
+.bat-cap .bv{color:#9aa;font-size:0.7em;font-weight:700}
+.bat-foot-label{font-family:'Orbitron';font-size:0.5em;letter-spacing:3px;color:#664;margin-top:3px}
 
 /* Mode pills */
 .mode-bar{display:flex;justify-content:center;gap:6px;padding:3px 0}
@@ -246,6 +251,12 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
       </div>
       <div class="gauge-label">POWER</div>
     </div>
+
+    <div class="bat-footer">
+      <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
+      <div class="bat-cap"><span id="batLPct" style="color:#0c6">82%</span> <span class="bv" id="batLV">11.4V</span></div>
+      <div class="bat-foot-label">LEFT BATTERY</div>
+    </div>
   </div>
 
   <!-- CENTER -->
@@ -286,23 +297,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
       <div class="gear-badge g-norm" id="gearBadge">NORMAL</div>
     </div>
 
-    <div style="text-align:center">
-      <div style="display:flex;gap:10px;justify-content:center;align-items:center">
-        <div>
-          <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            L · <span id="batLV">11.4V</span> · <span id="batLPct" style="color:#0c6;font-weight:900;font-size:1.65em">82%</span>
-          </div>
-        </div>
-        <div>
-          <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            R · <span id="batRV">11.2V</span> · <span id="batRPct" style="color:#0c6;font-weight:900;font-size:1.65em">78%</span>
-          </div>
-        </div>
-      </div>
-      <div style="font-family:Orbitron;font-size:0.45em;color:#553;letter-spacing:2px;margin-top:2px">BATTERY</div>
-    </div>
+    <!-- Battery moved to a large footer under each track panel. -->
   </div>
 
   <!-- RIGHT TRACK (mirrored) -->
@@ -372,6 +367,12 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
         <div class="gauge-val" id="vCR" style="color:#f80">0W</div>
       </div>
       <div class="gauge-label">POWER</div>
+    </div>
+
+    <div class="bat-footer">
+      <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
+      <div class="bat-cap"><span id="batRPct" style="color:#0c6">78%</span> <span class="bv" id="batRV">11.2V</span></div>
+      <div class="bat-foot-label">RIGHT BATTERY</div>
     </div>
   </div>
 
