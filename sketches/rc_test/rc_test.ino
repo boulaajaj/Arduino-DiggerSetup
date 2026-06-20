@@ -174,6 +174,14 @@ const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
+// Wi-Fi telemetry-dashboard tuning (monitoring only — never affects control).
+// Centralized here per the [CONFIG] "all tunable constants" rule; the Wi-Fi
+// identity (SSID/pass) and runtime objects stay in [WIFI].
+const uint8_t  WIFI_AP_CHANNEL       = 11;   // 2.4 GHz AP channel — off the crowded 1/6 (issue #54)
+const uint32_t SSE_INTERVAL_MS       = 200;  // dashboard push period = 5 Hz (X.BUS poll rate is independent)
+const uint32_t WIFI_MODEM_TIMEOUT_MS = 50;   // per-call Wi-Fi/modem timeout so one stalled write can't freeze loop()
+const size_t   SSE_FRAME_CAP         = 384;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
+
 
 // ═══════════════════════════════════════════════════════════════
 // [DRIVE] — curvatureDrive: proven FRC algorithm (WPILib)
@@ -583,10 +591,8 @@ void telemUpdate() {
 
 const char WIFI_SSID[] = "Digger-Telemetry";
 const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
-// Pin the AP to 2.4 GHz channel 11 to sit clear of the common 1/6 home-router
-// occupancy (issue #54). FHSS RC (RC6GS) is unaffected; this only helps the
-// dashboard's Wi-Fi link, not the control radio.
-const uint8_t WIFI_AP_CHANNEL = 11;
+// Wi-Fi tuning constants (AP channel, SSE rate, modem timeout, frame cap) live
+// in [CONFIG] per the project's tunable-constants rule.
 WiFiServer wifiServer(80);
 bool     wifiUp  = false;
 uint32_t wifiSeq = 0;
@@ -600,9 +606,6 @@ char pageEtag[24] = "\"d0\"";
 // update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
 WiFiClient     sseClient;
 uint32_t       sseLastMs = 0;
-const uint32_t SSE_INTERVAL_MS = 200;   // push live telemetry at 5 Hz (issue #54:
-                                        // halve Wi-Fi push load; X.BUS poll rate
-                                        // is independent and unchanged)
 
 // Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
 int wifiMode() {
@@ -741,14 +744,16 @@ void wifiSendPage(WiFiClient &client, bool notModified) {
 void wifiUpdate() {
   if (!wifiUp) return;
 
-  // Cap how long ANY Wi-Fi/modem call below may block this loop pass. The
-  // WiFiS3 default is MODEM_TIMEOUT = 10 000 ms — a stalled iPhone TCP window
-  // (Safari backgrounded, weak signal) can otherwise freeze loop() for seconds,
-  // starving servo + S.BUS updates. 50 ms bounds the worst-case stall; the cost
-  // is an occasionally dropped telemetry frame, the right trade for a vehicle
-  // controller (issue #54). Restored to the default before returning so AP
-  // bring-up and other modem users keep the full timeout.
-  modem.timeout(50);
+  // Cap EACH Wi-Fi/modem call below at WIFI_MODEM_TIMEOUT_MS. The WiFiS3 default
+  // is MODEM_TIMEOUT = 10 000 ms — a stalled iPhone TCP window (Safari
+  // backgrounded, weak signal) can otherwise freeze loop() for seconds, starving
+  // servo + S.BUS updates. NOTE: this bounds each INDIVIDUAL modem operation, not
+  // the total time in wifiUpdate() — serving the full page makes several
+  // client.write() calls, so the aggregate can exceed it (page delivery is the
+  // main cost, and caching keeps it rare). The cost is an occasionally dropped
+  // telemetry frame — the right trade for a vehicle controller (issue #54).
+  // Restored to the default before returning so AP bring-up keeps the full timeout.
+  modem.timeout(WIFI_MODEM_TIMEOUT_MS);
 
   WiFiClient client = wifiServer.available();
   if (client) {
@@ -793,9 +798,9 @@ void wifiUpdate() {
       // Build the whole SSE frame — heartbeat comment, data line, terminator —
       // into one buffer and ship it in a SINGLE write(). That is one AT
       // round-trip to the ESP32 bridge per push instead of three, cutting the
-      // blocking modem calls 3:1 (issue #54). 384 B comfortably holds the
+      // blocking modem calls 3:1 (issue #54). SSE_FRAME_CAP comfortably holds the
       // 11-byte prefix + ~250-byte JSON + 2-byte terminator.
-      char frame[384];
+      char frame[SSE_FRAME_CAP];
       int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
       // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body can
       // never crowd it out; buildTelemJson clamps its own length to the cap we
