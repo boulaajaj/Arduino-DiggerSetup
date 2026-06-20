@@ -393,7 +393,7 @@ any tested driving behavior. Both sketches recompile clean (rc_test 39% flash /
 ## 2026-06-19 — Doc alignment to current hardware (issue #52)
 
 Confirmed canonical board = **UNO R4 WiFi** (migration complete); X.BUS telemetry
-+ Wi-Fi dashboard are LIVE (V7.8), not deferred — corrects #52's original table.
+and the Wi-Fi dashboard are LIVE (V7.8), not deferred — corrects #52's table.
 
 - Rewrote `PROJECT-PLAN.md` and `CLAUDE.md` to GL10/GL540L + UNO R4 WiFi +
   **open-loop PWM control** (Arduino outputs servo PWM 1000–2000 µs on D9/D10;
