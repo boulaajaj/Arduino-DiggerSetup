@@ -21,13 +21,13 @@ const char INDEX_HTML[] PROGMEM = R"DIGGER(
 /* Fixed-ratio dashboard: 1280x720 stage scaled to fit viewport (letterbox in
    portrait, fill in landscape). NOT responsive — internal layout is locked. */
 html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',sans-serif;
-  overflow:hidden;height:100vh;width:100vw}
+  overflow:hidden;height:100vh;width:100vw;
+  display:flex;align-items:center;justify-content:center}
 
 .dash-frame{
-  width:1280px;height:720px;flex:none;
-  position:fixed;left:50%;top:50%;          /* centered + scaled to fit by fitStage() */
-  transform-origin:center center;
-  overflow:hidden;                          /* never spill past the 1280x720 stage */
+  width:1280px;height:720px;flex:none;position:relative;
+  transform-origin:center center;          /* flex-centered; JS scales to fit (fitStage) */
+  overflow:hidden;                         /* clip any minor internal overflow */
   display:flex;flex-direction:column;
   background:
     radial-gradient(ellipse at 50% 0%, rgba(60,50,30,0.15) 0%, transparent 50%),
@@ -646,17 +646,18 @@ function fitStage(){
   const stage = document.querySelector('.dash-frame');
   if(!stage) return;
   const BW=1280, BH=720;
-  // Use the visual viewport (reliable on iOS; falls back to innerWidth/Height)
-  // and always scale to the SMALLER ratio so the whole stage fits the screen.
-  const vw = (window.visualViewport && window.visualViewport.width)  || window.innerWidth;
-  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  // Scale the flex-centered stage to the SMALLER ratio so the whole thing fits
+  // (portrait or landscape). visualViewport is the most reliable size on iOS.
+  const vw = (window.visualViewport && window.visualViewport.width)  || window.innerWidth  || document.documentElement.clientWidth;
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
   const s = Math.min(vw/BW, vh/BH);
-  stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  stage.style.transform = 'scale(' + s + ')';
 }
 window.addEventListener('resize', fitStage);
-window.addEventListener('orientationchange', ()=>setTimeout(fitStage, 50));
+window.addEventListener('orientationchange', ()=>setTimeout(fitStage, 100));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
-fitStage();
+// Run now + delayed retries to catch iOS settling the viewport late.
+fitStage(); setTimeout(fitStage, 200); setTimeout(fitStage, 600);
 </script>
 </body>
 </html>
