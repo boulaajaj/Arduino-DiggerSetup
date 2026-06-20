@@ -1,4 +1,4 @@
-// Pin Interrupt Test — Arduino Nano R4
+// Pin Interrupt Test — Arduino UNO R4 WiFi
 // Tests whether attachInterrupt() works on D2, D3, D4, D7.
 // D2/D3 should work (documented). D4/D7 are the question marks.
 //

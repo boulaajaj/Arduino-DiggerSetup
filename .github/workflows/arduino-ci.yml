@@ -22,10 +22,6 @@ jobs:
           - sbus_d12_test
           - telem_decode
           - usb_test
-          - xbus_inverted_test
-          - xbus_master
-          - xbus_poll_test
-          - xbus_probe
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2

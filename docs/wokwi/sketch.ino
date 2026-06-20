@@ -2,7 +2,7 @@
 // This is a simplified version for Wokwi visualization.
 // The real sketch is in sketches/rc_test/rc_test.ino
 //
-// Board: Arduino UNO (stand-in for Nano R4 in Wokwi)
+// Board: Arduino UNO (stand-in for UNO R4 WiFi in Wokwi)
 //
 // Pin Map:
 //   D0  <- X.BUS shared bus (both ESCs via diode-OR)

@@ -1,9 +1,9 @@
 // ============================================================
-// Hardware Diagnostic Sketch — Arduino Nano R4
+// Hardware Diagnostic Sketch — Arduino UNO R4 WiFi
 // Version: 2.1 (2026-03-31)
 //
 // Uses pulseIn() for RC channels (not interrupts — D4 and D7
-// don't support attachInterrupt on Nano R4 Renesas core).
+// don't support attachInterrupt on UNO R4 WiFi Renesas core).
 //
 // CSV format (~10 Hz):
 //   RC1,RC2,RC4,RC5,JoyY,JoyX,OutL,OutR,XbusB
@@ -52,7 +52,7 @@ void setup() {
   delay(500);
 
   Serial.println("# ==========================================");
-  Serial.println("# HARDWARE DIAGNOSTIC v2.1 — Arduino Nano R4");
+  Serial.println("# HARDWARE DIAGNOSTIC v2.1 — Arduino UNO R4 WiFi");
   Serial.println("# RC read via pulseIn (no interrupts)");
   Serial.println("# ==========================================");
 
