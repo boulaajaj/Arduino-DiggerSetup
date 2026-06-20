@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Malaki SuperTracks</title>
+<!-- Installable home-screen app: launches standalone (no browser chrome) on iOS/iPadOS. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Digger">
+<meta name="theme-color" content="#0a0b0d">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAZUSURBVHhe7d2vjx1VGMbxbQulQNulDSEIECQEUUMCpgIBAgSihhBMDSGYChKCAEEChhAECBKCqGmCQuJwOBwOh8Ph+A8ueXbZdPede/fO3HNm7nmf8xUf0+6Pe+d+xczsO+ccXD+8uQJcHMR/ADIjaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFgh6IW8+PxTg39DfQS9gOeevbH687uLq1svEPXcCHoBP3z42OrfBwerXz59dPB/qIugZ/b6y9ePYj5x942rg69BPQQ9s9+/unQm6L++v7h65ukbg69DHQQ9o4/vPHEm5hPfvn9l8LWog6Bnorsa/9y/MIj5xO1bh4PvQTmCnsnPn1weRHyaTkXi96AcQc/g3deuDgJeR6ck8XtRhqAr0wWf7jnHeNf5+8cL/MGlMoKu7Ou7Vwbhnuenjy4PfgZ2R9AV6ULvvAvBTe7cvjb4WdgNQVf025ePDGId449vLnFvuhKCruSDN58chDrFF+89PviZmI6gK9CFnf4CGCOdQqcqr7zEvelSBF3B/XvHw0elfv2c4aVSBF0oDh+VYnipDEEX0IVcHD4qpVMXzU/H34VxCLrAZ++sHz4qpfnp+LswDkHvSE+f7HLPeSydysTfie0Iekfbho9KMby0G4Lewdjho1IML01H0BPpQrD0nvNYOqVheGkagp5IT5vE8OakU5v4GrAZQU+g4aMY3BIYXhqPoCfYdfiolOarGV4ah6BHuvd22fBRKc1Zx9eEIYIeQRdmerokRrYkXSDyYO12BD1CreGjUgwvbUfQW7z16rVBWPukuev4GvEQQZ9DF2J6miRGtU+6B8696c0I+hx6iiQG1QKdAsXXimMEvcHcw0elGF5aj6A30NK3MaKWaHiJe9NDBL2GnhqJAbVI89jxtfeOoAM9LbLU8FEphpeGCDpYevioFMNLZxH0KfsaPiql+ez4XnpF0KfUfuB1KewK8BBB/2/TavtZsCvAMYJuZPioFMNLxwj68ObRkrYxkIw0rx3fW2+6D1pPg8QwMtPcdnyPPek66Cmr7WfR+64AXQfd6vBRqZ6Hl7oNWkvXtjx8VEpz3PE996DboPX0R4zASa+7AnQZdOlq+1n0OLzUXdCZho9K6ZRKc93xGDjrLmgtVRs/eGea647HwFlXQddebT+LnnYF6CrorMNHpXoaXuom6OzDR6V6GV7qImj95cz5nvNYPQwvdRH03KvtZ9HDrgD2QS+12n4W7rsCWAftOHxUyn14yTpoLUEbP1AcHM1/x2PlwjZoXQBxIbiZ664AtkHva7X9LFyHlyyD7mX4qJTmweOxy84uaF3w9DJ8VEqnZJoLj8cwM7ugW1ltPwu3XQGsgu51+KiU0/CSTdC6wOl1+KiUTtE0Jx6PaUY2QevpjPhBYTzNicdjmpFF0K2vtp+Fw64AFkEzfFSHw/BS+qAZPqor+/BS6qB1Icg957qy7wqQOuhsq+1nkXlXgLRBZ11tP4usw0tpg2b4aF6aI884vJQyaC0ZGz8A1Kd58njsW5cuaIfV9rPIuCtAuqAZPlpWtuGlVEFridh4wDE/zZfHz6JVaYLWBYqesogHG/PTvf4s96bTBO262n4WWXYFSBE0w0dtyDC8lCJoLQkbDy6Wp+Gl1u9NNx+0nqaIBxb70/quAE0H3dNq+1m0PrzUdNAMH7Wp5eGlZoNm+KhtmkOPn1kLmg2aB17b1uquAE0G3ftq+1m0uCtAc0EzfJRHi8NLzQWtpV7jgUO7NJceP8N9aipoPSURDxjap/n0+FnuSzNBs9p+Xi3tCtBM0Awf5dbK8FITQWtJV4aP8tO8evxsl9ZE0HoqIh4c5NPCrgB7D1rnXjrdgId9L6C+96CBmggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVv4DWreiLpysy+4AAAAASUVORK5CYII=">
 <style>
 /* Web fonts omitted on purpose: the digger AP has no internet, so an @import
    here only stalls first paint while the browser waits for a fetch that can
