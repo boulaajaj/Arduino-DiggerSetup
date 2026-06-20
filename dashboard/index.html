@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Malaki SuperTracks</title>
+<!-- Installable home-screen app: launches standalone (no browser chrome) on iOS/iPadOS. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Digger">
+<meta name="theme-color" content="#0a0b0d">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAZUSURBVHhe7d2vjx1VGMbxbQulQNulDSEIECQEUUMCpgIBAgSihhBMDSGYChKCAEEChhAECBKCqGmCQuJwOBwOh8Ph+A8ueXbZdPede/fO3HNm7nmf8xUf0+6Pe+d+xczsO+ccXD+8uQJcHMR/ADIjaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFghaFgh6IW8+PxTg39DfQS9gOeevbH687uLq1svEPXcCHoBP3z42OrfBwerXz59dPB/qIugZ/b6y9ePYj5x942rg69BPQQ9s9+/unQm6L++v7h65ukbg69DHQQ9o4/vPHEm5hPfvn9l8LWog6Bnorsa/9y/MIj5xO1bh4PvQTmCnsnPn1weRHyaTkXi96AcQc/g3deuDgJeR6ck8XtRhqAr0wWf7jnHeNf5+8cL/MGlMoKu7Ou7Vwbhnuenjy4PfgZ2R9AV6ULvvAvBTe7cvjb4WdgNQVf025ePDGId449vLnFvuhKCruSDN58chDrFF+89PviZmI6gK9CFnf4CGCOdQqcqr7zEvelSBF3B/XvHw0elfv2c4aVSBF0oDh+VYnipDEEX0IVcHD4qpVMXzU/H34VxCLrAZ++sHz4qpfnp+LswDkHvSE+f7HLPeSydysTfie0Iekfbho9KMby0G4Lewdjho1IML01H0BPpQrD0nvNYOqVheGkagp5IT5vE8OakU5v4GrAZQU+g4aMY3BIYXhqPoCfYdfiolOarGV4ah6BHuvd22fBRKc1Zx9eEIYIeQRdmerokRrYkXSDyYO12BD1CreGjUgwvbUfQW7z16rVBWPukuev4GvEQQZ9DF2J6miRGtU+6B8696c0I+hx6iiQG1QKdAsXXimMEvcHcw0elGF5aj6A30NK3MaKWaHiJe9NDBL2GnhqJAbVI89jxtfeOoAM9LbLU8FEphpeGCDpYevioFMNLZxH0KfsaPiql+ez4XnpF0KfUfuB1KewK8BBB/2/TavtZsCvAMYJuZPioFMNLxwj68ObRkrYxkIw0rx3fW2+6D1pPg8QwMtPcdnyPPek66Cmr7WfR+64AXQfd6vBRqZ6Hl7oNWkvXtjx8VEpz3PE996DboPX0R4zASa+7AnQZdOlq+1n0OLzUXdCZho9K6ZRKc93xGDjrLmgtVRs/eGea647HwFlXQddebT+LnnYF6CrorMNHpXoaXuom6OzDR6V6GV7qImj95cz5nvNYPQwvdRH03KvtZ9HDrgD2QS+12n4W7rsCWAftOHxUyn14yTpoLUEbP1AcHM1/x2PlwjZoXQBxIbiZ664AtkHva7X9LFyHlyyD7mX4qJTmweOxy84uaF3w9DJ8VEqnZJoLj8cwM7ugW1ltPwu3XQGsgu51+KiU0/CSTdC6wOl1+KiUTtE0Jx6PaUY2QevpjPhBYTzNicdjmpFF0K2vtp+Fw64AFkEzfFSHw/BS+qAZPqor+/BS6qB1Icg957qy7wqQOuhsq+1nkXlXgLRBZ11tP4usw0tpg2b4aF6aI884vJQyaC0ZGz8A1Kd58njsW5cuaIfV9rPIuCtAuqAZPlpWtuGlVEFridh4wDE/zZfHz6JVaYLWBYqesogHG/PTvf4s96bTBO262n4WWXYFSBE0w0dtyDC8lCJoLQkbDy6Wp+Gl1u9NNx+0nqaIBxb70/quAE0H3dNq+1m0PrzUdNAMH7Wp5eGlZoNm+KhtmkOPn1kLmg2aB17b1uquAE0G3ftq+1m0uCtAc0EzfJRHi8NLzQWtpV7jgUO7NJceP8N9aipoPSURDxjap/n0+FnuSzNBs9p+Xi3tCtBM0Awf5dbK8FITQWtJV4aP8tO8evxsl9ZE0HoqIh4c5NPCrgB7D1rnXjrdgId9L6C+96CBmggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVggaVv4DWreiLpysy+4AAAAASUVORK5CYII=">
 <style>
 /* Web fonts omitted on purpose: the digger AP has no internet, so an @import
    here only stalls first paint while the browser waits for a fetch that can
@@ -75,6 +82,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 .g-cap{fill:radial-gradient(circle,#333,#111);stroke:#444;stroke-width:1}
 .gauge-val{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
   font-family:'Orbitron';font-size:1.3em;font-weight:700;text-shadow:0 0 10px currentColor}
+.gauge-val.big{font-size:1.9em;bottom:16px}
 .gauge-label{font-family:'Orbitron';font-size:0.5em;letter-spacing:2px;color:#555;margin-top:2px}
 
 /* Center column */
@@ -112,12 +120,17 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
   border:1px solid #2a2a2a;margin-top:2px}
 .bot-bar-fill{height:100%;width:0%;border-radius:3px;transition:width .15s linear}
 
-/* Battery */
-.bat-gauge{width:60px;height:28px;border:2px solid #444;border-radius:3px;
+/* Battery — one large gauge per track, in that track's panel footer */
+.bat-gauge{width:150px;height:48px;border:3px solid #555;border-radius:4px;
   position:relative;display:inline-block;vertical-align:middle}
-.bat-gauge::after{content:'';position:absolute;right:-5px;top:7px;width:4px;height:10px;
-  background:#444;border-radius:0 2px 2px 0}
-.bat-fill{position:absolute;inset:2px;border-radius:1px;transition:width 0.5s ease}
+.bat-gauge::after{content:'';position:absolute;right:-7px;top:16px;width:6px;height:16px;
+  background:#555;border-radius:0 2px 2px 0}
+.bat-fill{position:absolute;inset:3px;border-radius:2px;transition:width 0.5s ease}
+.bat-footer{grid-column:1/-1;text-align:center;margin-top:10px;
+  border-top:1px solid #2a2520;padding-top:8px}
+.bat-cap{font-family:'Orbitron';font-size:1.2em;font-weight:900;margin-top:6px}
+.bat-cap .bv{color:#9aa;font-size:0.7em;font-weight:700}
+.bat-foot-label{font-family:'Orbitron';font-size:0.5em;letter-spacing:3px;color:#664;margin-top:3px}
 
 /* Mode pills */
 .mode-bar{display:flex;justify-content:center;gap:6px;padding:3px 0}
@@ -217,7 +230,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlRL" points="49,20 51,20 50.5,52 49.5,52" fill="#ff4444" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="6" fill="#1a1c22" stroke="#444" stroke-width="1.5"/>
         </svg>
-        <div class="gauge-val" id="vRL" style="color:#0cf">1280</div>
+        <div class="gauge-val big" id="vRL" style="color:#0cf">1280</div>
       </div>
       <div class="gauge-label">RPM</div>
     </div>
@@ -233,9 +246,15 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlCL" points="49,22 51,22 50.5,52 49.5,52" fill="#0cf" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="5" fill="#1a1c22" stroke="#333" stroke-width="1"/>
         </svg>
-        <div class="gauge-val" id="vCL" style="color:#0cf">22A</div>
+        <div class="gauge-val" id="vCL" style="color:#0cf">0W</div>
       </div>
-      <div class="gauge-label">CURRENT</div>
+      <div class="gauge-label">POWER</div>
+    </div>
+
+    <div class="bat-footer">
+      <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
+      <div class="bat-cap"><span id="batLPct" style="color:#0c6">82%</span> <span class="bv" id="batLV">11.4V</span></div>
+      <div class="bat-foot-label">LEFT BATTERY</div>
     </div>
   </div>
 
@@ -277,23 +296,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
       <div class="gear-badge g-norm" id="gearBadge">NORMAL</div>
     </div>
 
-    <div style="text-align:center">
-      <div style="display:flex;gap:10px;justify-content:center;align-items:center">
-        <div>
-          <div class="bat-gauge"><div class="bat-fill" id="batLFill" style="width:80%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            L · <span id="batLV">11.4V</span> · <span id="batLPct" style="color:#0c6;font-weight:900;font-size:1.4em">82%</span>
-          </div>
-        </div>
-        <div>
-          <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
-          <div style="font-family:Orbitron;font-size:0.5em;color:#aaa;margin-top:2px;text-align:center">
-            R · <span id="batRV">11.2V</span> · <span id="batRPct" style="color:#0c6;font-weight:900;font-size:1.4em">78%</span>
-          </div>
-        </div>
-      </div>
-      <div style="font-family:Orbitron;font-size:0.45em;color:#553;letter-spacing:2px;margin-top:2px">BATTERY</div>
-    </div>
+    <!-- Battery moved to a large footer under each track panel. -->
   </div>
 
   <!-- RIGHT TRACK (mirrored) -->
@@ -344,7 +347,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlRR" points="49,20 51,20 50.5,52 49.5,52" fill="#ff4444" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="6" fill="#1a1c22" stroke="#444" stroke-width="1.5"/>
         </svg>
-        <div class="gauge-val" id="vRR" style="color:#f80">1315</div>
+        <div class="gauge-val big" id="vRR" style="color:#f80">1315</div>
       </div>
       <div class="gauge-label">RPM</div>
     </div>
@@ -360,9 +363,15 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
           <polygon id="ndlCR" points="49,22 51,22 50.5,52 49.5,52" fill="#f80" filter="url(#gl)" transform="rotate(0,50,50)"/>
           <circle cx="50" cy="50" r="5" fill="#1a1c22" stroke="#333" stroke-width="1"/>
         </svg>
-        <div class="gauge-val" id="vCR" style="color:#f80">24A</div>
+        <div class="gauge-val" id="vCR" style="color:#f80">0W</div>
       </div>
-      <div class="gauge-label">CURRENT</div>
+      <div class="gauge-label">POWER</div>
+    </div>
+
+    <div class="bat-footer">
+      <div class="bat-gauge"><div class="bat-fill" id="batRFill" style="width:78%;background:linear-gradient(90deg,#0c6,#4f8)"></div></div>
+      <div class="bat-cap"><span id="batRPct" style="color:#0c6">78%</span> <span class="bv" id="batRV">11.2V</span></div>
+      <div class="bat-foot-label">RIGHT BATTERY</div>
     </div>
   </div>
 
@@ -422,7 +431,7 @@ const WATCHDOG_MS = 3000;       // silent SSE → force reconnect (defeats Safar
 const RECONNECT_DELAY_MS = 1500;
 const ESC_STALE_AGE_MS = 1500;  // per-ESC freshness threshold
 
-const MR=6000, GR=20, WC=0.95;
+const MR=6000, GR=20, WC=0.95, PWR_MAX=750;
 const gn=['ECO','NORMAL','BOOST'], gcl=['g-eco','g-norm','g-turbo'];
 
 let eL={r:0,c:0,b:11.4,tM:25,tE:25}, eR={r:0,c:0,b:11.2,tM:25,tE:25};
@@ -471,12 +480,12 @@ function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.styl
 // ── Render (rAF-throttled to avoid layout thrash if frames bunch up) ──
 function render(){
   rafScheduled=false;
-  ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c,50);
-  ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c,50);
+  ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c*eL.b,PWR_MAX);
+  ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c*eR.b,PWR_MAX);
   set('vEL',eL.tE.toFixed(0)+'°');set('vML',eL.tM.toFixed(0)+'°');
-  set('vRL',Math.round(eL.r));set('vCL',eL.c.toFixed(1)+'A');
+  set('vRL',Math.round(eL.r));set('vCL',Math.round(Math.max(0,eL.c*eL.b))+'W');
   set('vER',eR.tE.toFixed(0)+'°');set('vMR',eR.tM.toFixed(0)+'°');
-  set('vRR',Math.round(eR.r));set('vCR',eR.c.toFixed(1)+'A');
+  set('vRR',Math.round(eR.r));set('vCR',Math.round(Math.max(0,eR.c*eR.b))+'W');
   [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
   // Vehicle speed — average of SIGNED per-track velocities. A 360 pivot
