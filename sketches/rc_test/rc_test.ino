@@ -6,15 +6,14 @@
 // RC operator (Jason) and joystick rider (Malaki) share control
 // via 3-position override switch.
 //
-// Hardware shift (2026-04-25): swapped from E10/E3665 to GL10 ESC
-// + GL540L motor. The GL10's FOC handles motor acceleration
-// compensation and smoothness internally — Arduino's job shrinks
-// to: input mixing, override switch, gear caps.
+// Hardware (2026-04-25): GL10 FOC ESC + GL540L motor (replaced the
+// earlier sensored-ESC setup). The GL10's FOC handles motor
+// acceleration compensation and smoothness internally — Arduino's job
+// shrinks to: input mixing, override switch, gear caps.
 // V7.2 removed the Arduino-side inertia filter; the ESC's own
 // Acceleration + Drag Force settings own command smoothing now.
 // V7.6 removed the reverse-direction beeper entirely — audible
-// alerts will return as a battery-aware system after the planned
-// Nano R4 → UNO R4 migration (see GitHub issue tracker).
+// alerts will return as a battery-aware system (see GitHub issue tracker).
 // Telemetry: X.BUS Read Register (func 0x10) is polled non-blocking on
 // Serial1 (D0/D1) — READ-ONLY. 0x10 is service control; it never puts the
 // ESC into BUS_MODE, so PWM control authority is fully preserved. Both
@@ -168,7 +167,7 @@ const float RC_STEERING_GAIN = 1.00f;
 
 // Reverse speed limit — percentage of forward max (straight-line only).
 // 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
-// cap was for the older E10/E3665 hardware; GL10 + GL540L can take
+// cap was for the older sensored-ESC hardware; GL10 + GL540L can take
 // full reverse without trouble.
 const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 
@@ -456,7 +455,7 @@ int      telDbgSnapLen    = 0;
 uint32_t telDbgPrintPrevMs = 0;
 
 // Checksum = low 8 bits of the sum of bytes [1 .. len-2] (header & checksum
-// excluded). Matches the framing used in the bench-confirmed xbus_master.
+// excluded). Matches the framing confirmed on the bench during X.BUS bring-up.
 uint8_t xbusChecksum(const uint8_t *f, int len) {
   uint8_t s = 0;
   for (int i = 1; i < len - 1; i++) s += f[i];

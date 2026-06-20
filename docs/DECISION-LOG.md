@@ -389,3 +389,22 @@ any tested driving behavior. Both sketches recompile clean (rc_test 39% flash /
   SSE coalescing — that is issue #54, gated on hardware inspection.
 - **Re-test:** flight edits are behavior-neutral, so driving cannot change; a
   quick re-flash smoke check is cheap insurance but not required for control.
+
+## 2026-06-19 — Doc alignment to current hardware (issue #52)
+
+Confirmed canonical board = **UNO R4 WiFi** (migration complete); X.BUS telemetry
+and the Wi-Fi dashboard are LIVE (V7.8), not deferred — corrects #52's table.
+
+- Rewrote `PROJECT-PLAN.md` and `CLAUDE.md` to GL10/GL540L + UNO R4 WiFi +
+  **open-loop PWM control** (Arduino outputs servo PWM 1000–2000 µs on D9/D10;
+  GL10 internal FOC owns smoothing; no Arduino-side PID/feedforward/inertia) +
+  live X.BUS 0x10 telemetry (monitoring-only) + V7.8. FQBN `unor4wifi`, port COM7.
+- Deleted superseded retired-hardware files: `docs/WIRING-GUIDE.md` (old
+  E10/E3665), `docs/PLANT-CHARACTERIZATION.md`, `docs/XBUS-INVESTIGATION.md`, and
+  sketches `xbus_master` / `xbus_probe` / `xbus_inverted_test` / `xbus_poll_test`
+  (also removed from the arduino-ci matrix). `WIRING-GUIDE-V8.md` is the canonical
+  wiring reference.
+- Swept E10/E3665/CS7581/UNO-Q tokens out of all current files (acceptance grep
+  clean); remaining "Nano R4" mentions are historical/comparative only.
+- `XBUS-PROTOCOL.md` kept as a CURRENT reference (live telemetry uses func 0x10).
+- All sketches compile on `unor4wifi`; markdownlint clean on changed docs.

@@ -2,17 +2,17 @@
 
 Reference document for the Arduino DiggerSetup project. Covers RC input
 architecture, tank mixing best practices, and efficient loop patterns for
-real-time motor control on the Arduino Nano R4 (Renesas RA4M1).
+real-time motor control on the Arduino UNO R4 WiFi (Renesas RA4M1).
 
 Last updated: 2026-04-01
 
 ---
 
-## 1. RC Input on Arduino Nano R4
+## 1. RC Input on Arduino UNO R4 WiFi
 
 ### Interrupt Pin Support (Confirmed)
 
-The Nano R4 (Renesas RA4M1) has limited `attachInterrupt()` support.
+The UNO R4 WiFi (Renesas RA4M1) has limited `attachInterrupt()` support.
 Not all digital pins have IRQ lines routed to the Interrupt Control Unit.
 
 | Pin | attachInterrupt | Notes |
@@ -93,7 +93,7 @@ struct PulseReader {
 - Consistent timestamps — no stale `now` problem
 - Same accuracy as pulseIn for RC signals (1-2ms pulses at 50Hz)
 
-**Accuracy**: At 48MHz (Nano R4), the loop runs fast enough that edge
+**Accuracy**: At 48MHz (UNO R4 WiFi), the loop runs fast enough that edge
 detection jitter is <5us — well within RC signal tolerance.
 
 ### Timestamp Management Rules
@@ -240,14 +240,14 @@ void loop() {
 
 ### Float vs Fixed-Point
 
-The Nano R4 has a hardware FPU (VFPv4). Float operations are 1-2 cycles:
+The UNO R4 WiFi has a hardware FPU (VFPv4). Float operations are 1-2 cycles:
 
 - Use `float` for control math, filters, expo curves
 - Use `int` for sensor values, PWM outputs, counters
 - Never use `double` (software emulated, 10x slower)
 - The `f` suffix matters: `1.0f` uses FPU, `1.0` may use software double
 
-### Memory Budget (Nano R4: 32KB RAM)
+### Memory Budget (UNO R4 WiFi: 32KB RAM)
 
 Current sketch uses ~300 bytes of globals + ~3KB Arduino runtime.
 ~28KB available for future expansion (PID state, telemetry buffers, etc.).

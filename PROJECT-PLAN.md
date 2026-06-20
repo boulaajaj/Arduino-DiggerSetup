@@ -2,19 +2,43 @@
 
 ## What This Does
 
-An Arduino Nano R4 sits between an RC receiver and two ESCs, implementing
-a **tank-style mixer** with a secondary joystick input for the rider.
-The RC transmitter (Jason) can always override. A 3-position switch
-selects who has authority.
+An **Arduino UNO R4 WiFi** sits between an RC receiver and two FOC ESCs,
+implementing a **tank-style mixer** with a secondary joystick input for the
+rider. The RC transmitter (Jason) can always override via a 3-position switch.
+
+The controller's job is deliberately small: **read inputs, shape them, mix them,
+cap them by gear, and output a servo-PWM throttle/reverse command to each ESC.**
+The GL10 ESC's internal FOC owns motor smoothness and compensation, so there is
+**no Arduino-side closed-loop control**.
 
 The controller provides:
 
-- **Exponential response curve** — fine low-speed control, full range at high stick
-- **Inertia simulation** — asymmetric accel/decel for heavy machine feel
-- **Spin turn limiter** — graduated power reduction during counter-rotation
-- **Reverse speed limit** — caps backward speed to 50% of forward
-- **Soft power limits** — tanh saturation, no hard clamps
-- **Per-channel failsafe** — each RC channel independently monitored
+- **Curvature/tank mixing** — symmetric add + desaturate, smoothstep blend into pivot
+- **Exponential response curve** — separate throttle/steering expo for fine low-speed control
+- **Gear caps** — Eco / Normal / Turbo wheel-speed limits on RC CH4
+- **Override switch** — RC-only / RC-priority / 50-50 blend on RC CH5
+- **Per-channel failsafe** — neutral hold when S.BUS is invalid
+- **X.BUS telemetry (monitoring only)** — V / I / RPM / temps streamed to a Wi-Fi dashboard
+
+---
+
+## Control strategy (read this first)
+
+**The Arduino sends the throttle/reverse command as servo PWM. The GL10's FOC
+executes it.** Two chips, two jobs:
+
+| Who | Job |
+| --- | --- |
+| **Arduino (RA4M1)** | Decides *what we want*: read RC + joystick → expo/deadband → curvatureDrive mix → gear cap → output servo PWM (1000–2000 µs) per track on D9/D10. |
+| **GL10 ESC (internal FOC)** | Decides *how to spin the motor* to hit that command smoothly: phase currents, acceleration ramp, drag — all inside the ESC. |
+
+- **Open-loop command.** The Arduino does **not** read RPM and correct the
+  output. Stick position → PWM → ESC executes. The earlier dual-loop current+RPM
+  PID / feedforward / inertia filter (from the previous sensored-ESC setup) is
+  **gone** — superseded by the GL10's internal FOC.
+- **Telemetry is monitoring-only.** X.BUS Read Register (0x10) is polled
+  read-only for the dashboard; it is never fed back into the throttle, and there
+  is no path from Wi-Fi to motor output.
 
 ---
 
@@ -22,105 +46,80 @@ The controller provides:
 
 | # | Component | Model | Key Specs |
 | --- | ----------- | ------- | ----------- |
-| 1 | Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 14-bit ADC, 5V tolerant |
-| 2 | Battery (x2) | OVONIC 3S LiPo 15000mAh | 11.1V, EC5, 130C |
-| 3 | ESC (x2) | XC E10 Sensored 140A | Servo PWM input, X.BUS telemetry |
-| 4 | Motor (x2) | XC E3665 2500KV Sensored | 4-pole, hall sensor, 8mm shaft |
-| 5 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, gyro receiver |
-| 6 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect |
-| 7 | Current Sensor (x2) | CS7581 Hall-effect | Per-motor current |
+| 1 | Controller | Arduino **UNO R4 WiFi** | Renesas RA4M1 (48 MHz, 14-bit ADC, 5 V tolerant) + ESP32-S3 (Wi-Fi) |
+| 2 | Battery (x2) | OVONIC 3S LiPo 15000 mAh 130C | 11.1 V, EC5 |
+| 3 | ESC (x2) | **XC GL10 80A FOC** | Standard 50 Hz servo PWM in, internal FOC, IP67 |
+| 4 | Motor (x2) | **XC GL540L** | Sensored brushless, paired with GL10 |
+| 5 | RC System | Radiolink RC6GS V3 + R7FG | 6CH, S.BUS; gun-style (trigger = throttle, wheel = steering) — the **Arduino** does the tank mixing |
+| 6 | Joystick | Genie 101174GT dual-axis | 5 V, 0-5 V analog, hall-effect (direct to ADC) |
+
+> **History:** the project previously ran XC sensored ESCs/motors with an
+> Arduino-side dual-loop PID. Swapped to GL10 + GL540L on 2026-04-25, then
+> migrated from Nano R4 to UNO R4 WiFi for onboard Wi-Fi telemetry.
 
 ---
 
-## Pin Map
+## Pin Map (UNO R4 WiFi)
 
 ```text
-D2  ← RC CH1 (left track, pre-mixed)   [attachInterrupt CHANGE]
-D3  ← RC CH4 (control mode, 3-pos)     [attachInterrupt CHANGE]
-D4  ← RC CH2 (right track, pre-mixed)  [non-blocking poll — no IRQ on D4]
-D5     (reserved for left hall sensor)
-D6     (reserved for right hall sensor)
-D7  ← RC CH5 (override switch, 3-pos)  [non-blocking poll — no IRQ on D7]
-D9  → Left ESC                          [Servo PWM]
-D10 → Right ESC                         [Servo PWM]
-A0  ← Joystick Y (throttle)             [14-bit ADC, 0-5V direct]
-A1  ← Joystick X (steering)             [14-bit ADC, 0-5V direct]
-A2  ← CS7581 current sensor (left)      [14-bit ADC]
-A3  ← CS7581 current sensor (right)     [14-bit ADC]
-5V  → RC receiver + joystick VCC
+A0  ← Joystick Y (throttle)            [14-bit ADC, 0-5V direct (5V tolerant)]
+A1  ← Joystick X (steering)            [14-bit ADC, 0-5V direct (5V tolerant)]
+D11    (sbusUart TX on SCI0 — unused; S.BUS is RX-only)
+D12 ← S.BUS RX (sbusUart on SCI0 via NPN inverter)   [100k 8E2]
+D8     (reserved — future battery-aware beeper)
+D9  → Left Track ESC                   [Servo PWM, 50 Hz, 1000-2000 us]
+D10 → Right Track ESC                  [Servo PWM]
+D0/D1 → Serial1 (X.BUS half-duplex telemetry bus to both ESCs, 115200 8N1)
+USB-C → USB CDC Serial (debug + firmware upload)
+VIN ← BEC / battery (7-24V)
 GND → All components (common ground)
 ```
 
-D0/D1 reserved for X.BUS (Serial1) — conflicts with USB Serial during debug.
+Full wiring spec: `docs/WIRING-GUIDE-V8.md`. Interface board: `docs/INTERFACE-BOARD-PERFBOARD.md`.
 
 ---
 
 ## Signal Pipeline
 
 ```text
-RC (ISR + poll) ──┐
-                  ├─► Mixer ─► Spin Limiter ─► Reverse Limiter
-Joystick (ADC) ──┘        ─► Soft Limit ─► Inertia ─► ESC Output
+RC (S.BUS) ──► curvatureDrive ──┐
+                                ├─► override mixer ─► gear cap ─► servo PWM (D9/D10) ─► GL10 ESCs
+Joystick (ADC) ──► curvatureDrive ─┘
+
+X.BUS telemetry (Serial1, read-only) ──► EMA ──► Wi-Fi dashboard (monitoring only)
 ```
 
-### Override Switch (CH5)
+### Override Switch (RC CH5)
 
 | Position | Mode | Who Controls |
-| ---------- | ------ | ------------- |
+| --- | --- | --- |
 | LOW | RC only | Jason has full authority, joystick disabled |
-| MID | RC priority | Both active, RC overrides when non-neutral |
-| HIGH | 50/50 blend | RC + joystick averaged, both always contribute |
+| MID | RC priority | RC overrides when non-neutral |
+| HIGH | 50/50 blend | RC + joystick averaged |
 
-### Dynamics Pipeline
+### Gear Caps (RC CH4)
 
-1. **Spin limiter** — graduated power cap during counter-rotation (50% at full pivot)
-2. **Reverse limiter** — backward speed capped at 50% of forward max
-3. **Soft limit** — tanh saturation caps max servo deviation
-4. **Inertia** — asymmetric exponential: accel ~1.5s, decel/coast ~3.0s
+| Position | Cap | Use |
+| --- | --- | --- |
+| Eco | 55% | training / tight spaces (reverse & pivot get a +5pp boost) |
+| Normal | 70% | normal driving |
+| Turbo | 100% | full authority |
 
----
-
-## Tuning Constants
-
-| Constant | Value | Description |
-| ---------- | ------- | ------------- |
-| `EXPO_LINEAR` | 0.3 | Linear blend of expo curve |
-| `EXPO_SQUARE` | 0.7 | Quadratic blend (sum to 1.0) |
-| `SOFT_RANGE` | 400 us | Max servo offset from center |
-| `TAU_ACCEL` | 0.3 s | Acceleration time constant |
-| `TAU_DECEL` | 0.5 s | Deceleration/coast time constant |
-| `SPIN_LIMIT` | 0.25 | Power cap at full pivot turn (25%) |
-| `REVERSE_LIMIT` | 0.25 | Max reverse as fraction of forward (25%) |
-| `RC_DEADBAND` | 50 us | RC pulse dead zone |
-| `JOY_DEADBAND` | 480 | Joystick ADC dead zone (~5.9%) |
-| `FAILSAFE_US` | 500 ms | Per-channel signal timeout |
+> Failsafe: when S.BUS is invalid, the controller holds neutral and gear stays at Eco.
 
 ---
 
-## File Map
+## Telemetry (live, monitoring-only)
 
-```text
-sketches/rc_test/
-  rc_test.ino       — Main controller sketch (V3.4)
-  types.h           — Shared structs (RCChannel, PulseReader, etc.)
-
-sketches/xbus_probe/
-  xbus_probe.ino    — X.BUS telemetry probe (standalone)
-
-sketches/hw_diagnostic/
-  hw_diagnostic.ino — Hardware diagnostic (ADC, RC, signal check)
-
-sketches/pin_test/
-  pin_test.ino      — Interrupt pin capability test
-
-docs/
-  CONTROL-RESEARCH.md — Tank mix, RC input, loop patterns research
-
-live_plot.py        — Real-time 7-panel matplotlib monitor
-monitor.py          — Simple serial monitor
-PROJECT-PLAN.md     — This file
-OPERATOR-GUIDE.md   — User guide for Jason (RC) and Malaki (joystick)
-```
+- **X.BUS Read Register (func 0x10)** on Serial1 (D0/D1) — NOT Throttle (0x50),
+  which would put the ESC into BUS_MODE and fight our PWM.
+- **Registers:** 0x0C VbatBus (×0.1 V), 0x0D IbusBus (×0.1 A), 0x02 motSpeed
+  (electrical Hz), 0x20 mos-Tem, 0x22 mot-Tem (raw − 40 °C).
+- **Cadence:** non-blocking, alternating ESCs (~30-40 Hz/ESC underlying), EMA on
+  V/I/temps, instantaneous RPM, 5 s per-ESC freshness watchdog.
+- **Wi-Fi dashboard:** UNO R4 WiFi AP `Digger-Telemetry` at `192.168.4.1`,
+  Server-Sent Events at ~10 Hz, page served from flash. **Monitoring only — no
+  control input over Wi-Fi, ever.**
 
 ---
 
@@ -128,97 +127,57 @@ OPERATOR-GUIDE.md   — User guide for Jason (RC) and Malaki (joystick)
 
 ```bash
 # Compile
-arduino-cli compile --fqbn arduino:renesas_uno:nanor4 sketches/rc_test/rc_test.ino
+arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
 
-# Upload (COM8)
-arduino-cli upload --fqbn arduino:renesas_uno:nanor4 -p COM8 sketches/rc_test/rc_test.ino
+# Upload (COM7)
+arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/rc_test
 
-# Monitor serial
+# Monitor / plot
 python monitor.py
-
-# Live plot
 python live_plot.py
 ```
 
 ---
 
-## Status
+## Status (V7.8)
 
-### Working (V3.1 — deployed on Nano R4)
+### Done
 
-- [x] Non-blocking RC input on all 4 channels (ISR + PulseReader)
-- [x] Per-channel failsafe (independent 0.5s timeout)
-- [x] Expo response curve (20% linear + 80% quadratic)
-- [x] Inertia simulation (asymmetric: 1.5s accel, 3.0s decel)
-- [x] Spin turn limiter (50% at full pivot, graduated)
-- [x] Reverse speed limiter (50% of forward max)
-- [x] Soft power limits (tanh saturation)
-- [x] Override switch (3-pos: RC only / RC priority / Joystick only)
-- [x] Tank mix for joystick (RC pre-mixed by transmitter)
-- [x] ADC crosstalk fix (double-read with settling delay)
-- [x] 10 Hz CSV telemetry with signal health indicators
-- [x] Modular code architecture with searchable [MODULE] sections
+- [x] GL10 + GL540L hardware swap (2026-04-25)
+- [x] S.BUS input on `sbusUart` (SCI0 / D12) via NPN inverter
+- [x] curvatureDrive tank mixing + per-axis expo + pivot authority
+- [x] Removed Arduino-side inertia / PID (GL10 FOC owns smoothing)
+- [x] Gear caps (Eco / Normal / Turbo) with Eco reverse/pivot boost
+- [x] Migrated Nano R4 → UNO R4 WiFi
+- [x] Soldered interface board (X.BUS merge + S.BUS inverter)
+- [x] X.BUS 0x10 telemetry live — both ESCs (V / I / RPM / temps)
+- [x] Wi-Fi telemetry dashboard (SSE, monitoring-only)
+- [x] Field test at reduced power
 
-### Pending — Field Tuning
+### Pending
 
-- [ ] Expo/inertia field tuning (TAU_ACCEL, TAU_DECEL, EXPO blend)
-- [ ] Spin turn limit calibration (SPIN_LIMIT value)
-- [ ] Reverse limit calibration (REVERSE_LIMIT value)
-
-### Pending — Telemetry & PID
-
-- [ ] **Waiting on XC Technology reply** (email sent 2026-03-31):
-  - X.BUS protocol spec → implement polling → test if transceivers survived BEC damage
-  - E3665 hall sensor pinout → wire RPM tap if X.BUS fails
-- [ ] CS7581 current sensor wiring and calibration (A2, A3)
-- [ ] RPM closed-loop PID (target RPM from stick, actual from sensor)
-- [ ] Dual-loop PID: inner current (feedforward) + outer RPM (feedback)
-- [ ] Add RPM + current panels to live_plot.py
-
-### Pending — Integration
-
-- [ ] Bench test with ESCs at reduced power
-- [ ] Field test on excavator
-- [ ] Battery voltage monitoring
-- [ ] Emergency stop integration
+- [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
+- [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
+- [ ] Battery-aware beeper (issue #40 / #51)
+- [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
 
 ---
 
-## X.BUS Telemetry Status
+## File Map
 
-**XC E10 "X.BUS" is NOT Spektrum X-Bus.** It is XC Technology's
-proprietary protocol on a single data wire (not I2C).
-
-### Probing Results (2026-03-31): Zero Data
-
-- Passive listening: 7 baud rates, zero bytes
-- Active probing: All known protocols, zero responses
-- Raw D0 sampling: zero toggles (line electrically dead at 3.3V)
-- While driving under load: still zero
-
-### Possible BEC Damage
-
-Both ESC BEC red wires were connected together at 8.5V for 15-30min.
-20-30% chance X.BUS hardware is damaged. **Rule: NEVER connect both
-ESC BEC red wires. Only one BEC powers the bus.**
-
-### Strategy
-
-1. Wait for XC Technology reply with protocol spec
-2. If X.BUS dead → motor hall sensor tap for RPM (needs pinout from XC)
-3. RPM feedback is for closed-loop PID, not just display
-
----
-
-## Architecture Decisions Log
-
-| Date | Decision | Rationale |
-| ------ | ---------- | ----------- |
-| 2026-03-20 | RPM via motor hall tap (not sprocket, not BT) | High resolution, zero latency, signal exists |
-| 2026-03-21 | Dual-loop PID (current + RPM) | Inner predicts, outer confirms — standard industrial |
-| 2026-03-29 | XC X.BUS is UART not I2C | Single data wire, can't be I2C |
-| 2026-03-30 | Revert from UNO Q to Nano R4 | UNO Q had Router Bridge complexity |
-| 2026-04-01 | Non-blocking poll replaces pulseIn | pulseIn caused stale timestamp bug |
-| 2026-04-01 | Per-channel failsafe | Combined failsafe masked dead channels |
-| 2026-04-01 | Reverse limit 50% | Safety: limited visibility, operator reaction time |
-| 2026-04-01 | Spin limit 50% at full pivot | Safety: full-speed pivot throws operator |
+```text
+sketches/rc_test/
+  rc_test.ino       — Main controller sketch (V7.8 — GL10 FOC + telemetry + Wi-Fi)
+  types.h           — Shared structs (JoystickState, EscTelem, ...)
+  web_page.h        — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
+sketches/telem_check/ — Read-only X.BUS telemetry bench tool (0x50 framing)
+sketches/sbus_d12_test/ — S.BUS-on-D12 bring-up test
+docs/WIRING-GUIDE-V8.md        — Canonical hardware wiring reference (UNO R4 WiFi)
+docs/INTERFACE-BOARD-PERFBOARD.md — Soldered interface board build
+docs/XBUS-PROTOCOL.md          — XC X.BUS protocol reference (used by telemetry)
+docs/GL10-PARAMETERS.md        — GL10 parameter reference + code-context analysis
+docs/DECISION-LOG.md           — Technical decision log
+dashboard/index.html           — Wi-Fi dashboard source (mirror of web_page.h)
+live_plot.py / monitor.py      — Serial monitors
+PROJECT-PLAN.md                — This file
+```

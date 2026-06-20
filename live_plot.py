@@ -1,7 +1,7 @@
 """
-Live Plot — Digger Control Monitor (Nano R4)
+Live Plot — Digger Control Monitor (UNO R4 WiFi)
 =============================================
-Real-time plot for the Arduino Nano R4 digger controller.
+Real-time plot for the Arduino UNO R4 WiFi digger controller.
 Reads CSV from USB serial and displays all inputs + outputs.
 
 Panels:
@@ -61,7 +61,7 @@ for _, _, _, _, center in CHANNELS:
 # Plot Setup
 # -----------------------------------------------------------------------------
 fig, axes = plt.subplots(len(CHANNELS), 1, figsize=(10, 12), sharex=True)
-fig.suptitle("Digger Control — Live Monitor (Nano R4)", fontsize=14, fontweight="bold")
+fig.suptitle("Digger Control — Live Monitor (UNO R4 WiFi)", fontsize=14, fontweight="bold")
 
 plot_lines = []
 for i, (key, label, color, ylim, center) in enumerate(CHANNELS):

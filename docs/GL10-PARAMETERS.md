@@ -74,9 +74,9 @@ that down to 33% in low gear and 38% in mid gear.
 | Neutral Range of Throttle = 7% | Deadband at center. Our V7.1 `RC_DEADBAND` already filters input around 1500 µs; ESC deadband stacks on top of that. | Keep at 5-7%, lower if commands feel "ignored" near center. |
 | Acceleration = 6 | Throttle response rate at the ESC. Affects launch feel. | Keep at 6 unless launch feels jerky (lower) or sluggish (higher). |
 | Torque Compensation = 6 | Output max torque on obstacles. Crawler-tuned default. | Keep. |
-| BEC Voltage = 6.0V | Powers Arduino VIN per `WIRING-GUIDE.md`. | Keep. Do not change. |
+| BEC Voltage = 6.0V | Powers Arduino VIN per `WIRING-GUIDE-V8.md`. | Keep. Do not change. |
 | Motor Rotation | Set per-track via XC-Link so the two tracks rotate in opposite physical directions (one CW, one CCW) for forward motion. The V7.1 steering inversion in `curvatureDrive` (commit `6bfe536`) was retired in V7.4 (commit `431bf95`) after the motor/ESC replacement made the in-software flip over-correct. | Keep per-track; no software compensation needed. |
-| X-BUS ID | ESC Left = 0, ESC Right = 1 per `WIRING-GUIDE.md`. | Keep. |
+| X-BUS ID | ESC Left = 0, ESC Right = 1 per `WIRING-GUIDE-V8.md`. | Keep. |
 
 ### Recommended XC-Link configuration (apply to BOTH ESCs)
 

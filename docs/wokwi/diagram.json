@@ -29,7 +29,7 @@
       "id": "label_note",
       "top": -130,
       "left": 50,
-      "attrs": { "text": "UNO = stand-in for Arduino Nano R4 (5V tolerant)" }
+      "attrs": { "text": "UNO = stand-in for Arduino UNO R4 WiFi (5V tolerant)" }
     },
     {
       "type": "wokwi-servo",
@@ -43,7 +43,7 @@
       "id": "label_esc_l",
       "top": 385,
       "left": -100,
-      "attrs": { "text": "ESC Left (XC E10, addr 0)" }
+      "attrs": { "text": "ESC Left (XC GL10, addr 0)" }
     },
     {
       "type": "wokwi-servo",
@@ -57,7 +57,7 @@
       "id": "label_esc_r",
       "top": 385,
       "left": 550,
-      "attrs": { "text": "ESC Right (XC E10, addr 1)" }
+      "attrs": { "text": "ESC Right (XC GL10, addr 1)" }
     },
     {
       "type": "wokwi-analog-joystick",
@@ -139,7 +139,7 @@
       "id": "label_txs",
       "top": -100,
       "left": -200,
-      "attrs": { "text": "RC signals direct (Nano R4 is 5V tolerant)" }
+      "attrs": { "text": "RC signals direct (UNO R4 WiFi is 5V tolerant)" }
     },
     {
       "type": "wokwi-text",

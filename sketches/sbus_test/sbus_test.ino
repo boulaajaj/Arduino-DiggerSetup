@@ -1,4 +1,5 @@
-// S.BUS Signal Test — Arduino Nano R4
+// S.BUS Signal Test — LEGACY (Nano R4 era, S.BUS on D0).
+// Current board is UNO R4 WiFi with S.BUS on D12 — see sbus_d12_test.
 // Tests S.BUS reception from R7FG CH7 via NPN inverter on D0 (Serial1 RX).
 // Prints all 6 channels + failsafe + frame-lost flags at 10Hz.
 //

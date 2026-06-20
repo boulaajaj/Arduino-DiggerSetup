@@ -1,4 +1,4 @@
-// USB output test — Arduino Nano R4
+// USB output test — Arduino UNO R4 WiFi
 // Simple Serial test over USB. No Router Bridge needed.
 
 int count = 0;
@@ -10,7 +10,7 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
   delay(1000);
-  Serial.println("USB_TEST: Arduino Nano R4 Serial working!");
+  Serial.println("USB_TEST: Arduino UNO R4 WiFi Serial working!");
   Serial.println("SETUP_DONE");
 }
 

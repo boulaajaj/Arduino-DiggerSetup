@@ -1,7 +1,7 @@
 # Copilot Code Review Instructions — Arduino Digger Controller
 
 ## Project Context
-Arduino Nano R4 (Renesas RA4M1, 32-bit ARM Cortex-M4, 48MHz) controlling a ride-on excavator.
+Arduino UNO R4 WiFi (Renesas RA4M1, 32-bit ARM Cortex-M4, 48MHz; ESP32-S3 Wi-Fi coprocessor) controlling a ride-on excavator.
 Safety-critical: code errors can cause a 50lb machine with a child riding it to behave unexpectedly.
 
 ## Critical Checks (Flag as errors)
@@ -23,4 +23,4 @@ Safety-critical: code errors can cause a 50lb machine with a child riding it to 
 - Servo PWM range: 1000-2000us, center 1500us
 - ADC: 14-bit (0-16383), center 8192
 - SBUS range: 172-1811, center ~992
-- Board FQBN: arduino:renesas_uno:nanor4
+- Board FQBN: arduino:renesas_uno:unor4wifi

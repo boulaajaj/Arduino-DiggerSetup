@@ -2,10 +2,11 @@
 
 ## What This Is
 
-Arduino Nano R4-based tank-style track controller for a ride-on excavator.
-Two FOC brushless motors drive rubber tracks via FOC ESCs. Dual input:
-RC transmitter (Jason) and joystick (Malaki/rider). 3-position override
-switch selects who has authority.
+Arduino **UNO R4 WiFi**-based tank-style track controller for a ride-on
+excavator. Two FOC brushless motors drive rubber tracks via FOC ESCs. Dual
+input: RC transmitter (Jason) and joystick (Malaki/rider). 3-position override
+switch selects who has authority. X.BUS telemetry is streamed to a Wi-Fi
+dashboard (monitoring only).
 
 ## People
 
@@ -17,120 +18,131 @@ switch selects who has authority.
 
 | Component | Model | Key Detail |
 | --- | --- | --- |
-| Controller | Arduino Nano R4 | Renesas RA4M1, 48MHz, 5V tolerant GPIO, 14-bit ADC |
+| Controller | Arduino **UNO R4 WiFi** | Renesas RA4M1 (48MHz, 14-bit ADC, 5V tolerant) + ESP32-S3 Wi-Fi coprocessor |
 | ESC (x2) | XC GL10 80A FOC | Standard 50 Hz servo PWM input, internal FOC compensation, IP67 |
 | Motor (x2) | XC GL540L | Sensored brushless, paired with GL10 |
 | Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
-| RC System | Radiolink RC6GS V3 + R7FG | 6CH, transmitter does tank mixing |
+| RC System | Radiolink RC6GS V3 + R7FG | 6CH gun-style (trigger = throttle, wheel = steering); the Arduino does the tank mixing |
 | Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect (direct to ADC — 5V tolerant) |
 
-**Hardware history:** Previously used XC E10 ESC + XC E3665 motor.
-Swapped to GL10 + GL540L on 2026-04-25. The FOC ESC handles motor
-acceleration compensation and smoothness internally, so the Arduino's
-job shrinks to input mixing, override switching, and soft limits.
-The earlier dual-loop PID / hall-sensor-tap / X.BUS control plans
-are no longer needed for control — see "Telemetry" below for what's
-deferred. V7.6 removed the reverse-direction beeper subsystem
-entirely; audible alerts will return as a battery-aware system
-after the planned Nano R4 → UNO R4 migration.
+**Hardware history:** previously ran XC sensored ESCs/motors with an
+Arduino-side dual-loop PID. Swapped to GL10 + GL540L on 2026-04-25 — the FOC ESC
+handles motor acceleration compensation and smoothness internally, so the
+Arduino's job shrank to input mixing, override switching, and gear caps. The
+earlier dual-loop PID / hall-sensor-tap control plans are retired (see
+"Control strategy"). Then migrated Nano R4 → UNO R4 WiFi for onboard Wi-Fi
+telemetry. V7.6 removed the reverse-direction beeper; audible alerts will return
+as a battery-aware system (issue #40 / #51).
 
-## Pin Assignments (Nano R4)
+## Control strategy (PWM out, FOC inside the ESC)
+
+**The Arduino generates the throttle/reverse command and sends it as servo PWM.
+The GL10's internal FOC executes it.**
+
+| Who | Job |
+| --- | --- |
+| Arduino (RA4M1) | Read RC + joystick → expo/deadband → curvatureDrive mix → override → gear cap → output servo PWM (1000–2000 µs) per track on D9/D10. |
+| GL10 ESC (FOC) | Convert that PWM command into smooth motor drive (phase currents, accel ramp, drag) — internal to the ESC. |
+
+- **Open-loop command** — the Arduino does NOT read RPM and correct the output.
+  Stick → PWM → ESC executes. No Arduino-side PID / feedforward / inertia.
+- **Telemetry is monitoring-only** — X.BUS 0x10 is read-only for the dashboard,
+  never fed back into throttle. No path from Wi-Fi to motor output (permanent).
+
+## Pin Assignments (UNO R4 WiFi)
 
 ```text
 A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
 A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
-A4     (sbusUart TX on SCI0, currently unused)
-A5  <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
-D8     (reserved — future battery-aware beeper, V8 / UNO R4)
+D11    (sbusUart TX on SCI0 — unused; S.BUS is RX-only)
+D12 <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
+D8     (reserved — future battery-aware beeper)
 D9  -> Left Track ESC                       [Servo PWM, 50 Hz, 1000-2000 us]
 D10 -> Right Track ESC                      [Servo PWM]
-D0/D1 — Serial1 hardware UART (currently unused; S.BUS moved off it)
-USB-C — USB CDC Serial for debug + firmware upload
+D0/D1 -> Serial1 (X.BUS half-duplex telemetry bus to both ESCs, 115200 8N1)
+USB-C -> USB CDC Serial for debug + firmware upload
 5V  -> RC Receiver + Joystick VCC + S.BUS inverter
 VIN <- Battery / BEC (7-24V)
 GND -> All components (common ground)
 ```
 
-### UART Architecture (Nano R4)
+### UART Architecture (UNO R4 WiFi)
 
-The Nano R4 exposes one stock hardware UART (Serial1 on D0/D1) plus a
-second UART that can be instantiated on A4 (TX, pin 18) / A5 (RX, pin 19)
-via the RA4M1's SCI0 channel. The sketch declares it under a unique
-name (NOT `Serial2`) to avoid the core's macro collision with the
-pre-declared `_UART2_` symbol:
+The UNO R4 WiFi exposes Serial1 (SCI2 on D0/D1) plus a second UART that can be
+instantiated on D11 (TX) / D12 (RX) via the RA4M1's SCI0 channel. The sketch
+declares it under a unique name (NOT `Serial2`, which collides with the core's
+pre-declared `_UART2_`, and is also reserved for the ESP32-S3 Wi-Fi bridge):
 
 ```cpp
-UART sbusUart(18, 19);            // A4 TX (unused), A5 RX (S.BUS)
+const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
+const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
+UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
 bfs::SbusRx sbusRx(&sbusUart);
 ```
 
 | Port | Hardware | Pin | Function |
 | --- | --- | --- | --- |
 | Serial | USB CDC | (USB-C) | Debug telemetry / firmware upload |
-| Serial1 | UART (SCI2) | D0 (RX) / D1 (TX) | Currently unused |
-| sbusUart | UART (SCI0) | A4 (TX) / A5 (RX) | S.BUS RX from R7FG via inverter |
+| Serial1 | UART (SCI2) | D0 (RX) / D1 (TX) | X.BUS telemetry bus to both ESCs (115200 8N1) |
+| sbusUart | UART (SCI0) | D11 (TX) / D12 (RX) | S.BUS RX from R7FG via inverter (100000 8E2) |
 
-S.BUS is electrically inverted at idle. A small NPN-based inverter
-circuit on the receiver wire flips the signal so `sbusUart` sees standard
-UART polarity (idle HIGH). Same inverter circuit that was on D0 in
-V5.0/V6.0 — just relocated to A5. Library config is unchanged
-(100000 baud, 8E2, courtesy of `bfs::SbusRx`).
+> **Note:** on the UNO R4 WiFi, SCI0 is on D11/D12 (the Nano R4 used A4/A5).
+> S.BUS is electrically inverted at idle; an NPN-based inverter flips it so
+> `sbusUart` sees standard UART polarity (idle HIGH). Full wiring:
+> `docs/WIRING-GUIDE-V8.md`.
 
-### Telemetry (deferred)
+### Telemetry (live)
 
-`types.h` defines `EscTelem { voltage, motorTempC, escTempC, lastGoodMs, valid }`
-as scaffolding, but no telemetry is polled in V7. With S.BUS occupying
-`sbusUart` on SCI0, the only remaining hardware UART (`Serial1` on D0/D1,
-SCI2) is available but unused, and the standing rule is "never
-SoftwareSerial for telemetry".
-The plan when telemetry comes back online:
+`types.h` defines `EscTelem { voltage, busCurrentA, rpmHz, escTempC, motorTempC,
+lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
 
-- **Use X.BUS Read Register (func 0x10), NOT Throttle (0x50).** Throttle
-  frames put the ESC into BUS_MODE and override our PWM — incompatible
-  with the GL10's PWM input strategy.
-- **Registers to poll:** 0x0C VbatBus (×0.1 V), 0x20 mos-Tem (raw − 40 °C),
-  0x22 mot-Tem (raw − 40 °C).
-- **Cadence:** 1 Hz, alternating between the two ESCs (each sampled every 2 s),
-  EMA filter with 10 s time constant. After 5 s with no good frame the
-  reading is marked stale.
-- **Hardware path TBD** — `Serial1` (D0/D1) is free, so X.BUS telemetry
-  can land there if the wiring is feasible. Alternative is to relocate
-  S.BUS off `sbusUart` and reuse SCI0.
-- **Audible alerts driven by telemetry** — once battery voltage is
-  available, the V8 battery-aware beeper (issue tracker) will consume it.
+- **X.BUS Read Register (func 0x10), NOT Throttle (0x50).** 0x10 is
+  point-to-point service control — it never puts the ESC into BUS_MODE, so PWM
+  control authority is fully preserved. 0x50 would fight our PWM.
+- **Registers:** 0x0C VbatBus (×0.1 V), 0x0D IbusBus (×0.1 A), 0x02 motSpeed
+  (electrical Hz), 0x20 mos-Tem, 0x22 mot-Tem (raw − 40 °C).
+- **Cadence:** non-blocking, alternating ESCs (~30-40 Hz/ESC underlying), EMA on
+  V/I/temps, instantaneous RPM, 5 s per-ESC freshness watchdog. Both ESCs
+  confirmed reporting (2026-06-13).
+- **Standing rule:** never `SoftwareSerial` for telemetry — hardware UARTs only.
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.6 — GL10 FOC, beeper removed) + `types.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.8 — GL10 FOC + telemetry + Wi-Fi) + `types.h` + `web_page.h`
 
 Signal pipeline:
 
-1. RC inputs: S.BUS on `sbusUart` (A5 RX via NPN inverter), all 16 channels
+1. RC inputs: S.BUS on `sbusUart` (D12 RX via NPN inverter), all 16 channels
 2. Joystick via 14-bit ADC (A0, A1, cached at 100 Hz) → deadband → expo curve (separate throttle/steering coefficients)
 3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
    - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
    - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Gear cap (RC CH4): Eco 40% / Normal 65% / Turbo 100% wheel-speed cap.
+5. Gear cap (RC CH4): Eco 55% / Normal 70% / Turbo 100% wheel-speed cap.
    In Eco the pivot and reverse caps get a +5pp boost so the operator
    keeps usable maneuvering authority.
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
+7. X.BUS 0x10 telemetry polled read-only on Serial1; EMA-smoothed and streamed to the Wi-Fi dashboard (monitoring only).
 
 Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
-[JOYSTICK], [MIXER], [OUTPUT], [DEBUG]. Search `[NAME]` to jump.
+[JOYSTICK], [GEAR], [MIXER], [OUTPUT], [TELEMETRY], [WIFI], [DEBUG]. Search `[NAME]` to jump.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
-## Audible Alerts — Deferred to V8
+## Wi-Fi telemetry dashboard
 
-The reverse-direction beeper was removed in V7.6 per operator request:
-the reverse-alarm cadence (1s on / 1s off) was disruptive without adding
-safety value the operator didn't already have from line-of-sight on a
-~50 lb machine.
+- UNO R4 WiFi AP `Digger-Telemetry` (WPA2) at `192.168.4.1`. The dashboard is
+  embedded in flash (`web_page.h`, served at `/`) and streams telemetry over
+  Server-Sent Events (`/events`) at ~10 Hz; `/data` one-shot JSON kept for debug.
+- **Monitoring only — no control input over Wi-Fi, ever** (safety; permanent
+  decision). The dashboard mirror lives in `dashboard/index.html`.
 
-When the project migrates from Nano R4 to UNO R4 (planned, see the issue
-tracker for "Battery-aware beeper, V8"), the beeper comes back as a
-battery-level alarm driven by X.BUS voltage telemetry:
+## Audible Alerts — Deferred (battery-aware beeper)
+
+The reverse-direction beeper was removed in V7.6 per operator request (the
+1s-on/1s-off cadence was disruptive without adding safety on a ~50 lb,
+line-of-sight machine). Now that battery voltage is available over X.BUS
+telemetry, the beeper returns as a battery-level alarm (issues #40 / #51):
 
 | Battery state | Pattern |
 | --- | --- |
@@ -140,65 +152,60 @@ battery-level alarm driven by X.BUS voltage telemetry:
 | < 10% | Continuous tone |
 | < safety cutoff | Power cut — vehicle will not move forward |
 
-D8 is reserved for that future implementation; no code drives it today.
+D8 is reserved for that implementation; no code drives it today.
 
 ## Key Design Decisions
 
 ### GL10 FOC Replaces Custom PID Loops (DECIDED 2026-04-25)
 
-The previous control plan layered current-feedforward + RPM-feedback PID
-on top of the E10 ESC. With the GL10's internal FOC, that whole stack
-moves into the ESC. Arduino code keeps:
+The previous control plan layered current-feedforward + RPM-feedback PID on top
+of the older sensored ESC. With the GL10's internal FOC, that whole stack moves
+into the ESC. Arduino code keeps:
 
 - Input shaping (expo, deadband, curvatureDrive)
 - Mixing (override switch)
-- Gear caps (Eco 40% / Normal 65% / Turbo 100% via RC CH4)
+- Gear caps (Eco / Normal / Turbo via RC CH4)
 
-V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`):
-the GL10's own Acceleration + Drag Force settings now own command
-smoothing end-to-end, and the Arduino-side filter was double-smoothing
-the stream (operator felt "vehicle keeps coasting after stick release").
-
-The earlier feedforward tables (V7.0 on `claude/ff-trim-controller`)
-were built from plant characterization of the E10/E3665 combo. They
-don't apply to GL10/GL540L and are not used.
+V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`): the
+GL10's own Acceleration + Drag Force settings own command smoothing end-to-end,
+and the Arduino-side filter was double-smoothing the stream (operator felt
+"vehicle keeps coasting after stick release").
 
 ## Implementation Status
 
-- [x] V5.0 sketch: curvatureDrive, S.BUS, expo, inertia, soft limits
-- [x] V6.0 (main): X.BUS closed-loop RPM with curvatureDrive (E10/E3665 era)
+- [x] V5.0 sketch: curvatureDrive, S.BUS, expo, soft limits
 - [x] GL10 + GL540L hardware swap (2026-04-25)
-- [x] V7.0 sketch: S.BUS on `sbusUart`/A5, GL10 PWM control
-- [x] V7.1 tuning: tank-style curvature, pivot authority, expo split
-- [x] V7.2: removed Arduino-side inertia filter (ESC owns smoothing)
-- [x] V7.3: symmetric-add + desaturate in curvatureDrive (hold speed through turns)
-- [x] V7.4: steering polarity fix + reverse cap + Eco/Normal/Turbo gear spread
-- [x] V7.5: Eco-gear +5pp boost on reverse and pivot caps
-- [x] V7.6: removed reverse-direction beeper entirely (issue #39)
+- [x] V7.0–V7.6: S.BUS on `sbusUart`, GL10 PWM control, tank curvature, gear spread, beeper removed
+- [x] Migrated Nano R4 → UNO R4 WiFi (S.BUS on D11/D12, Serial1 free for X.BUS)
+- [x] Soldered interface board (X.BUS merge + S.BUS inverter)
+- [x] V7.7: X.BUS 0x10 telemetry integrated — both ESCs (V / I / RPM / temps)
+- [x] V7.8: Wi-Fi telemetry dashboard (SSE, monitoring-only)
 - [x] Field test at reduced power
-- [ ] X.BUS telemetry on `Serial1` (D0/D1) — voltage / temp / RPM (see issue #36)
+- [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
-- [ ] Migrate to UNO R4 WiFi for wireless telemetry (issue #6)
-- [ ] Battery-aware beeper after UNO R4 migration (V8 milestone)
+- [ ] Battery-aware beeper (issue #40 / #51)
+- [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
 
 ## File Map
 
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.5 — GL10 FOC)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.8 — GL10 FOC + telemetry + Wi-Fi)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
-sketches/serial2_test/serial2_test.ino   — Nano R4 A4/A5 SCI0 test (OBSOLETE; superseded by sbus_d12_test, excluded from CI)
-sketches/xbus_master/xbus_master.ino     — X.BUS master test sketch (deferred — kept for reference)
+sketches/rc_test/web_page.h              — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
+sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
+sketches/sbus_d12_test/sbus_d12_test.ino — S.BUS-on-D12 bring-up test
+dashboard/index.html                     — Wi-Fi dashboard source (mirror of web_page.h)
+docs/WIRING-GUIDE-V8.md                  — Canonical hardware wiring reference (UNO R4 WiFi)
+docs/INTERFACE-BOARD-PERFBOARD.md        — Soldered interface board build
 docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
-docs/GL10-PARAMETERS.md                  — Configurable parameter reference + code-context analysis
+docs/GL10-PARAMETERS.md                  — GL10 parameter reference + code-context analysis
 docs/GL10-OPERATION.md                   — Startup, throttle calibration, factory reset, LED/beep reference
-docs/XBUS-PROTOCOL.md                    — Official XC X.BUS protocol reference (translated)
-docs/XBUS-INVESTIGATION.md               — X.BUS investigation timeline and lessons learned
+docs/XBUS-PROTOCOL.md                    — XC X.BUS protocol reference (used by live telemetry)
 docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
-docs/WIRING-GUIDE.md                     — Hardware wiring reference
 docs/MISSION.md                          — Project design philosophy (smoothness above all)
-docs/PLANT-CHARACTERIZATION.md           — Measured plant response (E10/E3665 era, kept for reference)
+docs/DECISION-LOG.md                     — Technical decision log
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor
 ```
@@ -260,10 +267,10 @@ per-parameter code-context analysis.
 
 ## Build & Upload
 
-- Board: Arduino Nano R4
-- FQBN: `arduino:renesas_uno:nanor4`
+- Board: Arduino UNO R4 WiFi
+- FQBN: `arduino:renesas_uno:unor4wifi`
 - Board package: `arduino:renesas_uno`
-- Port: COM8
+- Port: COM7
 - Serial: 115200 baud
 - VS Code: Ctrl+Shift+B → "Live Plot" for real-time monitoring
-- Upload: `arduino-cli compile --fqbn arduino:renesas_uno:nanor4 && arduino-cli upload --fqbn arduino:renesas_uno:nanor4 -p COM8`
+- Upload: `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test && arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/rc_test`

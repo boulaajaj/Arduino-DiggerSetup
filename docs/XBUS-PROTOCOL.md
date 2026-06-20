@@ -53,7 +53,7 @@ Key characteristics:
 | Term | Definition |
 | ------ | ----------- |
 | **Master** | The controlling device in the master-slave network. Controls slave behavior. In our case: the Arduino. |
-| **Slave** | The controlled device. Receives commands from the master and responds with data or performs actions. In our case: the XC E10 ESC(s). |
+| **Slave** | The controlled device. Receives commands from the master and responds with data or performs actions. In our case: the XC GL10 ESC(s). |
 | **SAdr** | Slave Address (0x00-0x0F for point-to-point, 0xFF for broadcast). |
 | **RegAdr** | Register Address. Used in service control to read/write ESC configuration parameters. |
 
@@ -314,7 +314,7 @@ The ESC whose address matches the Target SAdr responds with:
 | 16 | 1 | - | Motor Temperature | - | Spare / reserved |
 
 > **RPM Conversion:** The "Output RPM" field is in Hz (electrical frequency).
-> For the XC E3665 motor (4-pole / 2 pole pairs):
+> For a 4-pole motor (2 pole pairs):
 > `Mechanical RPM = Hz * 60 / pole_pairs = Hz * 30`
 
 #### Running Status Bitfield
@@ -468,9 +468,9 @@ TR.BUS ── R9 (2K) ─┤ U3 (LMV331TP-TR comparator)
 - R4: **3K pull-up to 3.3V** on the TR.BUS line
 - Holds bus HIGH when idle (UART idle state)
 
-### Simplified Wiring for Arduino Nano R4 (5V Tolerant)
+### Simplified Wiring for Arduino UNO R4 WiFi (5V Tolerant)
 
-The Nano R4 has 5V tolerant GPIO and operates its UART at 5V logic levels.
+The UNO R4 WiFi has 5V tolerant GPIO and operates its UART at 5V logic levels.
 For bench testing, a simplified circuit can be used:
 
 ```text
@@ -487,7 +487,7 @@ Arduino RX ────────┘
 
 - **TX**: Series resistor (1K) prevents bus contention and limits current
   when both master and slave drive the bus simultaneously during turnaround.
-- **RX**: Direct connection. The Nano R4 GPIO is 5V tolerant, so no level
+- **RX**: Direct connection. The UNO R4 WiFi GPIO is 5V tolerant, so no level
   shifting is needed.
 - **Pull-up**: 3K-10K to 3.3V or 5V. Holds bus idle HIGH.
 - **No NPN inverter needed.** X.BUS uses standard UART polarity (unlike

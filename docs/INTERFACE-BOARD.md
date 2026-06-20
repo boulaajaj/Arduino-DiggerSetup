@@ -220,10 +220,11 @@ Plug servo cables from board headers to the Arduino shield headers:
 **PWM cables go direct** from the ESC servo connectors to the Arduino
 shield D9/D10 headers. No components needed — just plug in.
 
-> **D0 conflict:** X.BUS (J4) and S.BUS (J6) both need a serial RX
-> pin. On the Nano R4 with one hardware UART, only one can be connected
-> at a time. During X.BUS telemetry operation, leave J6 unplugged from
-> D0. For RC-only testing, unplug J4 from D0 and plug J6 in instead.
+> **UNO R4 WiFi — both UARTs free:** X.BUS telemetry lands on Serial1
+> (D0/D1) and S.BUS on `sbusUart` (SCI0, D11/D12), so both run at once
+> with no contention. (The earlier D0 conflict came from a single-UART
+> wiring where S.BUS and X.BUS both shared Serial1, before the SCI0
+> second UART was adopted — no longer the case.)
 
 ---
 
