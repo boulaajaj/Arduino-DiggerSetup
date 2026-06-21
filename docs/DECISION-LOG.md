@@ -480,3 +480,29 @@ low-voltage motor cutoff is split to PR #2 / #65 by risk).
   OPERATOR-GUIDE.md "Beep meanings" table (#70).
 - Follow-ups opened: #72 (smooth pivot→straight transition), #73 (dashboard
   visual alarm: red battery + error code, firmware-sourced).
+
+## 2026-06-21 — P0 Wi-Fi runaway failsafe (V7.13, PR #74 / #69)
+
+Root cause: serving the ~33 KB dashboard as one blocking burst froze loop()
+~1–2 s while the hardware-timed Servo PWM held the last throttle → uncommanded
+runaway under load. The in-loop S.BUS failsafe couldn't help (it was frozen too).
+
+Fix (two coupled parts):
+
+- **Hardware watchdog (RA4M1 WDT, 250 ms):** armed at end of setup() (after AP
+  bring-up); WDT.refresh() called ONLY after a successful control update (inputs
+  read + outputs written). Any loop stall > 250 ms resets the MCU → PWM stops →
+  ESCs neutral. Accepted as last-resort emergency stop (full reboot; AP blips).
+- **Incremental Wi-Fi serving:** wifiUpdate() does at most ONE modem write per
+  loop pass (one 1 KB page chunk OR one request OR one SSE frame); body streams
+  via a pageRemaining state machine; headers/304/data coalesced to single
+  writes. Keeps each loop pass well under the WDT timeout so normal refresh never
+  trips it.
+- Robustness (Copilot review): snprintf returns guarded; 0-byte page write
+  aborts the transfer instead of spinning forever (would starve SSE).
+
+**Operator-confirmed (2026-06-21):** dashboard refresh no longer stalls/resets
+the loop; the watchdog stands as the rare backstop only.
+
+Permanent fix remains #55 (offload Wi-Fi/HTTP/SSE to the ESP32-S3 spare core),
+which removes Wi-Fi from the control core entirely. WDT is the interim backstop.

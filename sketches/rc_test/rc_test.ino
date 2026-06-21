@@ -56,6 +56,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <WiFiS3.h>
+#include <WDT.h>        // RA4M1 hardware watchdog — control-loop runaway backstop (#69)
 #include "sbus.h"
 #include "types.h"
 #include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
@@ -103,16 +104,16 @@ const int      BEEP_WIFI_READY_LEN = 3;                // phases in BEEP_WIFI_RE
 // Distinct on purpose so each is identifiable by ear — see OPERATOR-GUIDE.md.
 const uint16_t ALERT_INACT[]   = {500, 1500};                   // one long beep / 2 s  (RC off)
 const int      ALERT_INACT_LEN = 2;
-const uint16_t ALERT_LOWV[]    = {120, 120, 120, 120, 120, 600};// three fast chirps / ~1.2 s (low batt)
+const uint16_t ALERT_LOWV[]    = {120, 120, 120, 120, 120, 600};  // three fast chirps / ~1.2 s (low batt)
 const int      ALERT_LOWV_LEN  = 6;
 
 // [ALERT] tunables
-const uint32_t INACT_RC_OFF_MS  = 60000UL; // RC off this long → inactivity beep ("unplug me")
+const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
 const float    LOWV_THRESH_V    = 10.5f;   // worst-of-two pack EMA below this → low-batt alarm
 const float    LOWV_PLAUS_MIN_V = 6.0f;    // pack reading below this = not present / bad → ignore
 const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read → ignore
 const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
-const uint32_t ALERT_STARTUP_MS = 60000UL; // suppress low-V alarm until telemetry/EMA settles
+const uint32_t ALERT_STARTUP_MS = 60000UL;  // suppress low-V alarm until telemetry/EMA settles
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -202,6 +203,15 @@ const uint8_t  WIFI_AP_CHANNEL       = 11;   // 2.4 GHz AP channel — off the c
 const uint32_t SSE_INTERVAL_MS       = 200;  // dashboard push period = 5 Hz (X.BUS poll rate is independent)
 const uint32_t WIFI_MODEM_TIMEOUT_MS = 50;   // per-call Wi-Fi/modem timeout so one stalled write can't freeze loop()
 const size_t   SSE_FRAME_CAP         = 384;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
+
+// Safety watchdog (#69). The MCU resets if loop() fails to service the control
+// path (read inputs + write outputs) within WDT_TIMEOUT_MS — a reset stops PWM,
+// so the ESCs go to neutral/failsafe instead of holding the last throttle. This
+// bounds ANY loop stall (Wi-Fi serving or otherwise) to at most this long.
+// Starting value; tune on the bench. Must stay above the worst-case single loop
+// pass (with incremental page serving, a pass is far under this).
+const uint32_t WDT_TIMEOUT_MS        = 250;
+const size_t   WIFI_PAGE_CHUNK       = 1024;  // dashboard HTML bytes sent per loop pass (incremental)
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -692,14 +702,29 @@ void alertUpdate(bool rcOn) {
   }
 
   // --- pick highest-priority alarm ---
-  const uint16_t* seq = nullptr; int len = 0;
-  if (lowVoltLatched)     { seq = ALERT_LOWV;  len = ALERT_LOWV_LEN; }
-  else if (inactiveAlarm) { seq = ALERT_INACT; len = ALERT_INACT_LEN; }
+  const uint16_t* seq = nullptr;
+  int len = 0;
+  if (lowVoltLatched) {
+    seq = ALERT_LOWV;
+    len = ALERT_LOWV_LEN;
+  } else if (inactiveAlarm) {
+    seq = ALERT_INACT;
+    len = ALERT_INACT_LEN;
+  }
 
-  if (seq == nullptr) { alarmSeq = nullptr; alarmOutputOn = false; return; }
+  if (seq == nullptr) {
+    alarmSeq = nullptr;
+    alarmOutputOn = false;
+    return;
+  }
 
   // (re)start playback when the active alarm changes
-  if (seq != alarmSeq) { alarmSeq = seq; alarmLen = len; alarmIdx = 0; alarmPhaseMs = nowMs; }
+  if (seq != alarmSeq) {
+    alarmSeq = seq;
+    alarmLen = len;
+    alarmIdx = 0;
+    alarmPhaseMs = nowMs;
+  }
 
   // advance the repeating pattern (loops, unlike the one-shot beepStart)
   if (nowMs - alarmPhaseMs >= alarmSeq[alarmIdx]) {
@@ -713,13 +738,20 @@ void alertUpdate(bool rcOn) {
 // ═══════════════════════════════════════════════════════════════
 // [WIFI] — AP + HTTP telemetry server (WiFiS3, stock UNO R4 WiFi)
 // ═══════════════════════════════════════════════════════════════
-// Hosts a Wi-Fi access point and serves telemetry as JSON at /data for
-// the dashboard (dashboard/index.html). MONITORING ONLY — no control
-// inputs are ever accepted over Wi-Fi (safety). Engineered non-blocking:
-// one short client transaction per loop pass, a bounded request-read
-// timeout, and a tiny payload, so it doesn't disturb the control loop.
-// The Servo PWM is hardware-timed, so even a brief loop stall (e.g. a
-// client connect) cannot glitch the ESC output.
+// Hosts a Wi-Fi access point and streams telemetry to the dashboard
+// (dashboard/index.html). MONITORING ONLY — no control inputs are ever
+// accepted over Wi-Fi (safety).
+//
+// SAFETY (#69): serving must NEVER starve the control loop. Originally the
+// ~33 KB page was sent as one blocking burst (~1-2 s), during which loop()
+// froze while the Servo PWM hardware kept emitting the last throttle → a
+// runaway. Two defenses now:
+//   1. wifiUpdate() does AT MOST ONE modem write per loop pass (one page
+//      chunk OR one request OR one SSE frame), so control + failsafe run
+//      between every chunk and the loop is never blocked for long.
+//   2. The hardware watchdog (WDT_TIMEOUT_MS, armed in setup) resets the MCU
+//      if the loop is ever stalled past the timeout regardless of cause —
+//      PWM stops and the ESCs go to neutral. Backstop, not the primary fix.
 
 const char WIFI_SSID[] = "Digger-Telemetry";
 const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
@@ -738,6 +770,14 @@ char pageEtag[24] = "\"d0\"";
 // update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
 WiFiClient     sseClient;
 uint32_t       sseLastMs = 0;
+
+// Incremental dashboard transfer (#69): the ~33 KB page is sent ONE
+// WIFI_PAGE_CHUNK per loop pass, not in a single blocking burst, so the control
+// path + failsafe + watchdog refresh run between chunks and the loop is never
+// starved. pageRemaining > 0 means a transfer is in flight.
+WiFiClient     pageClient;
+const char    *pagePtr = nullptr;
+size_t         pageRemaining = 0;
 
 // Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
 int wifiMode() {
@@ -832,14 +872,19 @@ int buildTelemJson(char *body, size_t cap) {
   return n;
 }
 
+// One-shot /data JSON. Header + body coalesced into a single write() so the
+// whole response is one modem round-trip (one bounded op this loop pass).
 void wifiSendData(WiFiClient &client) {
   char body[360];
   int n = buildTelemJson(body, sizeof(body));
-  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-                 "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: "));
-  client.print(n);
-  client.print(F("\r\n\r\n"));
-  client.write(reinterpret_cast<const uint8_t *>(body), n);
+  char buf[512];
+  int h = snprintf(buf, sizeof(buf),
+    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+    "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: %d\r\n\r\n", n);
+  if (h > 0 && (size_t)(h + n) < sizeof(buf)) {
+    memcpy(buf + h, body, n);
+    client.write(reinterpret_cast<const uint8_t *>(buf), h + n);
+  }
 }
 
 // Serve the embedded dashboard. The page is static, so it carries an ETag and
@@ -847,47 +892,90 @@ void wifiSendData(WiFiClient &client) {
 // once, then every refresh sends If-None-Match and gets a tiny 304 here instead
 // of re-streaming ~33 KB through the blocking Wi-Fi modem (issue #54). Live
 // values arrive separately over SSE, so the HTML itself never reloads in normal
-// use. The 200 body is chunked so one big write doesn't hog the loop.
-void wifiSendPage(WiFiClient &client, bool notModified) {
-  if (notModified) {
-    client.print(F("HTTP/1.1 304 Not Modified\r\nETag: "));
-    client.print(pageEtag);
-    client.print(F("\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"));
+// use.
+//
+// The 200 body is NOT sent here in one burst — that single blocking burst was
+// the #69 runaway root cause (it froze loop() for ~1-2 s while the ESC held the
+// last throttle). Instead wifiBeginPage() sends only the headers (one coalesced
+// write) and hands the body to the incremental sender in wifiUpdate(), which
+// ships ONE WIFI_PAGE_CHUNK per loop pass so control + failsafe run between
+// chunks.
+void wifiBeginPage(WiFiClient &client) {
+  size_t len = strlen(INDEX_HTML);
+  char hdr[160];
+  int h = snprintf(hdr, sizeof(hdr),
+    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+    "Cache-Control: no-cache\r\nETag: %s\r\nConnection: close\r\nContent-Length: %u\r\n\r\n",
+    pageEtag, (unsigned)len);
+  // snprintf returns <0 on error or >= size if truncated; only proceed with a
+  // valid, fully-formed header. Otherwise abort (don't start a body transfer
+  // behind a partial/garbage header).
+  if (h <= 0 || h >= (int)sizeof(hdr)) {
+    client.stop();
     return;
   }
-  size_t len = strlen(INDEX_HTML);
-  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-                 "Cache-Control: no-cache\r\nETag: "));
-  client.print(pageEtag);
-  client.print(F("\r\nConnection: close\r\nContent-Length: "));
-  client.print(len);
-  client.print(F("\r\n\r\n"));
-  const char *p = INDEX_HTML;
-  size_t remaining = len;
-  while (remaining) {
-    size_t chunk = remaining > 1024 ? 1024 : remaining;
-    size_t w = client.write(reinterpret_cast<const uint8_t *>(p), chunk);
-    if (w == 0) break;          // client went away
-    p += w; remaining -= w;
+  client.write(reinterpret_cast<const uint8_t *>(hdr), h);
+  pageClient = client;          // refcounted handle survives the local going out of scope
+  pagePtr = INDEX_HTML;
+  pageRemaining = len;          // body streams over the next passes (branch A of wifiUpdate)
+}
+
+// 304 Not Modified for a cached dashboard — tiny, single coalesced write.
+void wifiSend304(WiFiClient &client) {
+  char hdr[120];
+  int h = snprintf(hdr, sizeof(hdr),
+    "HTTP/1.1 304 Not Modified\r\nETag: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
+    pageEtag);
+  // Guard the snprintf return (could be <0 or truncated) before using it as a length.
+  if (h > 0 && h < (int)sizeof(hdr)) {
+    client.write(reinterpret_cast<const uint8_t *>(hdr), h);
   }
 }
 
-// Non-blocking. Accepts at most one new client per call (bounded request read),
-// and pushes a telemetry frame to the live SSE stream on its interval.
+// Non-blocking, and bounded to AT MOST ONE modem write per loop pass (#69):
+// either one page chunk, OR one request/response, OR one SSE frame. The control
+// path + WDT.refresh() run every pass between these, so Wi-Fi can never starve
+// the loop. Each modem call is also individually capped at WIFI_MODEM_TIMEOUT_MS
+// (vs the WiFiS3 default 10 000 ms) so a single stalled TCP window can't freeze
+// loop() for seconds (issue #54).
 void wifiUpdate() {
   if (!wifiUp) return;
 
-  // Cap EACH Wi-Fi/modem call below at WIFI_MODEM_TIMEOUT_MS. The WiFiS3 default
-  // is MODEM_TIMEOUT = 10 000 ms — a stalled iPhone TCP window (Safari
-  // backgrounded, weak signal) can otherwise freeze loop() for seconds, starving
-  // servo + S.BUS updates. NOTE: this bounds each INDIVIDUAL modem operation, not
-  // the total time in wifiUpdate() — serving the full page makes several
-  // client.write() calls, so the aggregate can exceed it (page delivery is the
-  // main cost, and caching keeps it rare). The cost is an occasionally dropped
-  // telemetry frame — the right trade for a vehicle controller (issue #54).
-  // Restored to the default before returning so AP bring-up keeps the full timeout.
   modem.timeout(WIFI_MODEM_TIMEOUT_MS);
 
+  // (A) A page transfer is in flight → send exactly ONE chunk and yield. Control
+  // + failsafe + watchdog refresh run before we get back here next pass.
+  if (pageRemaining > 0) {
+    if (!pageClient.connected()) {
+      // client went away mid-transfer
+      pageClient.stop();
+      pagePtr = nullptr;
+      pageRemaining = 0;
+    } else {
+      size_t chunk = pageRemaining > WIFI_PAGE_CHUNK ? WIFI_PAGE_CHUNK : pageRemaining;
+      size_t w = pageClient.write(reinterpret_cast<const uint8_t *>(pagePtr), chunk);
+      if (w == 0) {
+        // write stalled (modem timeout) — abort the transfer instead of spinning
+        // forever: a 0-byte write makes no progress, so without this the page
+        // never completes and SSE telemetry is starved one pass at a time.
+        pageClient.stop();
+        pagePtr = nullptr;
+        pageRemaining = 0;
+      } else {
+        pagePtr += w;
+        pageRemaining -= w;
+        if (pageRemaining == 0) {
+          pageClient.flush();
+          pageClient.stop();
+          pagePtr = nullptr;
+        }
+      }
+    }
+    modem.timeout(MODEM_TIMEOUT);
+    return;
+  }
+
+  // (B) Otherwise accept at most one new client this pass.
   WiFiClient client = wifiServer.available();
   if (client) {
     // Read the request line + headers into one bounded buffer (cap + 25 ms) so
@@ -914,30 +1002,35 @@ void wifiUpdate() {
       wifiSendData(client); client.flush(); client.stop();
     } else {
       // Static dashboard. If the browser already holds our ETag, reply 304 and
-      // skip the ~33 KB transfer entirely (issue #54).
+      // skip the ~33 KB transfer entirely (issue #54); otherwise send the headers
+      // now and stream the body incrementally over the next passes (branch A).
       bool cached = strstr(req, "If-None-Match") && strstr(req, pageEtag);
-      wifiSendPage(client, cached); client.flush(); client.stop();
+      if (cached) {
+        wifiSend304(client);
+        client.flush();
+        client.stop();
+      } else {
+        wifiBeginPage(client);     // body streams over the next passes (branch A)
+      }
     }
+    modem.timeout(MODEM_TIMEOUT);
+    return;                                            // one modem op done this pass
   }
 
-  // Stream live telemetry to the dashboard over the open SSE connection.
-  // Each push starts with an SSE comment line ": hb\n" — this is a no-op for
-  // the EventSource client but exercises the TCP socket and helps prevent
-  // Safari/iOS from parking the connection in a stalled state.
+  // (C) Idle → push at most one SSE telemetry frame on its interval. The push
+  // starts with a ": hb\n" comment (a no-op for EventSource) that exercises the
+  // TCP socket so Safari/iOS doesn't park the connection in a stalled state.
   if (sseClient.connected()) {
     uint32_t now = millis();
     if (now - sseLastMs >= SSE_INTERVAL_MS) {
       sseLastMs = now;
       // Build the whole SSE frame — heartbeat comment, data line, terminator —
-      // into one buffer and ship it in a SINGLE write(). That is one AT
-      // round-trip to the ESP32 bridge per push instead of three, cutting the
-      // blocking modem calls 3:1 (issue #54). SSE_FRAME_CAP comfortably holds the
-      // 11-byte prefix + ~250-byte JSON + 2-byte terminator.
+      // into one buffer and ship it in a SINGLE write() (one AT round-trip vs
+      // three, issue #54). SSE_FRAME_CAP holds the 11-byte prefix + JSON + "\n\n".
       char frame[SSE_FRAME_CAP];
       int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
       // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body can
-      // never crowd it out; buildTelemJson clamps its own length to the cap we
-      // pass, keeping `len` provably within `frame` for any payload size.
+      // never crowd it out; buildTelemJson clamps to the cap we pass.
       len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
       frame[len++] = '\n';
       frame[len++] = '\n';
@@ -963,7 +1056,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.11 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/horn ===");
+    Serial.println("# === Digger V7.13 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -1013,6 +1106,21 @@ void setup() {
   debugInit();
   Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
   wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
+
+  // Arm the hardware watchdog LAST — after the slow Wi-Fi AP bring-up — so init
+  // can't trip it. From here, loop() must call WDT.refresh() within
+  // WDT_TIMEOUT_MS or the MCU resets: PWM stops, the ESCs see no signal and go
+  // to neutral/failsafe, and the machine stops instead of holding the last
+  // throttle. This is the runaway backstop for ANY loop stall (#69).
+  if (WDT.begin(WDT_TIMEOUT_MS)) {
+    if (Serial) {
+      Serial.print("# WDT armed @ ");
+      Serial.print(WDT.getTimeout());
+      Serial.println(" ms");
+    }
+  } else if (Serial) {
+    Serial.println("# WDT FAILED to arm — no loop-stall backstop!");
+  }
 }
 
 void loop() {
@@ -1043,6 +1151,13 @@ void loop() {
   // Acceleration + Drag Force settings, so the Arduino sends the mixed
   // command straight through.
   outputWrite(mix.left, mix.right);
+
+  // Control path serviced this pass (inputs read + outputs written) — and ONLY
+  // now do we kick the watchdog. This is the sole refresh point: if anything
+  // below (telemetry/Wi-Fi) ever stalls the loop beyond WDT_TIMEOUT_MS, the
+  // refresh is missed, the MCU resets, and the machine stops instead of holding
+  // the last throttle command (#69).
+  WDT.refresh();
 
   // 3.5 Telemetry — non-blocking X.BUS Read Register (0x10), read-only.
   // Never enters BUS_MODE, so it cannot affect the control output above.
