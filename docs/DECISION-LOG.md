@@ -488,6 +488,7 @@ Root cause: serving the ~33 KB dashboard as one blocking burst froze loop()
 runaway under load. The in-loop S.BUS failsafe couldn't help (it was frozen too).
 
 Fix (two coupled parts):
+
 - **Hardware watchdog (RA4M1 WDT, 250 ms):** armed at end of setup() (after AP
   bring-up); WDT.refresh() called ONLY after a successful control update (inputs
   read + outputs written). Any loop stall > 250 ms resets the MCU → PWM stops →
