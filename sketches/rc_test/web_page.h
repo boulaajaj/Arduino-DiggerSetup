@@ -433,7 +433,7 @@ const WATCHDOG_MS = 3000;       // silent SSE → force reconnect (defeats Safar
 const RECONNECT_DELAY_MS = 1500;
 const ESC_STALE_AGE_MS = 1500;  // per-ESC freshness threshold
 
-const MR=6000, GR=20, WC=0.95, PWR_MAX=300;
+const MR=6000, GR=20, WC=0.95, PWR_MAX=200;
 const gn=['ECO','NORMAL','BOOST'], gcl=['g-eco','g-norm','g-turbo'];
 
 let eL={r:0,c:0,b:11.4,tM:25,tE:25}, eR={r:0,c:0,b:11.2,tM:25,tE:25};
@@ -523,7 +523,7 @@ function render(){
   // fills by magnitude. Amps/Watts scaled to typical driving range.
   const tL = Math.round((dOutL-1500)/5), tR = Math.round((dOutR-1500)/5);
   set('thrL', tL+'%'); set('thrR', tR+'%');
-  const AMPS_MAX = 60, WATTS_MAX = 450;
+  const AMPS_MAX = 60, WATTS_MAX = 400;
   const amps = dL.c+dR.c, watts = dL.c*dL.b + dR.c*dR.b;
   set('curTot', amps.toFixed(1)+'A');
   set('pwrTot', Math.round(watts)+'W');
@@ -540,13 +540,43 @@ function render(){
 function scheduleRender(){}
 
 function dirArrow(o){return o>1530?1:(o<1470?-1:0);}
+
+// Combined heading arrow: derive a 2D vehicle heading from the two track PWMs.
+//   fwd  = (L+R)/2   forward(+)/reverse(-) component
+//   turn = (L-R)/2   left track faster (+) = turning right
+// Rotate the up-arrow clockwise by atan2(turn,fwd): 0=forward(up), +90=right,
+// -90=left, ±180=reverse(down); forward-right ≈ +45. Colour green→orange→red by
+// how forward-vs-reverse the heading is. CSS transition animates it smoothly.
+let vDirAngle = 0;
+function lerp(a,b,t){return a+(b-a)*t;}
+function dirColor(t){            // t: 0 forward(green) … 0.5 sideways(orange) … 1 reverse(red)
+  t=Math.max(0,Math.min(1,t));
+  const g=[0,200,100], o=[255,136,0], r=[255,68,68];
+  const c = t<0.5 ? [lerp(g[0],o[0],t*2),lerp(g[1],o[1],t*2),lerp(g[2],o[2],t*2)]
+                  : [lerp(o[0],r[0],(t-0.5)*2),lerp(o[1],r[1],(t-0.5)*2),lerp(o[2],r[2],(t-0.5)*2)];
+  return 'rgb('+c.map(Math.round).join(',')+')';
+}
 function applyDir(){
   [['dirL',dirArrow(outL)],['dirR',dirArrow(outR)]].forEach(([id,d])=>{
     const e=document.getElementById(id); if(!e) return;
     e.className='dir-arrows '+(d>0?'fwd':d<0?'rev':'off');
     e.innerHTML=d<0?'&#9660;&#9660;':'&#9650;&#9650;';});
-  const vd=document.getElementById('vDir'), s=dirArrow(outL)+dirArrow(outR);
-  if(vd){vd.className='vehicle-dir '+(s<0?'rev':'fwd');vd.innerHTML=s<0?'&#9660;':'&#9650;';}
+  const vd=document.getElementById('vDir'); if(!vd) return;
+  const L=outL-1500, R=outR-1500;
+  const fwd=(L+R)/2, turn=(L-R)/2, mag=Math.hypot(fwd,turn);
+  if(mag<25){                                    // deadzone — stationary, dim, hold last heading
+    vd.className='vehicle-dir off'; vd.style.color='#333'; vd.style.textShadow='none';
+    return;
+  }
+  const theta=Math.atan2(turn,fwd)*180/Math.PI;  // 0=fwd(up), +90=right, ±180=reverse(down)
+  let dlt=(theta-vDirAngle)%360; if(dlt>180)dlt-=360; if(dlt<-180)dlt+=360;
+  vDirAngle+=dlt;                                 // unwrap so it rotates the short way
+  const col=dirColor((1-fwd/mag)/2);
+  vd.className='vehicle-dir';
+  vd.style.transform='rotate('+vDirAngle.toFixed(1)+'deg)';
+  vd.style.color=col;
+  vd.style.textShadow='0 0 14px '+col;
+  vd.innerHTML='&#9650;';
 }
 
 function applyData(d){

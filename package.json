@@ -1,0 +1,12 @@
+{
+  "name": "arduino-digger-tools",
+  "private": true,
+  "description": "Local dev tooling for the excavator project (dashboard UI testing).",
+  "type": "module",
+  "scripts": {
+    "ui-test": "node tools/ui-test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.0"
+  }
+}
