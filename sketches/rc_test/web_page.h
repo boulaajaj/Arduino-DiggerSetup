@@ -3,7 +3,7 @@ const char INDEX_HTML[] PROGMEM = R"DIGGER(
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Malaki SuperTracks</title>
 <!-- Installable home-screen app: launches standalone (no browser chrome) on iOS/iPadOS. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -26,7 +26,8 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 
 .dash-frame{
   width:1280px;height:720px;flex:none;position:relative;
-  transform-origin:center center;          /* JS sets transform:scale(...) */
+  transform-origin:center center;          /* flex-centered; JS scales to fit (fitStage) */
+  overflow:hidden;                         /* clip any minor internal overflow */
   display:flex;flex-direction:column;
   background:
     radial-gradient(ellipse at 50% 0%, rgba(60,50,30,0.15) 0%, transparent 50%),
@@ -441,6 +442,14 @@ let lastRx=0, lastFrameAt=0, uptime0=0;
 let es=null, connState='INIT', reconnectTimer=null;
 let rafScheduled=false;
 
+// Smoothed display state — eases toward the latest telemetry each animation
+// frame so gauges/numbers glide (soft curve) instead of snapping between the
+// 5 Hz samples. Discrete fields (gear/mode/direction) stay instant.
+let dL={r:0,c:0,b:11.4,tM:25,tE:25}, dR={r:0,c:0,b:11.2,tM:25,tE:25};
+let dOutL=1500, dOutR=1500;
+const SMOOTH=0.18;                       // ease factor per frame (higher = snappier)
+function ez(c,t){ return c + (t - c) * SMOOTH; }
+
 function bp(v){return Math.max(0,Math.min(100,((v-9)/(12.6-9))*100))}
 function bc(p){return p>50?'linear-gradient(90deg,#0c6,#4f8)':p>25?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
 function ndl(id,val,max){const e=document.getElementById(id);
@@ -478,39 +487,44 @@ function showBanner(msg, kind){
 }
 function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.style.display='none';}
 
-// ── Render (rAF-throttled to avoid layout thrash if frames bunch up) ──
+// ── Render — continuous requestAnimationFrame loop (eases displayed values ~60fps) ──
 function render(){
-  rafScheduled=false;
-  ndl('ndlEL',eL.tE,120);ndl('ndlML',eL.tM,120);ndl('ndlRL',eL.r,MR);ndl('ndlCL',eL.c*eL.b,PWR_MAX);
-  ndl('ndlER',eR.tE,120);ndl('ndlMR',eR.tM,120);ndl('ndlRR',eR.r,MR);ndl('ndlCR',eR.c*eR.b,PWR_MAX);
-  set('vEL',eL.tE.toFixed(0)+'°');set('vML',eL.tM.toFixed(0)+'°');
-  set('vRL',Math.round(eL.r));set('vCL',Math.round(Math.max(0,eL.c*eL.b))+'W');
-  set('vER',eR.tE.toFixed(0)+'°');set('vMR',eR.tM.toFixed(0)+'°');
-  set('vRR',Math.round(eR.r));set('vCR',Math.round(Math.max(0,eR.c*eR.b))+'W');
-  [['vEL',eL.tE],['vML',eL.tM],['vER',eR.tE],['vMR',eR.tM]].forEach(([id,t])=>{
+  // Ease displayed values toward the latest targets (soft exponential curve)
+  // so gauges + numbers glide between the 5 Hz telemetry samples.
+  dL.r=ez(dL.r,eL.r); dL.c=ez(dL.c,eL.c); dL.b=ez(dL.b,eL.b); dL.tE=ez(dL.tE,eL.tE); dL.tM=ez(dL.tM,eL.tM);
+  dR.r=ez(dR.r,eR.r); dR.c=ez(dR.c,eR.c); dR.b=ez(dR.b,eR.b); dR.tE=ez(dR.tE,eR.tE); dR.tM=ez(dR.tM,eR.tM);
+  dOutL=ez(dOutL,outL); dOutR=ez(dOutR,outR);
+
+  ndl('ndlEL',dL.tE,120);ndl('ndlML',dL.tM,120);ndl('ndlRL',dL.r,MR);ndl('ndlCL',dL.c*dL.b,PWR_MAX);
+  ndl('ndlER',dR.tE,120);ndl('ndlMR',dR.tM,120);ndl('ndlRR',dR.r,MR);ndl('ndlCR',dR.c*dR.b,PWR_MAX);
+  set('vEL',dL.tE.toFixed(0)+'°');set('vML',dL.tM.toFixed(0)+'°');
+  set('vRL',Math.round(dL.r));set('vCL',Math.round(Math.max(0,dL.c*dL.b))+'W');
+  set('vER',dR.tE.toFixed(0)+'°');set('vMR',dR.tM.toFixed(0)+'°');
+  set('vRR',Math.round(dR.r));set('vCR',Math.round(Math.max(0,dR.c*dR.b))+'W');
+  [['vEL',dL.tE],['vML',dL.tM],['vER',dR.tE],['vMR',dR.tM]].forEach(([id,t])=>{
     const e=document.getElementById(id); if(e) e.style.color=tc(t);});
   // Vehicle speed — average of SIGNED per-track velocities. A 360 pivot
   // (one track fwd, one rev) averages to ~0; 30%+100% fwd averages to ~65%.
-  const sL = outL>1530?1:(outL<1470?-1:0), sR = outR>1530?1:(outR<1470?-1:0);
-  const vehKmh = Math.abs((eL.r*sL + eR.r*sR)/2 / GR * WC * 60/1000);
+  const sgnL = dOutL>1530?1:(dOutL<1470?-1:0), sgnR = dOutR>1530?1:(dOutR<1470?-1:0);
+  const vehKmh = Math.abs((dL.r*sgnL + dR.r*sgnR)/2 / GR * WC * 60/1000);
   set('spd', vehKmh.toFixed(1));
 
   // Per-battery percentages — each gets its own number and indicator color
-  const bL=bp(eL.b), bR=bp(eR.b);
+  const bL=bp(dL.b), bR=bp(dR.b);
   const batColor = p => p>50?'#0c6' : p>25?'#fc0' : '#f44';
   const fL=document.getElementById('batLFill'), fR=document.getElementById('batRFill');
   if(fL){fL.style.width=bL+'%'; fL.style.background=bc(bL);}
   if(fR){fR.style.width=bR+'%'; fR.style.background=bc(bR);}
-  set('batLV',eL.b.toFixed(1)+'V'); set('batRV',eR.b.toFixed(1)+'V');
+  set('batLV',dL.b.toFixed(1)+'V'); set('batRV',dR.b.toFixed(1)+'V');
   set('batLPct',bL.toFixed(0)+'%'); set('batRPct',bR.toFixed(0)+'%');
   const lpEl=document.getElementById('batLPct'); if(lpEl) lpEl.style.color=batColor(bL);
   const rpEl=document.getElementById('batRPct'); if(rpEl) rpEl.style.color=batColor(bR);
   // Bottom row — values + bar gauges. Throttle is signed (-100..+100), bar
   // fills by magnitude. Amps/Watts scaled to typical driving range.
-  const tL = Math.round((outL-1500)/5), tR = Math.round((outR-1500)/5);
+  const tL = Math.round((dOutL-1500)/5), tR = Math.round((dOutR-1500)/5);
   set('thrL', tL+'%'); set('thrR', tR+'%');
   const AMPS_MAX = 60, WATTS_MAX = 1500;
-  const amps = eL.c+eR.c, watts = eL.c*eL.b + eR.c*eR.b;
+  const amps = dL.c+dR.c, watts = dL.c*dL.b + dR.c*dR.b;
   set('curTot', amps.toFixed(1)+'A');
   set('pwrTot', Math.round(watts)+'W');
   const setBar=(id,pct)=>{const e=document.getElementById(id);
@@ -519,8 +533,11 @@ function render(){
   setBar('thrRBar', Math.abs(tR));
   setBar('curTotBar', amps/AMPS_MAX*100);
   setBar('pwrTotBar', watts/WATTS_MAX*100);
+  requestAnimationFrame(render);          // continuous loop — keeps easing at ~60 fps
 }
-function scheduleRender(){if(!rafScheduled){rafScheduled=true; requestAnimationFrame(render);}}
+// applyData no longer needs to schedule a render; the continuous loop above
+// always reflects the latest targets. Kept as a no-op for call-site safety.
+function scheduleRender(){}
 
 function dirArrow(o){return o>1530?1:(o<1470?-1:0);}
 function applyDir(){
@@ -617,6 +634,7 @@ function staleWatch(){
 })();
 
 connect();
+requestAnimationFrame(render);            // start the continuous smoothing/render loop
 setInterval(staleWatch, 500);
 setInterval(watchdog, 1000);
 
@@ -628,12 +646,18 @@ function fitStage(){
   const stage = document.querySelector('.dash-frame');
   if(!stage) return;
   const BW=1280, BH=720;
-  const s = Math.min(window.innerWidth/BW, window.innerHeight/BH);
+  // Scale the flex-centered stage to the SMALLER ratio so the whole thing fits
+  // (portrait or landscape). visualViewport is the most reliable size on iOS.
+  const vw = (window.visualViewport && window.visualViewport.width)  || window.innerWidth  || document.documentElement.clientWidth;
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
+  const s = Math.min(vw/BW, vh/BH);
   stage.style.transform = 'scale(' + s + ')';
 }
 window.addEventListener('resize', fitStage);
-window.addEventListener('orientationchange', ()=>setTimeout(fitStage, 50));
-fitStage();
+window.addEventListener('orientationchange', ()=>setTimeout(fitStage, 100));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
+// Run now + delayed retries to catch iOS settling the viewport late.
+fitStage(); setTimeout(fitStage, 200); setTimeout(fitStage, 600);
 </script>
 </body>
 </html>
