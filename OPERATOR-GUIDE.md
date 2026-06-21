@@ -135,7 +135,7 @@ each pattern means one thing, and nothing else.
 | **Two short beeps** (once, right after power-on) | Wi-Fi telemetry is up | Connect your phone to `Digger-Telemetry` to see the dashboard (optional) |
 | **Steady tone** (only while held) | Someone is pressing the horn button on the RC remote | Nothing — that's the horn |
 | **One long beep, every 2 seconds** | The **RC remote has been turned off for over a minute** | **Unplug the LiPo batteries.** Left plugged in, they slowly drain and can be ruined within a week or two |
-| **Three fast chirps, over and over, won't stop** | A **battery is low** (below 10.5 V) | **Stop and charge the batteries.** This alarm will NOT turn off until you unplug and re-power the digger — it's protecting the expensive packs from damage |
+| **Three fast chirps, over and over, won't stop** | A **battery is low** (below 10.5 V) | **Stop and charge the batteries.** This is a *warning only* — it does **not** stop the motors. The packs are protected by you stopping and charging them, not by the firmware. The alarm will NOT turn off until you unplug and re-power the digger. (An automatic motor cutoff is planned — issue #65.) |
 
 **Notes:**
 
