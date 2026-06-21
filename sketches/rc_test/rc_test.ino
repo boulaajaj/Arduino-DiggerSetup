@@ -34,6 +34,7 @@
 //   [OUTPUT]     ESC servo PWM
 //   [TELEMETRY]  X.BUS Read Register (0x10) on Serial1 — V/I/RPM/temp
 //   [BEEPER]     Active piezo on D8 — horn (RC SWD/CH7) + beep patterns
+//   [ALERT]      Battery (< 10.5 V, latched) + inactivity (RC off) alarms on D8
 //   [DEBUG]      10 Hz serial CSV (control + telemetry)
 //
 // Pin map:
@@ -41,7 +42,7 @@
 //   A1  ← Joystick X (steering)        [14-bit ADC]
 //   D11 (unused — sbusUart TX on SCI0, S.BUS is RX-only)
 //   D12 ← S.BUS RX (sbusUart on SCI0 via NPN inverter)
-//   D8     (reserved — future battery-aware beeper, V8/UNO R4)
+//   D8  → Active piezo — horn + Wi-Fi/battery/inactivity alarms
 //   D9  → Left ESC                      [Servo PWM]
 //   D10 → Right ESC                     [Servo PWM]
 //   D0/D1 → Serial1 (X.BUS half-duplex telemetry bus to both ESCs)
@@ -97,6 +98,21 @@ const int SBUS_MAX = 1811;
 const int HORN_ON_RAW = 1400;  // SWD raw above this = horn ON (toward +100% ~1811)
 const uint16_t BEEP_WIFI_READY[]   = {180, 140, 180};  // Wi-Fi-ready "beep beep": on, off, on (ms)
 const int      BEEP_WIFI_READY_LEN = 3;                // phases in BEEP_WIFI_READY[]
+
+// [ALERT] repeating alarm patterns (ms, starting with ON; played as a loop).
+// Distinct on purpose so each is identifiable by ear — see OPERATOR-GUIDE.md.
+const uint16_t ALERT_INACT[]   = {500, 1500};                   // one long beep / 2 s  (RC off)
+const int      ALERT_INACT_LEN = 2;
+const uint16_t ALERT_LOWV[]    = {120, 120, 120, 120, 120, 600};// three fast chirps / ~1.2 s (low batt)
+const int      ALERT_LOWV_LEN  = 6;
+
+// [ALERT] tunables
+const uint32_t INACT_RC_OFF_MS  = 60000UL; // RC off this long → inactivity beep ("unplug me")
+const float    LOWV_THRESH_V    = 10.5f;   // worst-of-two pack EMA below this → low-batt alarm
+const float    LOWV_PLAUS_MIN_V = 6.0f;    // pack reading below this = not present / bad → ignore
+const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read → ignore
+const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
+const uint32_t ALERT_STARTUP_MS = 60000UL; // suppress low-V alarm until telemetry/EMA settles
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -591,6 +607,7 @@ void telemUpdate() {
 // D8; the horn ORs over any pattern. UX/alert only — no control-path impact.
 
 bool hornActive = false;                             // set each loop from the RC horn channel
+bool alarmOutputOn = false;                          // set each loop by [ALERT]; ORs onto D8
 const uint16_t* beepSeq = nullptr;
 int      beepLen = 0, beepIdx = -1;
 uint32_t beepPhaseMs = 0;
@@ -612,7 +629,84 @@ void beeperUpdate() {
     }
     patternOn = (beepIdx >= 0 && beepIdx < beepLen) && (beepIdx % 2 == 0);
   }
-  digitalWrite(PIN_BEEPER, (hornActive || patternOn) ? HIGH : LOW);
+  // Horn (manual) ORs over one-shot patterns ORs over [ALERT] alarms.
+  digitalWrite(PIN_BEEPER, (hornActive || patternOn || alarmOutputOn) ? HIGH : LOW);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [ALERT] — battery + inactivity alarms layered onto the D8 piezo
+// ═══════════════════════════════════════════════════════════════
+// Audio only — NO motor-path impact (the low-voltage motor cutoff is PR #2 /
+// issue #65). Picks the highest-priority active alarm and plays its repeating
+// pattern via alarmOutputOn (OR'd onto D8 in beeperUpdate). The horn still
+// sounds over any alarm.
+//
+//   Priority:  low-voltage (latched) > inactivity > (none)
+//   Inactivity: RC transmitter off (sbusValid==false) > INACT_RC_OFF_MS.
+//               Non-latching — clears when the RC comes back on.
+//   Low-volt:   worst of the two packs' EMA voltage < LOWV_THRESH_V, but only
+//               when BOTH ESCs report a plausible reading (power-sequencing:
+//               a not-yet-powered pack reads ~0 V and must not false-alarm).
+//               Debounced so an acceleration sag can't trip it; once latched it
+//               beeps until power cycle even if voltage recovers.
+
+uint32_t rcOffSinceMs   = 0;      // millis() when RC went off (0 = RC on)
+uint32_t lowVStartMs    = 0;      // millis() when worst pack first dipped low (0 = above)
+bool     lowVoltLatched = false;  // once true, stays until power cycle
+uint32_t alertBootMs    = 0;      // set in setup() — startup-grace reference
+
+// active repeating-alarm playback state
+const uint16_t* alarmSeq = nullptr;
+int      alarmLen = 0, alarmIdx = 0;
+uint32_t alarmPhaseMs = 0;
+
+void alertInit() { alertBootMs = millis(); }
+
+// Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
+void alertUpdate(bool rcOn) {
+  uint32_t nowMs = millis();
+
+  // --- inactivity: how long has the RC been off? ---
+  if (rcOn)                    rcOffSinceMs = 0;
+  else if (rcOffSinceMs == 0)  rcOffSinceMs = nowMs;
+  bool inactiveAlarm = (rcOffSinceMs != 0) && (nowMs - rcOffSinceMs >= INACT_RC_OFF_MS);
+
+  // --- low voltage: worst-of-two, validity-gated, debounced, latching ---
+  if (!lowVoltLatched && (nowMs - alertBootMs >= ALERT_STARTUP_MS)) {
+    float v0 = telem[0].voltage, v1 = telem[1].voltage;
+    bool bothValid = telem[0].valid && telem[1].valid;
+    bool plausible = (v0 >= LOWV_PLAUS_MIN_V && v0 <= LOWV_PLAUS_MAX_V &&
+                      v1 >= LOWV_PLAUS_MIN_V && v1 <= LOWV_PLAUS_MAX_V);
+    if (bothValid && plausible) {
+      float worst = (v0 < v1) ? v0 : v1;
+      if (worst < LOWV_THRESH_V) {
+        if (lowVStartMs == 0) lowVStartMs = nowMs;
+        if (nowMs - lowVStartMs >= LOWV_DEBOUNCE_MS) lowVoltLatched = true;
+      } else {
+        lowVStartMs = 0;   // recovered before debounce elapsed
+      }
+    } else {
+      lowVStartMs = 0;     // can't measure both packs → reset debounce, stay silent
+    }
+  }
+
+  // --- pick highest-priority alarm ---
+  const uint16_t* seq = nullptr; int len = 0;
+  if (lowVoltLatched)     { seq = ALERT_LOWV;  len = ALERT_LOWV_LEN; }
+  else if (inactiveAlarm) { seq = ALERT_INACT; len = ALERT_INACT_LEN; }
+
+  if (seq == nullptr) { alarmSeq = nullptr; alarmOutputOn = false; return; }
+
+  // (re)start playback when the active alarm changes
+  if (seq != alarmSeq) { alarmSeq = seq; alarmLen = len; alarmIdx = 0; alarmPhaseMs = nowMs; }
+
+  // advance the repeating pattern (loops, unlike the one-shot beepStart)
+  if (nowMs - alarmPhaseMs >= alarmSeq[alarmIdx]) {
+    alarmIdx = (alarmIdx + 1) % alarmLen;
+    alarmPhaseMs = nowMs;
+  }
+  alarmOutputOn = (alarmIdx % 2 == 0);   // even index = ON phase
 }
 
 
@@ -915,6 +1009,7 @@ void setup() {
   sbusRx.Begin();
   outputInit();
   beeperInit();
+  alertInit();
   debugInit();
   Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
   wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
@@ -956,7 +1051,8 @@ void loop() {
   // 3.6 Wi-Fi — serve telemetry JSON to the dashboard (monitoring only).
   wifiUpdate();
   wifiDebug(now);
-  beeperUpdate();   // horn (RC SWD) + any queued beep pattern (D8)
+  alertUpdate(sbusValid);  // battery + inactivity alarms → alarmOutputOn (audio only)
+  beeperUpdate();          // horn (RC SWD) + queued pattern + [ALERT] alarm (D8)
 
   // 4. Debug
   debugPrint(now);
