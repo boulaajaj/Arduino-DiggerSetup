@@ -22,3 +22,9 @@ libraries/
 
 # Claude Code agent worktrees (transient)
 .claude/worktrees/
+
+# Node tooling (local UI tests)
+node_modules/
+
+# Screenshot artifacts
+.shots/
