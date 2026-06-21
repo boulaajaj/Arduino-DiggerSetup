@@ -5,6 +5,22 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-20 — SAFETY (P0): Wi-Fi serving stalled control loop → runaway under load
+
+- Loaded test (~60 lb): digger made **uncommanded movement (runaway toward operator)**
+  during Wi-Fi/dashboard activity. Injury hazard.
+- Cause: dashboard serving (~36 × 1 KB chunked page writes + SSE) blocks `loop()` ~1–2 s
+  on the shared RA4M1 core. Servo PWM is hardware-timed and holds the last pulse, so the
+  ESC keeps executing the **last throttle command** while `loop()` — and the in-loop
+  RC-lockout failsafe — is frozen.
+- `modem.timeout(50)` caps each modem call but NOT the cumulative ~36-call page send.
+- Failsafe required (tracked P0 in #69): hardware WDT (~250 ms) refreshed only in the
+  control section → MCU reset to neutral if the loop is starved; bound Wi-Fi work per
+  loop pass; fail-to-neutral latched. Permanent fix = #55 (ESP32-S3 offload).
+- "Stop unless Wi-Fi client connected" is the WRONG mechanism — the hazard occurs WHEN a
+  client is connected (that's what blocks the loop); no client = clean loop.
+- Interim rule: do NOT load/refresh the dashboard while driving under load.
+
 ## 2026-06-20 — Dashboard page-load froze control loop; fixed by HTTP caching
 
 - **Confirmed via USB-serial capture:** with no Wi-Fi client, loop runs clean
