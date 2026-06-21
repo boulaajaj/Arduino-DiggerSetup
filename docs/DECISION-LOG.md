@@ -507,7 +507,7 @@ the loop; the watchdog stands as the rare backstop only.
 Permanent fix remains #55 (offload Wi-Fi/HTTP/SSE to the ESP32-S3 spare core),
 which removes Wi-Fi from the control core entirely. WDT is the interim backstop.
 
-## 2026-06-21 — Dashboard "connection lost" wedge: ESP32 socket exhaustion
+## 2026-06-21 — Dashboard "connection lost" wedge: ESP32-S3 socket exhaustion
 
 Symptom: after a few iPad Wi-Fi off→reconnect→refresh cycles, the dashboard
 sticks on "connection lost, reconnecting" for minutes; only a power-cycle (or a
@@ -532,7 +532,7 @@ WiFiS3, so we can't tune it.
 Decision (fix in a separate PR, not the merged dashboard PR #76): reap the SSE
 socket proactively — on a 0-byte `sseClient.write()` (dead socket) call
 `sseClient.stop()` (= AT+CIPCLOSE) to free the link ID immediately, so the next
-reconnect is acceptable. Add a stale-SSE guard (no successful write for ~3 s →
+reconnect can be accepted. Add a stale-SSE guard (no successful write for ~3 s →
 stop) and, as a fallback only if testing still shows wedges, a server/AP recycle.
 Permanent cure remains #55 (offload Wi-Fi to the ESP32-S3). Diagnostic method
 (serial `clients_seq` watch) is reusable for verification.
