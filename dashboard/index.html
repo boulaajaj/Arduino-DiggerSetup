@@ -542,7 +542,7 @@ function dirArrow(o){return o>1530?1:(o<1470?-1:0);}
 
 // Combined heading arrow: derive a 2D vehicle heading from the two track PWMs.
 //   fwd  = (L+R)/2   forward(+)/reverse(-) component
-//   turn = (L-R)/2   left track faster (+) = turning right
+//   turn = (R-L)/2   right track faster (+) = turning right (sign verified on-device)
 // Rotate the up-arrow clockwise by atan2(turn,fwd): 0=forward(up), +90=right,
 // -90=left, ±180=reverse(down); forward-right ≈ +45. Colour green→orange→red by
 // how forward-vs-reverse the heading is. CSS transition animates it smoothly.
@@ -562,7 +562,7 @@ function applyDir(){
     e.innerHTML=d<0?'&#9660;&#9660;':'&#9650;&#9650;';});
   const vd=document.getElementById('vDir'); if(!vd) return;
   const L=outL-1500, R=outR-1500;
-  const fwd=(L+R)/2, turn=(L-R)/2, mag=Math.hypot(fwd,turn);
+  const fwd=(L+R)/2, turn=(R-L)/2, mag=Math.hypot(fwd,turn);  // +turn = turning right (sign verified on-device)
   if(mag<25){                                    // deadzone — stationary, dim, hold last heading
     vd.className='vehicle-dir off'; vd.style.color='#333'; vd.style.textShadow='none';
     return;

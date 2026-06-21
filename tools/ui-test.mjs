@@ -28,11 +28,11 @@ const mock = (outL, outR) => ({
 const cases = [
   [1800, 1800, 'fwd_straight',  'UP / green'],
   [1200, 1200, 'rev_straight',  'DOWN / red'],
-  [1800, 1200, 'pivot_right',   'RIGHT (→) / orange'],
-  [1200, 1800, 'pivot_left',    'LEFT (←) / orange'],
-  [1800, 1500, 'fwd_right',     'UP-RIGHT ~45° / green'],
-  [1500, 1800, 'fwd_left',      'UP-LEFT ~-45° / green'],
-  [1300, 1100, 'rev_right',     'DOWN-RIGHT / red'],
+  [1200, 1800, 'pivot_right',   'RIGHT (→) / orange'],   // right turn = right track faster (R>L)
+  [1800, 1200, 'pivot_left',    'LEFT (←) / orange'],
+  [1500, 1800, 'fwd_right',     'UP-RIGHT ~45° / green'],
+  [1800, 1500, 'fwd_left',      'UP-LEFT ~-45° / green'],
+  [1100, 1300, 'rev_right',     'DOWN-RIGHT / red'],
   [1500, 1500, 'neutral',       'dim (deadzone)'],
 ];
 
