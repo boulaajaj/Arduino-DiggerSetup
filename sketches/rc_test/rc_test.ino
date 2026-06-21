@@ -907,6 +907,13 @@ void wifiBeginPage(WiFiClient &client) {
     "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
     "Cache-Control: no-cache\r\nETag: %s\r\nConnection: close\r\nContent-Length: %u\r\n\r\n",
     pageEtag, (unsigned)len);
+  // snprintf returns <0 on error or >= size if truncated; only proceed with a
+  // valid, fully-formed header. Otherwise abort (don't start a body transfer
+  // behind a partial/garbage header).
+  if (h <= 0 || h >= (int)sizeof(hdr)) {
+    client.stop();
+    return;
+  }
   client.write(reinterpret_cast<const uint8_t *>(hdr), h);
   pageClient = client;          // refcounted handle survives the local going out of scope
   pagePtr = INDEX_HTML;
@@ -919,7 +926,10 @@ void wifiSend304(WiFiClient &client) {
   int h = snprintf(hdr, sizeof(hdr),
     "HTTP/1.1 304 Not Modified\r\nETag: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
     pageEtag);
-  client.write(reinterpret_cast<const uint8_t *>(hdr), h);
+  // Guard the snprintf return (could be <0 or truncated) before using it as a length.
+  if (h > 0 && h < (int)sizeof(hdr)) {
+    client.write(reinterpret_cast<const uint8_t *>(hdr), h);
+  }
 }
 
 // Non-blocking, and bounded to AT MOST ONE modem write per loop pass (#69):
@@ -944,12 +954,21 @@ void wifiUpdate() {
     } else {
       size_t chunk = pageRemaining > WIFI_PAGE_CHUNK ? WIFI_PAGE_CHUNK : pageRemaining;
       size_t w = pageClient.write(reinterpret_cast<const uint8_t *>(pagePtr), chunk);
-      pagePtr += w;
-      pageRemaining -= w;
-      if (pageRemaining == 0) {
-        pageClient.flush();
+      if (w == 0) {
+        // write stalled (modem timeout) — abort the transfer instead of spinning
+        // forever: a 0-byte write makes no progress, so without this the page
+        // never completes and SSE telemetry is starved one pass at a time.
         pageClient.stop();
         pagePtr = nullptr;
+        pageRemaining = 0;
+      } else {
+        pagePtr += w;
+        pageRemaining -= w;
+        if (pageRemaining == 0) {
+          pageClient.flush();
+          pageClient.stop();
+          pagePtr = nullptr;
+        }
       }
     }
     modem.timeout(MODEM_TIMEOUT);
