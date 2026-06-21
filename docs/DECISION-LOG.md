@@ -506,3 +506,33 @@ the loop; the watchdog stands as the rare backstop only.
 
 Permanent fix remains #55 (offload Wi-Fi/HTTP/SSE to the ESP32-S3 spare core),
 which removes Wi-Fi from the control core entirely. WDT is the interim backstop.
+
+## 2026-06-21 — Dashboard "connection lost" wedge: ESP32 socket exhaustion
+
+Symptom: after a few iPad Wi-Fi off→reconnect→refresh cycles, the dashboard
+sticks on "connection lost, reconnecting" for minutes; only a power-cycle (or a
+long wait) recovers.
+
+Diagnosed via USB serial capture (`# WIFI ... clients_seq=` line, every 3 s)
+while reproducing. Evidence: `clients_seq` (incremented per telemetry frame
+built) ran 0 → 13 (one healthy SSE burst) → +1 per reconnect → **froze at 15**
+for 35 s+. Throughout: `status=8` (AP up), control CSV never stopped, **no
+reboot** (WDT never fired). So only the HTTP/SSE serving layer wedges — driving
+is unaffected.
+
+Root cause (confirmed against WiFiS3 source): TCP sockets live on the ESP32-S3
+(~5 link IDs). When the iPad drops Wi-Fi abruptly there's no clean close → the
+held `sseClient` socket becomes a half-open zombie. The firmware never checks the
+SSE `write()` return, so it keeps the dead socket. `WiFiServer::available()` only
+surfaces NEW connections — it cannot reap an established zombie — so once the pool
+fills, new `/events` reconnects are never accepted → permanent wedge until the
+ESP's own TCP timeout (minutes). `AT+CIPSTO` (idle timeout) is not exposed by
+WiFiS3, so we can't tune it.
+
+Decision (fix in a separate PR, not the merged dashboard PR #76): reap the SSE
+socket proactively — on a 0-byte `sseClient.write()` (dead socket) call
+`sseClient.stop()` (= AT+CIPCLOSE) to free the link ID immediately, so the next
+reconnect is acceptable. Add a stale-SSE guard (no successful write for ~3 s →
+stop) and, as a fallback only if testing still shows wedges, a server/AP recycle.
+Permanent cure remains #55 (offload Wi-Fi to the ESP32-S3). Diagnostic method
+(serial `clients_seq` watch) is reusable for verification.
