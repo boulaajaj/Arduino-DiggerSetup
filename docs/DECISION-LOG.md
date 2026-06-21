@@ -447,3 +447,36 @@ and the Wi-Fi dashboard are LIVE (V7.8), not deferred — corrects #52's table.
   clean); remaining "Nano R4" mentions are historical/comparative only.
 - `XBUS-PROTOCOL.md` kept as a CURRENT reference (live telemetry uses func 0x10).
 - All sketches compile on `unor4wifi`; markdownlint clean on changed docs.
+
+## 2026-06-20 — Battery + inactivity beeper (V7.12, PR #71 / #51)
+
+New `[ALERT]` module on the D8 piezo (audio only — no motor-path change; the
+low-voltage motor cutoff is split to PR #2 / #65 by risk).
+
+- **Inactivity alarm:** RC transmitter off (`sbusValid==false`) > 60 s → one long
+  beep / 2 s (`500/1500`, non-latching). `sbusValid` already encodes RC-off
+  (S.BUS failsafe or frame-loss timeout). Purpose: unplug LiPos (parasitic ~2 W
+  draw deep-discharges packs over 1–2 weeks).
+- **Low-voltage alarm:** worst-of-two pack < **10.5 V** → three fast chirps /
+  ~1.2 s (`120/120 ×3, 600`), validity-gated (both ESCs plausible 6–13 V; a
+  not-yet-powered ~0 V pack can't false-alarm), 3 s sag debounce, 60 s startup
+  grace, **latched until power cycle**. Priority: low-V > inactivity.
+- **10.5 V chosen** (≈3.5 V/cell, ~30%) deliberately conservative: large/expensive
+  15 Ah packs, long runtime, and the operator's balance charger false-declares a
+  pack "dead" if it arrives too low. Stop early, stay healthy.
+- **Bench test PASS (2026-06-20):** flashed a TEST build at `LOWV_THRESH_V=12.0`
+  (packs resting ~12.2/12.4). Confirmed the low-V alarm beeps when the worse pack
+  reached ~12 V, and latches. Production value restored to **10.5 V** (same code
+  path, constant only) and re-flashed (SHA 8a33a9b). Note: clearing the latch
+  power-cycles the board, which drops USB/COM7 — replug to re-upload.
+- **Open finding — voltage signal is fast, not a battery average:** the alarm
+  reads `telem[].voltage`, whose EMA is `TELEM_A_VOLT=0.30` at ~30 Hz/ESC ≈ 0.3 s
+  smoothing — it sags under load. The 3 s debounce kills short sag spikes but not
+  a sustained hard pull, so 10.5 V could false-latch under load in the field.
+  Planned refinement before trusting 10.5 V live: a dedicated ~30 s EMA (per #40)
+  or much longer debounce for the alarm signal.
+- Beep vocabulary kept distinct (count the beeps): 2-short=Wi-Fi ready,
+  steady=horn, 1-long/2 s=inactivity, 3-fast/latched=low battery. Documented in
+  OPERATOR-GUIDE.md "Beep meanings" table (#70).
+- Follow-ups opened: #72 (smooth pivot→straight transition), #73 (dashboard
+  visual alarm: red battery + error code, firmware-sourced).
