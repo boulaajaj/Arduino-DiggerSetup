@@ -95,6 +95,8 @@ const uint8_t SBUS_CH_HORN  = 6;  // CH7 = SWD button → horn (beep at +100%)
 const int SBUS_MIN = 172;
 const int SBUS_MAX = 1811;
 const int HORN_ON_RAW = 1400;  // SWD raw above this = horn ON (toward +100% ~1811)
+const uint16_t BEEP_WIFI_READY[]   = {180, 140, 180};  // Wi-Fi-ready "beep beep": on, off, on (ms)
+const int      BEEP_WIFI_READY_LEN = 3;                // phases in BEEP_WIFI_READY[]
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -589,7 +591,6 @@ void telemUpdate() {
 // D8; the horn ORs over any pattern. UX/alert only — no control-path impact.
 
 bool hornActive = false;                             // set each loop from the RC horn channel
-const uint16_t BEEP_WIFI_READY[] = {180, 140, 180};  // on, off, on (ms) → "beep beep"
 const uint16_t* beepSeq = nullptr;
 int      beepLen = 0, beepIdx = -1;
 uint32_t beepPhaseMs = 0;
@@ -605,7 +606,10 @@ void beepStart(const uint16_t *seq, int len) {
 void beeperUpdate() {
   bool patternOn = false;
   if (beepIdx >= 0 && beepIdx < beepLen) {
-    if (millis() - beepPhaseMs >= beepSeq[beepIdx]) { beepIdx++; beepPhaseMs = millis(); }
+    if (millis() - beepPhaseMs >= beepSeq[beepIdx]) {
+      beepIdx++;
+      beepPhaseMs = millis();
+    }
     patternOn = (beepIdx >= 0 && beepIdx < beepLen) && (beepIdx % 2 == 0);
   }
   digitalWrite(PIN_BEEPER, (hornActive || patternOn) ? HIGH : LOW);
@@ -670,7 +674,7 @@ void wifiInit() {
     // Build the dashboard ETag once. Length + firmware tag, so it changes
     // whenever the embedded page changes and stale caches auto-invalidate.
     snprintf(pageEtag, sizeof(pageEtag), "\"d%uv711\"", (unsigned)strlen(INDEX_HTML));
-    beepStart(BEEP_WIFI_READY, 3);   // "beep beep" — Wi-Fi AP is up/ready
+    beepStart(BEEP_WIFI_READY, BEEP_WIFI_READY_LEN);   // "beep beep" — Wi-Fi AP is up/ready
     if (Serial) {
       Serial.print("# WiFi AP '");
       Serial.print(WIFI_SSID);

@@ -57,7 +57,10 @@ void loop() {
     Serial.print(" Lost=");  Serial.print(sbusData.lost_frame);
     Serial.print(" beep=");  Serial.print(beepOn);
     Serial.print(" | ch0-9: ");
-    for (int i = 0; i < 10; i++) { Serial.print(sbusData.ch[i]); Serial.print(' '); }
+    for (int i = 0; i < 10; i++) {
+      Serial.print(sbusData.ch[i]);
+      Serial.print(' ');
+    }
     Serial.println();
   }
 }

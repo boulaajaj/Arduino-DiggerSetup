@@ -486,7 +486,7 @@ function showBanner(msg, kind){
 }
 function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.style.display='none';}
 
-// ── Render (rAF-throttled to avoid layout thrash if frames bunch up) ──
+// ── Render — continuous requestAnimationFrame loop (eases displayed values ~60fps) ──
 function render(){
   // Ease displayed values toward the latest targets (soft exponential curve)
   // so gauges + numbers glide between the 5 Hz telemetry samples.
