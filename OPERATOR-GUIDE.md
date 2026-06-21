@@ -125,6 +125,31 @@ somewhere it shouldn't, Jason can intervene immediately.
 
 ---
 
+## Beep Meanings (the D8 buzzer)
+
+The digger has one buzzer that makes different sounds. **Count the beeps** —
+each pattern means one thing, and nothing else.
+
+| What you hear | Meaning | What to do |
+| --- | --- | --- |
+| **Two short beeps** (once, right after power-on) | Wi-Fi telemetry is up | Connect your phone to `Digger-Telemetry` to see the dashboard (optional) |
+| **Steady tone** (only while held) | Someone is pressing the horn button on the RC remote | Nothing — that's the horn |
+| **One long beep, every 2 seconds** | The **RC remote has been turned off for over a minute** | **Unplug the LiPo batteries.** Left plugged in, they slowly drain and can be ruined within a week or two |
+| **Three fast chirps, over and over, won't stop** | A **battery is low** (below 10.5 V) | **Stop and charge the batteries.** This is a *warning only* — it does **not** stop the motors. The packs are protected by you stopping and charging them, not by the firmware. The alarm will NOT turn off until you unplug and re-power the digger. (An automatic motor cutoff is planned — issue #65.) |
+
+**Notes:**
+
+- The low-battery alarm is *latched* on purpose — once it starts, it keeps going
+  even if the voltage bounces back up, so you can't miss it. Power-cycle to reset
+  it after charging.
+- The low-battery alarm checks **both** batteries and sounds for the weaker one.
+- It only triggers when both batteries are reporting — if one isn't plugged in
+  yet, it stays quiet (so it won't false-alarm while you're powering up).
+- These alarms are **sound only.** They do not stop or slow the motors. (A
+  separate low-battery motor cutoff is planned — see issue #65.)
+
+---
+
 ## Adjusting Settings
 
 These values can be changed in the Arduino sketch
