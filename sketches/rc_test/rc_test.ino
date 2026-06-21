@@ -1042,15 +1042,20 @@ void wifiUpdate() {
         // three, issue #54). SSE_FRAME_CAP holds the 11-byte prefix + JSON + "\n\n".
         char frame[SSE_FRAME_CAP];
         int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
-        // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body can
-        // never crowd it out; buildTelemJson clamps to the cap we pass.
-        len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
-        frame[len++] = '\n';
-        frame[len++] = '\n';
-        size_t w = sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
-        if (w == 0) {            // 0-byte write = dead socket → reap immediately (#77)
-          sseClient.stop();
-          sseActive = false;
+        // Guard the snprintf return before using it as an offset (consistent with
+        // wifiBeginPage/wifiSend304). The fixed 11-byte prefix can't really
+        // truncate, but this keeps the frame+len / cap math provably in-bounds.
+        if (len > 0 && len < (int)sizeof(frame) - 2) {
+          // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body
+          // can never crowd it out; buildTelemJson clamps to the cap we pass.
+          len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
+          frame[len++] = '\n';
+          frame[len++] = '\n';
+          size_t w = sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
+          if (w == 0) {          // 0-byte write = dead socket → reap immediately (#77)
+            sseClient.stop();
+            sseActive = false;
+          }
         }
       }
     }
