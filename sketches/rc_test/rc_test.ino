@@ -770,6 +770,7 @@ char pageEtag[24] = "\"d0\"";
 // update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
 WiFiClient     sseClient;
 uint32_t       sseLastMs = 0;
+bool           sseActive = false;   // we are holding a live SSE socket (#77 reaping)
 
 // Incremental dashboard transfer (#69): the ~33 KB page is sent ONE
 // WIFI_PAGE_CHUNK per loop pass, not in a single blocking burst, so the control
@@ -992,9 +993,15 @@ void wifiUpdate() {
     req[ri] = '\0';
 
     if (strstr(req, "/events")) {
-      // Upgrade to a persistent Server-Sent Events stream.
-      if (sseClient.connected()) sseClient.stop();   // replace any stale stream
+      // Upgrade to a persistent Server-Sent Events stream. ALWAYS free any
+      // previous SSE socket first — even a dead/half-open one — so its ESP32
+      // link id is released (AT+CIPCLOSE) instead of leaking. The old code only
+      // closed it when still connected(), so a client that dropped Wi-Fi without
+      // a clean close leaked a link id every reconnect until the ~5-socket pool
+      // was exhausted and the server could accept nothing (#77).
+      sseClient.stop();
       sseClient = client;
+      sseActive = true;
       sseClient.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
                         "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
       sseLastMs = 0;                                   // push first frame immediately
@@ -1017,24 +1024,40 @@ void wifiUpdate() {
     return;                                            // one modem op done this pass
   }
 
-  // (C) Idle → push at most one SSE telemetry frame on its interval. The push
-  // starts with a ": hb\n" comment (a no-op for EventSource) that exercises the
-  // TCP socket so Safari/iOS doesn't park the connection in a stalled state.
-  if (sseClient.connected()) {
-    uint32_t now = millis();
-    if (now - sseLastMs >= SSE_INTERVAL_MS) {
-      sseLastMs = now;
-      // Build the whole SSE frame — heartbeat comment, data line, terminator —
-      // into one buffer and ship it in a SINGLE write() (one AT round-trip vs
-      // three, issue #54). SSE_FRAME_CAP holds the 11-byte prefix + JSON + "\n\n".
-      char frame[SSE_FRAME_CAP];
-      int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
-      // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body can
-      // never crowd it out; buildTelemJson clamps to the cap we pass.
-      len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
-      frame[len++] = '\n';
-      frame[len++] = '\n';
-      sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
+  // (C) Idle → push at most one SSE telemetry frame, AND proactively reap the
+  // socket the instant it dies so a dropped client can't leak its ESP32 link id
+  // and exhaust the ~5-socket pool (#77). The push starts with a ": hb\n" comment
+  // (a no-op for EventSource) that exercises the TCP socket so Safari/iOS doesn't
+  // park the connection in a stalled state.
+  if (sseActive) {
+    if (!sseClient.connected()) {
+      sseClient.stop();          // peer gone (e.g. Wi-Fi dropped) → free the link id NOW
+      sseActive = false;
+    } else {
+      uint32_t now = millis();
+      if (now - sseLastMs >= SSE_INTERVAL_MS) {
+        sseLastMs = now;
+        // Build the whole SSE frame — heartbeat comment, data line, terminator —
+        // into one buffer and ship it in a SINGLE write() (one AT round-trip vs
+        // three, issue #54). SSE_FRAME_CAP holds the 11-byte prefix + JSON + "\n\n".
+        char frame[SSE_FRAME_CAP];
+        int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
+        // Guard the snprintf return before using it as an offset (consistent with
+        // wifiBeginPage/wifiSend304). The fixed 11-byte prefix can't really
+        // truncate, but this keeps the frame+len / cap math provably in-bounds.
+        if (len > 0 && len < (int)sizeof(frame) - 2) {
+          // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body
+          // can never crowd it out; buildTelemJson clamps to the cap we pass.
+          len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
+          frame[len++] = '\n';
+          frame[len++] = '\n';
+          size_t w = sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
+          if (w == 0) {          // 0-byte write = dead socket → reap immediately (#77)
+            sseClient.stop();
+            sseActive = false;
+          }
+        }
+      }
     }
   }
 
