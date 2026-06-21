@@ -522,7 +522,7 @@ function render(){
   // fills by magnitude. Amps/Watts scaled to typical driving range.
   const tL = Math.round((dOutL-1500)/5), tR = Math.round((dOutR-1500)/5);
   set('thrL', tL+'%'); set('thrR', tR+'%');
-  const AMPS_MAX = 60, WATTS_MAX = 400;
+  const AMPS_MAX = 60, WATTS_MAX = 2*PWR_MAX;   // total = both motors; stays in sync with per-motor scale
   const amps = dL.c+dR.c, watts = dL.c*dL.b + dR.c*dR.b;
   set('curTot', amps.toFixed(1)+'A');
   set('pwrTot', Math.round(watts)+'W');
