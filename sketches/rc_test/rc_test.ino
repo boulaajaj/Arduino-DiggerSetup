@@ -145,17 +145,25 @@ const float EXPO_STEER_CUBIC     = 0.3f;
 // operator-side cable was rewired and right-stick produced a left turn).
 const float JOY_STEER_DIR = -1.0f;
 
+// Joystick throttle gain — the joystick felt underpowered vs the RC throttle, so
+// boost it slightly (2026-06-21). Lifts the mid-range; full deflection still tops
+// out at the gear cap (the gain is clamped to ±1.0 before mixing).
+const float JOY_THROTTLE_GAIN = 1.05f;
+
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
-// Gear scaling — RC CH4 selects speed cap. 3-position switch:
-//   LOW  → 60% wheel speed cap   (training / tight spaces)
-//   MID  → 70% wheel speed cap   (normal driving)
-//   HIGH → 100% wheel speed cap  (full throttle authority)
+// Gear scaling — RC CH4 selects the AVERAGE-speed cap. 3-position switch:
+//   LOW  → 65% average-speed cap  (training / tight spaces)
+//   MID  → 80% average-speed cap  (normal driving — the everyday gear)
+//   HIGH → 100% (the rail)        (full throttle authority)
+// The cap limits the AVERAGE track speed, not each wheel: in a turn the outer
+// track may use the headroom up to the ESC limit so the turn holds its speed
+// (see curvatureDrive). Boost has no headroom (already at the rail).
 // Failsafe: when S.BUS is invalid, gearScale stays at LOW for safety.
-const float GEAR_LOW_SCALE  = 0.55f;  // Eco   (was 0.40 — bumped 2026-06-14 for low-end torque)
-const float GEAR_MID_SCALE  = 0.70f;  // Normal (was 0.65)
-const float GEAR_HIGH_SCALE = 1.00f;  // Boost
+const float GEAR_LOW_SCALE  = 0.65f;  // Eco   (+10pp 2026-06-21 for usefulness; keeps ~35% turn headroom)
+const float GEAR_MID_SCALE  = 0.80f;  // Normal (+10pp 2026-06-21 — the everyday gear; keeps ~20% turn headroom)
+const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rail)
 
 // Eco gets +5pp authority on reverse and pivot caps so the operator can
 // still maneuver in tight spaces. Forward stays at GEAR_LOW_SCALE (40%).
@@ -172,11 +180,12 @@ Gear  currentGear = GEAR_LOW;
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
-// |xSpeed| >= END:   pure curvature (outer holds xSpeed, inner slows)
-// Between: smoothstep blend so the operator doesn't feel a mode jump
-// when transitioning from rolling-turn into pivot-in-place.
+// |xSpeed| >= END:   pure curvature (outer holds the average, inner slows)
+// Between: smoothstep blend so the operator doesn't feel a mode jump. The band
+// is WIDE (0.05–0.55) so the pivot↔forward/reverse hand-off is gradual — a
+// narrow band made the transition snap near 15–20% throttle (#72).
 const float PIVOT_BLEND_START = 0.05f;
-const float PIVOT_BLEND_END   = 0.30f;
+const float PIVOT_BLEND_END   = 0.55f;
 const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
@@ -218,50 +227,49 @@ const size_t   WIFI_PAGE_CHUNK       = 1024;  // dashboard HTML bytes sent per l
 // [DRIVE] — curvatureDrive: proven FRC algorithm (WPILib)
 // ═══════════════════════════════════════════════════════════════
 
-WheelSpeeds curvatureDrive(float xSpeed, float zRotation) {
+// Gear-aware tank mix. `gearScale` (Eco/Normal/Boost) caps the AVERAGE forward
+// speed — NOT each wheel — so in a turn the outer track may use the headroom up
+// to the ESC limit (±1.0) and the turn keeps its speed instead of slowing (#72).
+// At Boost (gearScale = 1.0) there is no headroom, so the outer simply
+// desaturates at the rail (unchanged behavior). Pivot is gear-scaled so low
+// gears spin gently.
+WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   xSpeed    = constrain(xSpeed, -1.0f, 1.0f);
   zRotation = constrain(zRotation, -1.0f, 1.0f);
 
-  // Pivot output: counter-rotate the tracks, capped to PIVOT_SPEED_CAP.
-  // Eco gear uses a looser cap so the operator keeps usable pivot
-  // authority even with the 40% forward-speed scaling.
+  // Pivot output: counter-rotate the tracks (capped), then gear-scale so low
+  // gears pivot gently. Eco uses a looser cap to keep usable pivot authority.
   float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW : PIVOT_SPEED_CAP;
   float cappedRotation = constrain(zRotation, -pivotCap, pivotCap);
-  float pivotL = xSpeed - cappedRotation;
-  float pivotR = xSpeed + cappedRotation;
+  float pivotL = (xSpeed - cappedRotation) * gearScale;
+  float pivotR = (xSpeed + cappedRotation) * gearScale;
 
-  // Curvature output: symmetric add — whatever we subtract from the
-  // inner track we add to the outer. Average wheel speed stays at
-  // xSpeed through the turn, so the vehicle does not slow down.
-  //
-  //   inner = xSpeed * (1 - |z|)   ← slows
-  //   outer = xSpeed * (1 + |z|)   ← speeds up by the same delta
-  //
-  // When the outer would exceed ±1.0 (high throttle + sharp turn),
-  // desaturate by scaling BOTH wheels equally so the differential
-  // ratio is preserved and only the average is trimmed. This is the
-  // same pattern WPILib's ArcadeDrive uses with desaturateOutputs=true.
+  // Curvature output: the gear caps the AVERAGE (avg); a symmetric add forms the
+  // inner/outer differential. Desaturating against ±1.0 (the ESC rail) lets the
+  // outer climb into the gear→rail headroom so the average — and the vehicle's
+  // speed — is held through the turn (#72).
+  //   inner = avg * (1 - |z|)   outer = avg * (1 + |z|)
+  float avg   = xSpeed * gearScale;
   float boost = 1.0f + fabsf(zRotation);
   float slow  = 1.0f - fabsf(zRotation);
   float curvL, curvR;
   if (zRotation > 0) {
-    curvL = xSpeed * slow;   // turn LEFT: left is inner (subtract)
-    curvR = xSpeed * boost;  // and outer gets the matching add
+    curvL = avg * slow;    // turn LEFT: left is inner (subtract)
+    curvR = avg * boost;   // and outer gets the matching add
   } else {
-    curvL = xSpeed * boost;
-    curvR = xSpeed * slow;   // turn RIGHT: right is inner (subtract)
+    curvL = avg * boost;
+    curvR = avg * slow;    // turn RIGHT: right is inner (subtract)
   }
   float peak = fmaxf(fabsf(curvL), fabsf(curvR));
-  if (peak > 1.0f) {
+  if (peak > 1.0f) {       // clamp to the ESC rail, preserving the turn ratio
     float k = 1.0f / peak;
     curvL *= k;
     curvR *= k;
   }
 
-  // Smoothstep blend from pivot → curvature as |xSpeed| grows. Zero
-  // slope at both endpoints means the operator never feels a mode
-  // boundary — the rolling-turn smoothly becomes a pivot when they
-  // back off the throttle, and vice versa.
+  // Smoothstep blend pivot → curvature as |xSpeed| grows, across a WIDE band so
+  // the pivot↔drive hand-off is gradual (no snap near low throttle, #72). Zero
+  // slope at both endpoints means the operator never feels a mode boundary.
   float t = (fabsf(xSpeed) - PIVOT_BLEND_START) / (PIVOT_BLEND_END - PIVOT_BLEND_START);
   t = constrain(t, 0.0f, 1.0f);
   t = t * t * (3.0f - 2.0f * t);
@@ -312,8 +320,7 @@ ServoOutput rcDrive() {
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
   if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
-  ws = applyGear(ws);
+  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
   return wheelSpeedsToServo(ws);
 }
 
@@ -344,10 +351,6 @@ void updateGear() {
     gearScale = GEAR_MID_SCALE;
     currentGear = GEAR_MID;
   }
-}
-
-WheelSpeeds applyGear(WheelSpeeds ws) {
-  return {ws.left * gearScale, ws.right * gearScale};
 }
 
 
@@ -385,12 +388,11 @@ void updateJoystick(uint32_t now) {
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
   cachedJoy.zRotation = JOY_STEER_DIR * signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
-  float xSpeed = cachedJoy.xSpeed;
+  float xSpeed = constrain(cachedJoy.xSpeed * JOY_THROTTLE_GAIN, -1.0f, 1.0f);
   float zRotation = cachedJoy.zRotation;
   float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
   if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation);
-  ws = applyGear(ws);
+  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
   cachedJoyOut = wheelSpeedsToServo(ws);
 }
 
@@ -1079,7 +1081,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.13 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog ===");
+    Serial.println("# === Digger V7.14 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog + smooth pivot/headroom ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
