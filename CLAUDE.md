@@ -31,8 +31,8 @@ handles motor acceleration compensation and smoothness internally, so the
 Arduino's job shrank to input mixing, override switching, and gear caps. The
 earlier dual-loop PID / hall-sensor-tap control plans are retired (see
 "Control strategy"). Then migrated Nano R4 → UNO R4 WiFi for onboard Wi-Fi
-telemetry. V7.6 removed the reverse-direction beeper; audible alerts will return
-as a battery-aware system (issue #40 / #51).
+telemetry. V7.6 removed the reverse-direction beeper; audible alerts returned in
+V7.11–V7.12 as a battery + inactivity alarm on D8 (issue #51 / #68).
 
 ## Control strategy (PWM out, FOC inside the ESC)
 
@@ -108,7 +108,7 @@ lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.8 — GL10 FOC + telemetry + Wi-Fi) + `types.h` + `web_page.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms) + `types.h` + `web_page.h`
 
 Signal pipeline:
 
@@ -118,9 +118,12 @@ Signal pipeline:
    - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
    - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Gear cap (RC CH4): Eco 55% / Normal 70% / Turbo 100% wheel-speed cap.
-   In Eco the pivot and reverse caps get a +5pp boost so the operator
-   keeps usable maneuvering authority.
+5. Gear cap (RC CH4): Eco 65% / Normal 80% / Boost 100% — caps the AVERAGE
+   track speed (folded into curvatureDrive), so in a turn the outer track uses
+   the gear→rail headroom and Eco/Normal hold speed through corners; Boost is at
+   the rail. In Eco the pivot and reverse caps get a boost so the operator keeps
+   usable maneuvering authority. Joystick throttle carries a ×1.05 gain (clamped
+   to the gear cap).
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
 7. X.BUS 0x10 telemetry polled read-only on Serial1; EMA-smoothed and streamed to the Wi-Fi dashboard (monitoring only).
 
@@ -133,26 +136,27 @@ Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
 - UNO R4 WiFi AP `Digger-Telemetry` (WPA2) at `192.168.4.1`. The dashboard is
   embedded in flash (`web_page.h`, served at `/`) and streams telemetry over
-  Server-Sent Events (`/events`) at ~10 Hz; `/data` one-shot JSON kept for debug.
+  Server-Sent Events (`/events`) at ~5 Hz (`SSE_INTERVAL_MS = 200`); `/data` one-shot JSON kept for debug.
 - **Monitoring only — no control input over Wi-Fi, ever** (safety; permanent
   decision). The dashboard mirror lives in `dashboard/index.html`.
 
-## Audible Alerts — Deferred (battery-aware beeper)
+## Audible Alerts — Implemented (V7.11–V7.12, active piezo on D8)
 
-The reverse-direction beeper was removed in V7.6 per operator request (the
-1s-on/1s-off cadence was disruptive without adding safety on a ~50 lb,
-line-of-sight machine). Now that battery voltage is available over X.BUS
-telemetry, the beeper returns as a battery-level alarm (issues #40 / #51):
+The V7.6-removed reverse beeper returned as a battery + inactivity alarm system.
+An active piezo on **D8** is driven non-blocking by `[BEEPER]` / `[ALERT]`; the
+horn ORs over one-shot patterns, which OR over repeating alarms. The original
+percentage-based plan was implemented as a simpler **voltage** threshold:
 
-| Battery state | Pattern |
-| --- | --- |
-| ≥ 30% | Silent |
-| < 30% | 1 beep every 10 s |
-| < 20% | 3 beeps every 10 s |
-| < 10% | Continuous tone |
-| < safety cutoff | Power cut — vehicle will not move forward |
+| Event | Pattern | Trigger |
+| --- | --- | --- |
+| Wi-Fi ready | beep-beep (once at boot) | AP up |
+| Horn | continuous tone (held) | RC CH7 SWD button (`HORN_ON_RAW`) |
+| Inactivity ("unplug me") | one long beep / 2 s | RC off > 60 s (`INACT_RC_OFF_MS`) |
+| Low battery | three fast chirps / ~1.2 s, **latched** | worse pack EMA < 10.5 V (`LOWV_THRESH_V`), debounced 3 s, suppressed first 60 s |
 
-D8 is reserved for that implementation; no code drives it today.
+Alarms are **sound-only** — they do not stop or slow the motors. A low-battery
+motor cutoff is still pending (issue #65). See OPERATOR-GUIDE.md for the
+operator-facing beep table.
 
 ## Key Design Decisions
 
@@ -164,7 +168,7 @@ into the ESC. Arduino code keeps:
 
 - Input shaping (expo, deadband, curvatureDrive)
 - Mixing (override switch)
-- Gear caps (Eco / Normal / Turbo via RC CH4)
+- Gear caps (Eco / Normal / Boost via RC CH4 — average-speed cap with turn headroom)
 
 V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`): the
 GL10's own Acceleration + Drag Force settings own command smoothing end-to-end,
@@ -180,10 +184,14 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 - [x] Soldered interface board (X.BUS merge + S.BUS inverter)
 - [x] V7.7: X.BUS 0x10 telemetry integrated — both ESCs (V / I / RPM / temps)
 - [x] V7.8: Wi-Fi telemetry dashboard (SSE, monitoring-only)
+- [x] V7.9–V7.10: bounded modem timeout, coalesced SSE, AP ch11, page caching (#54)
+- [x] V7.11–V7.12: beeper/horn + battery & inactivity alarms on D8 (#51, #68)
+- [x] V7.13: loop watchdog + incremental Wi-Fi serving (#69)
+- [x] V7.14: smooth pivot↔drive blend + Eco/Normal turn headroom + gear step-up + joystick gain (#72)
 - [x] Field test at reduced power
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
-- [ ] Battery-aware beeper (issue #40 / #51)
+- [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
 - [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
 
 ## File Map
@@ -191,7 +199,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.8 — GL10 FOC + telemetry + Wi-Fi)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
 sketches/rc_test/web_page.h              — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)

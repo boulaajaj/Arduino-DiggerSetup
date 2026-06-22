@@ -71,7 +71,9 @@ The rider drives with a single dual-axis stick:
 | **Right/left at a standstill** | **Pivot turn** — tracks counter-rotate on the spot (capped at 60%) |
 
 A deadband around center keeps the machine still when the stick is released, and
-an expo curve makes small movements gentle for precise maneuvering.
+an expo curve makes small movements gentle for precise maneuvering. The
+joystick throttle also carries a slight boost (×1.05) so it doesn't feel weaker
+than the RC throttle — full deflection still tops out at the active gear cap.
 
 ### Override modes (3-position switch)
 
@@ -83,11 +85,19 @@ an expo curve makes small movements gentle for precise maneuvering.
 
 ### Gear caps (gear switch)
 
-| Gear | Wheel-speed cap | Use |
+The gear sets the **average (straight-line) speed cap** — not a per-wheel limit.
+In a turn, Eco and Normal let the *outer* track climb into the headroom up to the
+ESC rail, so the machine **holds its speed through corners** instead of bogging
+down. Boost is already at the rail, so it has no extra turn headroom.
+
+| Gear | Straight-line cap | Use |
 | --- | --- | --- |
-| **Eco** | 55% | Training / tight spaces (reverse & pivot get a +5pp boost for maneuvering) |
-| **Normal** | 70% | Everyday driving |
-| **Turbo** | 100% | Full authority |
+| **Eco** | 65% | Training / tight spaces (~35% turn headroom; reverse & pivot get extra authority) |
+| **Normal** | 80% | Everyday driving (~20% turn headroom) |
+| **Boost** | 100% | Full authority (at the rail — no turn headroom) |
+
+Reverse is capped to 50% of forward stick travel (62.5% in Eco), and pivoting in
+place is capped at 60% (72.5% in Eco) — all gear-scaled.
 
 ---
 
@@ -114,11 +124,17 @@ driven by a **GL10 80A FOC** ESC, fed from its own **3S LiPo** pack.
 
 The board hosts its own Wi-Fi access point (`Digger-Telemetry`) at
 `192.168.4.1`. Connect a phone and the dashboard streams live data over
-Server-Sent Events at ~10 Hz:
+Server-Sent Events at ~5 Hz:
+
+![Live telemetry dashboard — per-track gauges, battery state, gear and throttle](docs/images/dashboard-telemetry.png)
 
 - Per-track **voltage, current, power, RPM**, and **ESC + motor temperatures**
 - **Battery state** for each pack
 - Active **drive mode**, **gear**, and per-track **throttle/direction**
+
+It's a **single-page app** that fits landscape on an iPhone or Android phone — no
+app install, just connect to the AP and open the page (it can also be saved to
+the home screen for a full-screen, browser-chrome-free view).
 
 It's **monitoring only** — there is no path from Wi-Fi to the motors, ever. The
 dashboard source is mirrored in [`dashboard/index.html`](dashboard/index.html).

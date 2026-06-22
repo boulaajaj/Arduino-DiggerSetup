@@ -77,11 +77,16 @@ The 3-position switch on Jason's remote controls who drives:
 The motors are very powerful, so top speed is capped by the **gear switch
 (CH4)** on the remote. The cap applies to BOTH the remote and the joystick:
 
-| Gear | Top speed | Reverse | Pivot (spin in place) |
-| ---- | --------- | ------- | --------------------- |
-| **Eco** | 55% | 62.5% | 72.5% |
-| **Normal** | 70% | 50% | 60% |
-| **Turbo** | 100% | 50% | 60% |
+| Gear | Straight-line speed | Reverse | Pivot (spin in place) |
+| ---- | ------------------- | ------- | --------------------- |
+| **Eco** | 65% | 62.5% | 72.5% |
+| **Normal** | 80% | 50% | 60% |
+| **Boost** | 100% | 50% | 60% |
+
+The "straight-line speed" is the cap on **average** track speed. In a turn,
+Eco and Normal let the outer track speed up to keep the machine moving, so it
+**doesn't bog down in corners** (Eco keeps ~35% headroom, Normal ~20%). Boost
+is already flat-out, so it has no extra turning headroom.
 
 Full stick travel is always usable — the cap just sets the maximum the stick
 maps to, so no stick movement is wasted. **Start in Eco.** Eco deliberately
@@ -120,7 +125,7 @@ somewhere it shouldn't, Jason can intervene immediately.
 | Jason drives alone | Switch to Mode 1 (down) |
 | Both drive together | Switch to Mode 3 (up) |
 | Emergency stop | Jason: sticks to center in any mode |
-| Max speed | Set by gear: Eco 55% / Normal 70% / Turbo 100% |
+| Max speed | Set by gear: Eco 65% / Normal 80% / Boost 100% |
 | Smoothing | Handled inside the GL10 ESCs (FOC) |
 | Signal-loss stop | Tracks neutral after ~0.1 s of lost RC |
 
@@ -159,11 +164,13 @@ top of the file:
 
 | Setting | Current Value | What It Does |
 | --------- | -------------- | -------------- |
-| `GEAR_LOW_SCALE` | 0.55 | Eco top-speed cap (fraction of full) |
-| `GEAR_MID_SCALE` | 0.70 | Normal top-speed cap |
-| `GEAR_HIGH_SCALE` | 1.00 | Turbo top-speed cap |
-| `REVERSE_LIMIT` | 0.50 | Reverse cap (Normal/Turbo) as a fraction of forward |
+| `GEAR_LOW_SCALE` | 0.65 | Eco average-speed cap (fraction of full) |
+| `GEAR_MID_SCALE` | 0.80 | Normal average-speed cap |
+| `GEAR_HIGH_SCALE` | 1.00 | Boost average-speed cap |
+| `REVERSE_LIMIT` | 0.50 | Reverse cap (Normal/Boost) as a fraction of forward |
 | `PIVOT_SPEED_CAP` | 0.60 | Spin-in-place (pivot) cap |
+| `PIVOT_BLEND_END` | 0.55 | Throttle where pivot fully blends into drive (wider = gentler hand-off) |
+| `JOY_THROTTLE_GAIN` | 1.05 | Joystick throttle boost (clamped to the gear cap at full deflection) |
 | `RC_DEADBAND` | 50 | How far RC sticks must move to register (μs) |
 | `JOY_DEADBAND` | 480 | How far the joystick must move to register (ADC units, ~6% of travel) |
 
