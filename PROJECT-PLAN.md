@@ -15,7 +15,7 @@ The controller provides:
 
 - **Curvature/tank mixing** — symmetric add + desaturate, smoothstep blend into pivot
 - **Exponential response curve** — separate throttle/steering expo for fine low-speed control
-- **Gear caps** — Eco / Normal / Turbo wheel-speed limits on RC CH4
+- **Gear caps** — Eco / Normal / Boost average-speed limits on RC CH4 (outer track keeps turn headroom)
 - **Override switch** — RC-only / RC-priority / 50-50 blend on RC CH5
 - **Per-channel failsafe** — neutral hold when S.BUS is invalid
 - **X.BUS telemetry (monitoring only)** — V / I / RPM / temps streamed to a Wi-Fi dashboard
@@ -99,11 +99,20 @@ X.BUS telemetry (Serial1, read-only) ──► EMA ──► Wi-Fi dashboard (mo
 
 ### Gear Caps (RC CH4)
 
-| Position | Cap | Use |
+The gear caps the **average** track speed (not each wheel). In a turn the outer
+track uses the headroom up to the ±1.0 ESC rail, so Eco/Normal hold their speed
+through corners; Boost is already at the rail.
+
+| Position | Avg-speed cap | Use |
 | --- | --- | --- |
-| Eco | 55% | training / tight spaces (reverse & pivot get a +5pp boost) |
-| Normal | 70% | normal driving |
-| Turbo | 100% | full authority |
+| Eco | 65% | training / tight spaces (~35% turn headroom; reverse & pivot get extra authority) |
+| Normal | 80% | normal driving — the everyday gear (~20% turn headroom) |
+| Boost | 100% | full authority (at the rail) |
+
+Reverse is capped at 50% of forward stick travel (62.5% in Eco); pivot at 60%
+(72.5% in Eco). The pivot↔drive hand-off smoothstep-blends across |throttle|
+5–55% so there's no snap at low speed. The joystick throttle carries a ×1.05
+gain (clamped to the gear cap at full deflection).
 
 > Failsafe: when S.BUS is invalid, the controller holds neutral and gear stays at Eco.
 
@@ -118,8 +127,8 @@ X.BUS telemetry (Serial1, read-only) ──► EMA ──► Wi-Fi dashboard (mo
 - **Cadence:** non-blocking, alternating ESCs (~30-40 Hz/ESC underlying), EMA on
   V/I/temps, instantaneous RPM, 5 s per-ESC freshness watchdog.
 - **Wi-Fi dashboard:** UNO R4 WiFi AP `Digger-Telemetry` at `192.168.4.1`,
-  Server-Sent Events at ~10 Hz, page served from flash. **Monitoring only — no
-  control input over Wi-Fi, ever.**
+  Server-Sent Events at ~5 Hz (`SSE_INTERVAL_MS = 200`), page served from flash.
+  **Monitoring only — no control input over Wi-Fi, ever.**
 
 ---
 
@@ -139,7 +148,7 @@ python live_plot.py
 
 ---
 
-## Status (V7.8)
+## Status (V7.14)
 
 ### Done
 
@@ -147,18 +156,22 @@ python live_plot.py
 - [x] S.BUS input on `sbusUart` (SCI0 / D12) via NPN inverter
 - [x] curvatureDrive tank mixing + per-axis expo + pivot authority
 - [x] Removed Arduino-side inertia / PID (GL10 FOC owns smoothing)
-- [x] Gear caps (Eco / Normal / Turbo) with Eco reverse/pivot boost
+- [x] Gear caps (Eco 65% / Normal 80% / Boost 100%) capping average speed, outer-track turn headroom
+- [x] Eco reverse/pivot boost; ×1.05 joystick throttle gain
+- [x] Smooth pivot↔drive blend (wide 5–55% band) — no snap at low throttle (#72)
 - [x] Migrated Nano R4 → UNO R4 WiFi
 - [x] Soldered interface board (X.BUS merge + S.BUS inverter)
 - [x] X.BUS 0x10 telemetry live — both ESCs (V / I / RPM / temps)
-- [x] Wi-Fi telemetry dashboard (SSE, monitoring-only)
+- [x] Wi-Fi telemetry dashboard (SSE ~5 Hz, monitoring-only)
+- [x] Battery + inactivity alarms on D8 (V7.12)
+- [x] Loop watchdog — runaway/stall failsafe drops ESCs to neutral (V7.13)
 - [x] Field test at reduced power
 
 ### Pending
 
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
-- [ ] Battery-aware beeper (issue #40 / #51)
+- [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
 - [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
 
 ---
@@ -167,7 +180,7 @@ python live_plot.py
 
 ```text
 sketches/rc_test/
-  rc_test.ino       — Main controller sketch (V7.8 — GL10 FOC + telemetry + Wi-Fi)
+  rc_test.ino       — Main controller sketch (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms)
   types.h           — Shared structs (JoystickState, EscTelem, ...)
   web_page.h        — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
 sketches/telem_check/ — Read-only X.BUS telemetry bench tool (0x50 framing)

@@ -3,7 +3,7 @@
 ## For Jason (RC remote) and Malaki (joystick)
 
 This machine has **two ways to drive it**: an RC remote controller and a
-joystick. An Arduino Nano sits in the middle and
+joystick. An Arduino UNO R4 WiFi sits in the middle and
 decides which input controls the tracks based on a 3-position switch on
 the remote.
 
@@ -72,36 +72,42 @@ The 3-position switch on Jason's remote controls who drives:
 
 ## Safety Features
 
-### 40% Power Limit
+### Gear Speed Caps (the safety throttle)
 
-The motors are very powerful. The system limits output to **40% of full
-power** at all times. This applies to BOTH the remote and the joystick.
+The motors are very powerful, so top speed is capped by the **gear switch
+(CH4)** on the remote. The cap applies to BOTH the remote and the joystick:
 
-Full stick travel is still usable — pushing the stick halfway gives 20%
-power, all the way gives 40%. No stick movement is wasted.
+| Gear | Straight-line speed | Reverse | Pivot (spin in place) |
+| ---- | ------------------- | ------- | --------------------- |
+| **Eco** | 65% | 62.5% | 72.5% |
+| **Normal** | 80% | 50% | 60% |
+| **Boost** | 100% | 50% | 60% |
 
-| Stick Position | Power Output |
-| --------------- | ------------- |
-| 25% | 10% |
-| 50% | 20% |
-| 75% | 30% |
-| 100% (full) | 40% (max) |
+The "straight-line speed" is the cap on **average** track speed. In a turn,
+Eco and Normal let the outer track speed up to keep the machine moving, so it
+**doesn't bog down in corners** (Eco keeps ~35% headroom, Normal ~20%). Boost
+is already flat-out, so it has no extra turning headroom.
+
+Full stick travel is always usable — the cap just sets the maximum the stick
+maps to, so no stick movement is wasted. **Start in Eco.** Eco deliberately
+gives reverse and pivoting a little extra authority so the machine can still
+maneuver in tight spaces at low speed.
 
 ### Smooth Acceleration
 
-The system prevents jerky starts by gradually ramping up motor speed:
-
-- **Speeding up:** Takes about **0.8 seconds** to reach full requested speed
-- **Slowing down:** Takes about **0.4 seconds** to stop
-
-This means the machine won't lurch forward when the stick is pushed
-quickly, but it WILL stop quickly when the stick is released — important
-for avoiding obstacles.
+The machine won't lurch when a stick is pushed quickly — but the smoothing is
+now handled **inside the GL10 ESCs** (their internal FOC ramps the motor),
+not by a delay in the Arduino. The stick command is sent straight through, so
+releasing the stick stops the machine promptly — important for avoiding
+obstacles. (The old Arduino-side ramp was removed when the GL10 ESCs took over
+that job.)
 
 ### RC Signal Loss Protection
 
-If the Arduino loses the RC signal for more than half a second (remote
-turned off, out of range, etc.), both motors automatically stop.
+If the Arduino loses the RC signal for about a tenth of a second (remote turned
+off, out of range, etc.), both tracks are held at neutral. A hardware watchdog
+also resets the controller — and drops the ESCs to neutral — if the firmware
+ever stalls.
 
 ### Jason Always Has Override
 
@@ -119,9 +125,9 @@ somewhere it shouldn't, Jason can intervene immediately.
 | Jason drives alone | Switch to Mode 1 (down) |
 | Both drive together | Switch to Mode 3 (up) |
 | Emergency stop | Jason: sticks to center in any mode |
-| Max speed | 40% of motor capacity (safety limit) |
-| Ramp up time | ~0.8 seconds |
-| Stop time | ~0.4 seconds |
+| Max speed | Set by gear: Eco 65% / Normal 80% / Boost 100% |
+| Smoothing | Handled inside the GL10 ESCs (FOC) |
+| Signal-loss stop | Tracks neutral after ~0.1 s of lost RC |
 
 ---
 
@@ -158,14 +164,21 @@ top of the file:
 
 | Setting | Current Value | What It Does |
 | --------- | -------------- | -------------- |
-| `POWER_LIMIT_PCT` | 40 | Max power output (%) — raise or lower as needed |
-| `SMOOTH_TAU_UP` | 800 | Acceleration smoothing in ms (higher = slower start) |
-| `SMOOTH_TAU_DOWN` | 400 | Deceleration smoothing in ms (higher = slower stop) |
+| `GEAR_LOW_SCALE` | 0.65 | Eco average-speed cap (fraction of full) |
+| `GEAR_MID_SCALE` | 0.80 | Normal average-speed cap |
+| `GEAR_HIGH_SCALE` | 1.00 | Boost average-speed cap |
+| `REVERSE_LIMIT` | 0.50 | Reverse cap (Normal/Boost) as a fraction of forward |
+| `PIVOT_SPEED_CAP` | 0.60 | Spin-in-place (pivot) cap |
+| `PIVOT_BLEND_END` | 0.55 | Throttle where pivot fully blends into drive (wider = gentler hand-off) |
+| `JOY_THROTTLE_GAIN` | 1.05 | Joystick throttle boost (clamped to the gear cap at full deflection) |
 | `RC_DEADBAND` | 50 | How far RC sticks must move to register (μs) |
-| `JOY_DEADBAND` | 30 | How far joystick must move to register (ADC units) |
+| `JOY_DEADBAND` | 480 | How far the joystick must move to register (ADC units, ~6% of travel) |
+
+Smoothing is no longer an Arduino setting — it lives in the GL10 ESC's
+Acceleration / Drag parameters (see `docs/GL10-PARAMETERS.md`).
 
 After changing a value, re-upload the sketch to the Arduino using:
 
 ```bash
-arduino-cli upload -p COM7 --fqbn arduino:avr:nano:cpu=atmega328 sketches/rc_test/rc_test.ino
+arduino-cli upload -p COM7 --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
 ```
