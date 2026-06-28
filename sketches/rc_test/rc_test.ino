@@ -145,15 +145,19 @@ const float EXPO_STEER_CUBIC     = 0.3f;
 // operator-side cable was rewired and right-stick produced a left turn).
 const float JOY_STEER_DIR = -1.0f;
 
-// Joystick throttle gain — 1:1 with the RC throttle in Eco/Normal (#90). Was
-// boosted 1.05 in V7.14; the operator wants the joystick to match the RC exactly
-// so both inputs share one scale for the shared-control mix.
-const float JOY_THROTTLE_GAIN = 1.00f;
+// Joystick throttle gain (#90) — the Genie stick under-ranges: full physical
+// deflection only reaches ~0.75 xSpeed, so the rider couldn't hit the per-gear
+// caps below. Lift it so full travel can reach the cap. Joystick-only; RC
+// unaffected. Tunable.
+const float JOY_THROTTLE_GAIN = 1.40f;
 
-// Joystick Boost-gear throttle cap (#90) — in Boost ONLY, the joystick rider's
-// forward/reverse authority is capped here while the RC stays at full (1.0).
-// Throttle axis only; steering/pivot unaffected. Eco/Normal: no extra cap.
-const float JOY_BOOST_CAP = 0.90f;
+// Per-gear joystick throttle caps (#90) — the joystick rider's MAX track output
+// per gear (RC keeps the gear's full authority). Throttle axis only; steering /
+// pivot unaffected. Output = xSpeed * gearScale, so these are converted to an
+// xSpeed clamp in updateJoystick().
+const float JOY_CAP_ECO    = 0.65f;  // Eco
+const float JOY_CAP_NORMAL = 0.75f;  // Normal
+const float JOY_CAP_BOOST  = 0.90f;  // Boost
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
@@ -410,11 +414,16 @@ void updateJoystick(uint32_t now) {
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
   cachedJoy.zRotation = JOY_STEER_DIR * signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
-  float xSpeed = constrain(cachedJoy.xSpeed * JOY_THROTTLE_GAIN, -1.0f, 1.0f);
+  float xSpeed = cachedJoy.xSpeed * JOY_THROTTLE_GAIN;
   float zRotation = cachedJoy.zRotation;
-  // Boost-gear joystick cap (#90): limit the rider's throttle authority in Boost
-  // only; RC unaffected. Throttle axis only (steering untouched).
-  if (currentGear == GEAR_HIGH) xSpeed = constrain(xSpeed, -JOY_BOOST_CAP, JOY_BOOST_CAP);
+  // Per-gear joystick throttle cap (#90): the rider's max track output per gear
+  // (RC unaffected). Output = xSpeed * gearScale, so convert the output cap into
+  // an xSpeed clamp. Throttle axis only — steering/pivot untouched.
+  float joyCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
+               : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
+                                            : JOY_CAP_NORMAL;
+  float xCap = joyCap / gearScale;
+  xSpeed = constrain(xSpeed, -xCap, xCap);
   float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
   if (xSpeed < -revLimit) xSpeed = -revLimit;
   cachedJoyCmd = {xSpeed, zRotation};
