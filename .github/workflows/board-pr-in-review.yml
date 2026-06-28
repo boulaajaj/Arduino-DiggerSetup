@@ -78,6 +78,7 @@ jobs:
               --jq ".data.node.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .fieldValueByName.optionId" || true)
             if printf '%s\n' "$opt" | grep -qx "$INPROGRESS_OPT"; then
               in_progress=true
+              break  # one In-Progress match is enough; stop querying further issues
             fi
           done
 
