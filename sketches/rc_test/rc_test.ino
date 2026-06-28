@@ -194,6 +194,14 @@ const float PIVOT_BLEND_START = 0.05f;
 const float PIVOT_BLEND_END   = 0.55f;
 const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 
+// Outer-track turn cap (#96). The #72 outer-track headroom lets the outer wheel
+// borrow up to the ESC rail to hold speed through a turn — but when the INNER
+// track is stopped (full steer) that headroom is wasted (the outer doesn't need
+// ~99% to swing the nose). curvatureDrive fades the outer-track ceiling from the
+// rail (straight, both tracks moving) down to TURN_TRACK_CAP (full steer, inner
+// stopped), driven by |zRotation| — open-loop, smooth, no hard switch.
+const float TURN_TRACK_CAP    = 0.70f;  // outer-track cap at full steer (field-tune)
+
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
 // maps directly to curvatureDrive, which already handles inner-track
 // slowdown and pivot/curvature blend. Earlier non-unity values were
@@ -266,9 +274,15 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
     curvL = avg * boost;
     curvR = avg * slow;    // turn RIGHT: right is inner (subtract)
   }
+  // Outer-track ceiling fades from the ESC rail (gentle turn — both tracks moving)
+  // down to TURN_TRACK_CAP (full steer — inner track stopped). |zRotation| is the
+  // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
+  // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
+  // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
+  float ceiling = 1.0f - (1.0f - TURN_TRACK_CAP) * fabsf(zRotation);
   float peak = fmaxf(fabsf(curvL), fabsf(curvR));
-  if (peak > 1.0f) {       // clamp to the ESC rail, preserving the turn ratio
-    float k = 1.0f / peak;
+  if (peak > ceiling) {    // desaturate against the faded ceiling, preserving the turn ratio
+    float k = ceiling / peak;
     curvL *= k;
     curvR *= k;
   }
