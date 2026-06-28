@@ -151,13 +151,22 @@ const float JOY_STEER_DIR = -1.0f;
 // unaffected. Tunable.
 const float JOY_THROTTLE_GAIN = 1.40f;
 
-// Per-gear joystick throttle caps (#90) — the joystick rider's MAX track output
-// per gear (RC keeps the gear's full authority). Throttle axis only; steering /
-// pivot unaffected. Output = xSpeed * gearScale, so these are converted to an
-// xSpeed clamp in updateJoystick().
+// ── Throttle output caps ──────────────────────────────────────────────────
+// All caps below are MAX TRACK-OUTPUT fractions (0..1). A straight-line track
+// output = xSpeed * gearScale, so each cap is converted to the xSpeed domain
+// via outCapToX() at point of use — one helper, no scattered conversions.
+
+// Per-gear joystick FORWARD cap (#90) — the joystick rider's max forward track
+// output per gear (RC keeps the gear's full authority). Throttle axis only;
+// steering / pivot unaffected.
 const float JOY_CAP_ECO    = 0.65f;  // Eco
 const float JOY_CAP_NORMAL = 0.75f;  // Normal
 const float JOY_CAP_BOOST  = 0.90f;  // Boost
+
+// REVERSE cap (#87) — flat across ALL gears and BOTH inputs (RC + joystick).
+// Replaces the old per-gear REVERSE_LIMIT / REVERSE_LIMIT_LOW. Reverse output is
+// a constant 65% regardless of gear. Within the GL10 Max Reverse Force setting.
+const float REVERSE_CAP    = 0.65f;
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
@@ -174,12 +183,10 @@ const float GEAR_LOW_SCALE  = 0.65f;  // Eco   (+10pp 2026-06-21 for usefulness;
 const float GEAR_MID_SCALE  = 0.80f;  // Normal (+10pp 2026-06-21 — the everyday gear; keeps ~20% turn headroom)
 const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rail)
 
-// Eco gets extra authority on the reverse and pivot input caps so the
-// operator can still maneuver in tight spaces. Forward stays at
-// GEAR_LOW_SCALE (65%). Effective wheel speed = input cap × gear scale:
-//   reverse:  0.625 × 0.65 = 0.41 effective (vs 0.50 × 0.65 = 0.33 unboosted)
-//   pivot:    0.725 × 0.65 = 0.47 effective (vs 0.60 × 0.65 = 0.39 unboosted)
-const float REVERSE_LIMIT_LOW   = 0.625f;
+// Eco gets extra PIVOT authority so the operator can still maneuver in tight
+// spaces (pivot input cap; forward stays at GEAR_LOW_SCALE 65%). Effective pivot
+// wheel speed = pivot cap × gear scale: 0.725 × 0.65 = 0.47 (vs 0.60 × 0.65).
+// (Reverse is no longer Eco-special — it's a flat REVERSE_CAP for all gears.)
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
 // Gear state — declared here so curvatureDrive() and rcCommand() can read
@@ -187,6 +194,10 @@ const float PIVOT_SPEED_CAP_LOW = 0.725f;
 // owns the writes.
 float gearScale  = GEAR_LOW_SCALE;
 Gear  currentGear = GEAR_LOW;
+
+// Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
+// gear (output = xSpeed * gearScale). Single point of truth for every cap.
+inline float outCapToX(float outCap) { return outCap / gearScale; }
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -213,12 +224,6 @@ const float TURN_TRACK_CAP    = 0.70f;  // outer-track cap at full steer (field-
 // root cause fixed, the gains return to neutral.
 const float RC_THROTTLE_GAIN = 1.00f;
 const float RC_STEERING_GAIN = 1.00f;
-
-// Reverse speed limit — percentage of forward max (straight-line only).
-// 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
-// cap was for the older sensored-ESC hardware; GL10 + GL540L can take
-// full reverse without trouble.
-const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
@@ -342,11 +347,10 @@ int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SV
 DriveCommand rcCommand() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
-  // Apply tunable input gains, then clamp to the curvatureDrive domain.
-  xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
+  // Apply tunable input gains, then clamp: RC keeps the gear's full forward
+  // authority (1.0); reverse is the flat REVERSE_CAP for every gear (#87).
+  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(REVERSE_CAP), 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
-  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
-  if (xSpeed < -revLimit) xSpeed = -revLimit;
   return {xSpeed, zRotation};
 }
 
@@ -416,16 +420,13 @@ void updateJoystick(uint32_t now) {
 
   float xSpeed = cachedJoy.xSpeed * JOY_THROTTLE_GAIN;
   float zRotation = cachedJoy.zRotation;
-  // Per-gear joystick throttle cap (#90): the rider's max track output per gear
-  // (RC unaffected). Output = xSpeed * gearScale, so convert the output cap into
-  // an xSpeed clamp. Throttle axis only — steering/pivot untouched.
-  float joyCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
+  // Clamp throttle: per-gear joystick FORWARD cap, flat REVERSE_CAP backward —
+  // both as track-output fractions converted to the xSpeed domain (#90/#87).
+  // Throttle axis only; steering/pivot untouched. RC unaffected.
+  float fwdCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
                : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
                                             : JOY_CAP_NORMAL;
-  float xCap = joyCap / gearScale;
-  xSpeed = constrain(xSpeed, -xCap, xCap);
-  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
-  if (xSpeed < -revLimit) xSpeed = -revLimit;
+  xSpeed = constrain(xSpeed, -outCapToX(REVERSE_CAP), outCapToX(fwdCap));
   cachedJoyCmd = {xSpeed, zRotation};
 }
 
