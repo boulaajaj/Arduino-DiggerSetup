@@ -1,0 +1,105 @@
+name: Board · PR → In Review
+
+# Moves a pull request into the "In Review" column of Project #1 the moment it is
+# opened against an issue that is currently "In Progress". Nothing else is touched.
+#
+# Why an Action (not a built-in Project workflow): GitHub exposes no API/CLI to
+# enable built-in Project workflows (only deleteProjectV2Workflow exists), and the
+# built-ins cannot express the precise "linked issue is In Progress" condition.
+#
+# Token note: the default GITHUB_TOKEN cannot write to a *user-owned* Project, so
+# this workflow uses a PROJECTS_TOKEN secret carrying the `project` scope. Fork PRs
+# do not receive secrets (GitHub security) — acceptable, all work is on owner branches.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+# Don't pile up runs when a PR body is edited repeatedly.
+concurrency:
+  group: board-in-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  move-to-in-review:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+      PROJECT_ID: PVT_kwHOACps0s4Bb533
+      STATUS_FIELD: PVTSSF_lAHOACps0s4Bb533zhWmvVI
+      INPROGRESS_OPT: 19cf2baf
+      INREVIEW_OPT: d4342753
+      OWNER: ${{ github.repository_owner }}
+      REPO: ${{ github.event.repository.name }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NODE: ${{ github.event.pull_request.node_id }}
+    steps:
+      - name: Move linked PR to In Review
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECTS_TOKEN not available (likely a fork PR). Skipping."
+            exit 0
+          fi
+
+          # 1. Linked closing issues for this PR (e.g. "Fixes #86").
+          issue_ids=$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$pr:Int!){
+              repository(owner:$owner,name:$repo){
+                pullRequest(number:$pr){
+                  closingIssuesReferences(first:20){nodes{id number}}
+                }}}' \
+            -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].id')
+
+          if [ -z "$issue_ids" ]; then
+            echo "PR #$PR_NUMBER has no linked closing issue — nothing to do."
+            exit 0
+          fi
+
+          # 2. Is any linked issue currently In Progress on Project #1?
+          in_progress=false
+          for iid in $issue_ids; do
+            opt=$(gh api graphql \
+              -f query='query($id:ID!){
+                node(id:$id){
+                  ... on Issue{
+                    projectItems(first:20){
+                      nodes{
+                        project{id}
+                        fieldValueByName(name:"Status"){
+                          ... on ProjectV2ItemFieldSingleSelectValue{optionId}
+                        }}}}}}' \
+              -f id="$iid" \
+              --jq ".data.node.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .fieldValueByName.optionId" || true)
+            if printf '%s\n' "$opt" | grep -qx "$INPROGRESS_OPT"; then
+              in_progress=true
+              break  # one In-Progress match is enough; stop querying further issues
+            fi
+          done
+
+          if [ "$in_progress" != "true" ]; then
+            echo "No linked issue is In Progress — leaving PR #$PR_NUMBER alone."
+            exit 0
+          fi
+
+          # 3. Add the PR to Project #1 (idempotent) and capture its item id.
+          item_id=$(gh api graphql \
+            -f query='mutation($p:ID!,$c:ID!){
+              addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}' \
+            -f p="$PROJECT_ID" -f c="$PR_NODE" \
+            --jq '.data.addProjectV2ItemById.item.id')
+
+          # 4. Set Status = In Review.
+          gh api graphql \
+            -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){
+              updateProjectV2ItemFieldValue(input:{
+                projectId:$p,itemId:$i,fieldId:$f,
+                value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
+            -f p="$PROJECT_ID" -f i="$item_id" -f f="$STATUS_FIELD" -f o="$INREVIEW_OPT"
+
+          echo "✅ PR #$PR_NUMBER → In Review"
