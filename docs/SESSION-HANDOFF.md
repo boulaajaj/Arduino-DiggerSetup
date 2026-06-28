@@ -22,13 +22,29 @@ done
   Confirm with: `gh project item-list 1 --owner boulaajaj`.
 
 ## 2. Milestones (keep it to 3; close the finished one)
+
+Naming convention: short theme name (not version numbers), so milestones group
+*initiatives* while labels handle *area*. Three total:
+
+| Milestone | Description |
+|---|---|
+| **Firmware: drive & safety** | Control-loop work on the GL10 FOC controller: drive feel (smooth pivot↔drive, consistent reverse steering, turn-rate taper), throttle/reverse caps, and RC-loss failsafe + audible alarms. Open-loop, safety-first; no Wi-Fi→motor path. |
+| **Dashboard & tooling** | Wi-Fi telemetry dashboard (SSE, PWA, fit/shrink, alarm mirror), the replay/mock harness, and host-side scripts (live_plot, monitor, capture). Monitoring only. |
+| **Karpathy method adoption** | Turn the repo over to AI-agent guardrails/workflows (agent-skills, planning/task-breakdown, ADR discipline) so future work is consistent and reviewable. |
+
 ```bash
 REPO=boulaajaj/Arduino-DiggerSetup
-gh api repos/$REPO/milestones -f title="Firmware: drive & safety" -f state=open
-gh api repos/$REPO/milestones -f title="Dashboard & tooling" -f state=open
-gh api repos/$REPO/milestones -f title="Karpathy method adoption" -f state=open
+# Create the 3 milestones (title + description)
+gh api repos/$REPO/milestones -f title="Firmware: drive & safety" -f state=open \
+  -f description="GL10 FOC control-loop work: drive feel (smooth pivot<->drive, consistent reverse steering, turn-rate taper), throttle/reverse caps, RC-loss failsafe + audible alarms. Open-loop, safety-first."
+gh api repos/$REPO/milestones -f title="Dashboard & tooling" -f state=open \
+  -f description="Wi-Fi telemetry dashboard (SSE/PWA/fit/alarm mirror), replay/mock harness, and host-side scripts (live_plot, monitor, capture). Monitoring only."
+gh api repos/$REPO/milestones -f title="Karpathy method adoption" -f state=open \
+  -f description="Adopt AI-agent guardrails/workflows (agent-skills, planning/task-breakdown, ADR discipline) so future work stays consistent and reviewable."
+# Close the finished migration milestone
 gh api -X PATCH repos/$REPO/milestones/1 -f state=closed   # V7 — GL10 FOC migration (done)
 
+# Assign issues -> milestones
 gh issue edit 72 86 87 88 89 --repo $REPO --milestone "Firmware: drive & safety"
 gh issue edit 61 66 67 73 81 82 83 84 9 37 --repo $REPO --milestone "Dashboard & tooling"
 gh issue edit 53 --repo $REPO --milestone "Karpathy method adoption"
