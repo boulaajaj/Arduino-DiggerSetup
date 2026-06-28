@@ -29,7 +29,7 @@
 //   [DRIVE]      curvatureDrive — symmetric add + desaturate, smoothstep blend into pivot
 //   [RC]         S.BUS input — raw throttle + steering via sbusUart (SCI0)
 //   [JOYSTICK]   ADC input — deadband, per-axis expo curve
-//   [GEAR]       RC CH4 → Eco 40% / Normal 65% / Turbo 100% wheel-speed cap
+//   [GEAR]       RC CH4 → Eco 65% / Normal 80% / Boost 100% average-speed cap
 //   [MIXER]      Override switch — selects RC vs joystick
 //   [OUTPUT]     ESC servo PWM
 //   [TELEMETRY]  X.BUS Read Register (0x10) on Serial1 — V/I/RPM/temp
@@ -165,10 +165,11 @@ const float GEAR_LOW_SCALE  = 0.65f;  // Eco   (+10pp 2026-06-21 for usefulness;
 const float GEAR_MID_SCALE  = 0.80f;  // Normal (+10pp 2026-06-21 — the everyday gear; keeps ~20% turn headroom)
 const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rail)
 
-// Eco gets +5pp authority on reverse and pivot caps so the operator can
-// still maneuver in tight spaces. Forward stays at GEAR_LOW_SCALE (40%).
-//   reverse:  0.625 × 0.40 = 0.25 effective (vs 0.20 unboosted)
-//   pivot:    0.725 × 0.40 = 0.29 effective (vs 0.24 unboosted)
+// Eco gets extra authority on the reverse and pivot input caps so the
+// operator can still maneuver in tight spaces. Forward stays at
+// GEAR_LOW_SCALE (65%). Effective wheel speed = input cap × gear scale:
+//   reverse:  0.625 × 0.65 = 0.41 effective (vs 0.50 × 0.65 = 0.33 unboosted)
+//   pivot:    0.725 × 0.65 = 0.47 effective (vs 0.60 × 0.65 = 0.39 unboosted)
 const float REVERSE_LIMIT_LOW   = 0.625f;
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
@@ -326,7 +327,7 @@ ServoOutput rcDrive() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [GEAR] — RC CH4 → speed cap (Eco 40% / Normal 65% / Turbo 100%)
+// [GEAR] — RC CH4 → average-speed cap (Eco 65% / Normal 80% / Boost 100%)
 // ═══════════════════════════════════════════════════════════════
 //
 // updateGear() is defined here (after [RC]) so it can read sbusValid /
