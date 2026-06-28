@@ -145,10 +145,15 @@ const float EXPO_STEER_CUBIC     = 0.3f;
 // operator-side cable was rewired and right-stick produced a left turn).
 const float JOY_STEER_DIR = -1.0f;
 
-// Joystick throttle gain — the joystick felt underpowered vs the RC throttle, so
-// boost it slightly (2026-06-21). Lifts the mid-range; full deflection still tops
-// out at the gear cap (the gain is clamped to ±1.0 before mixing).
-const float JOY_THROTTLE_GAIN = 1.05f;
+// Joystick throttle gain — 1:1 with the RC throttle in Eco/Normal (#90). Was
+// boosted 1.05 in V7.14; the operator wants the joystick to match the RC exactly
+// so both inputs share one scale for the shared-control mix.
+const float JOY_THROTTLE_GAIN = 1.00f;
+
+// Joystick Boost-gear throttle cap (#90) — in Boost ONLY, the joystick rider's
+// forward/reverse authority is capped here while the RC stays at full (1.0).
+// Throttle axis only; steering/pivot unaffected. Eco/Normal: no extra cap.
+const float JOY_BOOST_CAP = 0.90f;
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
@@ -173,7 +178,7 @@ const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rai
 const float REVERSE_LIMIT_LOW   = 0.625f;
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
-// Gear state — declared here so curvatureDrive() and rcDrive() can read
+// Gear state — declared here so curvatureDrive() and rcCommand() can read
 // it for the Eco-only conditional caps above. updateGear() in [GEAR]
 // owns the writes.
 float gearScale  = GEAR_LOW_SCALE;
@@ -313,7 +318,10 @@ int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH
 int rcSteering() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_STEER])) : SVC; }
 int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SVMIN; }
 
-ServoOutput rcDrive() {
+// RC axis command (xSpeed/zRotation), post-gain and reverse-limit — pre-mix,
+// pre-curvatureDrive. The mix combines RC + joystick at this axis level (#90),
+// then curvatureDrive runs once on the combined command.
+DriveCommand rcCommand() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
   // Apply tunable input gains, then clamp to the curvatureDrive domain.
@@ -321,8 +329,7 @@ ServoOutput rcDrive() {
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
   if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
-  return wheelSpeedsToServo(ws);
+  return {xSpeed, zRotation};
 }
 
 
@@ -369,7 +376,7 @@ int joyDeadband(int adc) {
 }
 
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};
-ServoOutput   cachedJoyOut = {SVC, SVC};
+DriveCommand  cachedJoyCmd = {0.0f, 0.0f};  // joystick axis command, post-gain/cap/rev-limit (#90)
 uint32_t      lastAdcTime = 0;
 const uint32_t ADC_INTERVAL = 10000UL;  // 10 ms = 100 Hz
 
@@ -391,10 +398,12 @@ void updateJoystick(uint32_t now) {
 
   float xSpeed = constrain(cachedJoy.xSpeed * JOY_THROTTLE_GAIN, -1.0f, 1.0f);
   float zRotation = cachedJoy.zRotation;
+  // Boost-gear joystick cap (#90): limit the rider's throttle authority in Boost
+  // only; RC unaffected. Throttle axis only (steering untouched).
+  if (currentGear == GEAR_HIGH) xSpeed = constrain(xSpeed, -JOY_BOOST_CAP, JOY_BOOST_CAP);
   float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
   if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
-  cachedJoyOut = wheelSpeedsToServo(ws);
+  cachedJoyCmd = {xSpeed, zRotation};
 }
 
 
@@ -402,24 +411,28 @@ void updateJoystick(uint32_t now) {
 // [MIXER] — Override switch selects authority
 // ═══════════════════════════════════════════════════════════════
 
-ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
-  ServoOutput out;
-  if (ovr < OVR_LO) {
-    out.left = rcL;  out.right = rcR;
-  } else if (ovr > OVR_HI) {
-    out.left  = SVC + ((rcL - SVC) + (joyL - SVC)) / 2;
-    out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
-  } else {
-    bool rcActive = (rcL != SVC) || (rcR != SVC);
-    if (rcActive) {
-      out.left = rcL;
-      out.right = rcR;
-    } else {
-      out.left = joyL;
-      out.right = joyR;
-    }
+// Max/oppose combine for one axis (#90): the stronger same-direction input wins
+// (NOT summed), opposing inputs subtract. result = max(a,b,0) + min(a,b,0).
+//   same dir  60% & 30% → 60%   (larger wins, no halving)
+//   opposite +100% & −30% → 70% (dominant minus opposing)
+//   single    x & 0 → x         (full range — fixes the old 50/50 halving)
+float maxOppose(float a, float b) {
+  return fmaxf(fmaxf(a, b), 0.0f) + fminf(fminf(a, b), 0.0f);
+}
+
+// Combine RC + joystick at the AXIS level (xSpeed/zRotation), per override mode.
+// curvatureDrive runs ONCE on the result (in loop), so a single operator always
+// gets full range — the old code averaged the final wheel PWMs and halved it.
+DriveCommand mixCommands(DriveCommand rc, int ovr, DriveCommand joy) {
+  if (ovr < OVR_LO) {            // Mode 1 — RC only
+    return rc;
+  } else if (ovr > OVR_HI) {     // Mode 3 — dual: max/oppose per axis
+    return { maxOppose(rc.xSpeed, joy.xSpeed),
+             maxOppose(rc.zRotation, joy.zRotation) };
+  } else {                        // Mode 2 — RC overrides joystick when RC active
+    bool rcActive = (rc.xSpeed != 0.0f) || (rc.zRotation != 0.0f);
+    return rcActive ? rc : joy;
   }
-  return out;
 }
 
 
@@ -1168,9 +1181,10 @@ void loop() {
   if (!sbusValid) {
     mix.left = SVC;  mix.right = SVC;
   } else {
-    ServoOutput rc = rcDrive();
-    mix = mixInputs(rc.left, rc.right, rcOverride(),
-                    cachedJoyOut.left, cachedJoyOut.right);
+    // Combine RC + joystick at the axis level (#90), then run curvatureDrive once
+    // on the combined command so a single operator keeps full range.
+    DriveCommand cmd = mixCommands(rcCommand(), rcOverride(), cachedJoyCmd);
+    mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
   }
 
   // 3. Output — GL10 FOC handles command smoothing internally via its
