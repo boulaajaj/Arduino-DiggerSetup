@@ -27,6 +27,14 @@ So: **never leave active work as a bare branch with no PR** — it is invisible 
 the board. One commit + a draft PR is enough to make it show. Agents must follow
 this without being asked.
 
+## Firmware Flash — Always Log It
+
+**Every** firmware upload to the digger (production *or* bench/test) gets a row
+appended to `docs/FIRMWARE-UPLOAD-LOG.md`, immediately after the flash — no
+exceptions. Each row records: **date, version, commit SHA, branch + PR #,
+board/port**, and notes covering **what changed** and **what to test**. This is
+the device's flight log; an unlogged flash is treated as not done.
+
 ## People
 
 - **Jason** — RC transmitter operator (safety supervisor)
