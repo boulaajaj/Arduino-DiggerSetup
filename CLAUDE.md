@@ -8,6 +8,25 @@ input: RC transmitter (Jason) and joystick (Malaki/rider). 3-position override
 switch selects who has authority. X.BUS telemetry is streamed to a Wi-Fi
 dashboard (monitoring only).
 
+## Project Board — Single Source of Truth
+
+[Project #1](https://github.com/users/boulaajaj/projects/1) is the **single
+source of truth** for what is pending, in progress, and done. Anything being
+worked on **must** show as **In Progress** on the board.
+
+**The rule: starting work = open a draft PR.** As soon as work begins on an
+issue, open a *draft* PR whose body links the issue (`Closes #N`). A draft PR is
+the earliest GitHub-visible signal, and the board automation keys off it:
+
+- `.github/workflows/board-pr-in-review.yml` → when a PR links an **In Progress**
+  issue, the PR card is added and set to **In Review**.
+- Built-in Project workflows (enabled in the UI) move closed issues / merged PRs
+  to **Done**.
+
+So: **never leave active work as a bare branch with no PR** — it is invisible to
+the board. One commit + a draft PR is enough to make it show. Agents must follow
+this without being asked.
+
 ## People
 
 - **Jason** — RC transmitter operator (safety supervisor)
