@@ -5,6 +5,18 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-28 — Reverse turning is symmetric with forward (#87, #96)
+
+- Decision: reverse is treated the same as forward in `curvatureDrive()`.
+  `REVERSE_CAP` (0.65) bounds the reverse **average** speed; the outer track then
+  borrows the same `TURN_TRACK_CAP` turn headroom forward uses, so a reverse turn
+  swings precisely instead of slowing/snapping (smoothness mission).
+- So the reverse outer track may exceed 65% **during a turn** — by design,
+  mirroring forward. "Reverse 65%" = the straight-line/average reverse speed cap.
+- V7.19 added a reverse-specific ceiling clamp (outer ≤ 65% in reverse turns) per
+  a Copilot review; V7.20 (SHA 53abb4a) reverted it on operator decision — simpler
+  (no reverse special-case) and consistent forward/reverse.
+
 ## 2026-06-28 — V7.16 dynamic outer-track turn cap (#96) — CONFIRMED working
 
 - curvatureDrive fades the outer-track ceiling from the ESC rail (straight) down to
