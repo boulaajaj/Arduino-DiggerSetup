@@ -5,6 +5,35 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-28 — Reverse turning is symmetric with forward (#87, #96)
+
+- Decision: reverse is treated the same as forward in `curvatureDrive()`.
+  `REVERSE_CAP` (0.65) bounds the reverse **average** speed; the outer track then
+  borrows the same `TURN_TRACK_CAP` turn headroom forward uses, so a reverse turn
+  swings precisely instead of slowing/snapping (smoothness mission).
+- So the reverse outer track may exceed 65% **during a turn** — by design,
+  mirroring forward. "Reverse 65%" = the straight-line/average reverse speed cap.
+- V7.19 added a reverse-specific ceiling clamp (outer ≤ 65% in reverse turns) per
+  a Copilot review; V7.20 (SHA 53abb4a) reverted it on operator decision — simpler
+  (no reverse special-case) and consistent forward/reverse.
+- **Field finding (operator):** reverse at 50% was severely underpowered on slight
+  uphill / grass — couldn't climb. This is why the reverse cap was raised to 65%
+  (REVERSE_CAP) and headroom kept; reverse confirmed working on terrain at 65%.
+
+## 2026-06-28 — V7.16 dynamic outer-track turn cap (#96) — CONFIRMED working
+
+- curvatureDrive fades the outer-track ceiling from the ESC rail (straight) down to
+  `TURN_TRACK_CAP = 0.70` at full steer, by |zRotation| (open-loop).
+- Bench-confirmed: joystick full throttle + full steer no longer pins one track to
+  ~99% while the other is stopped; outer caps ~70%, gentle turns keep #72 headroom.
+  Operator: "working really well." 70% kept as the field-test value.
+- Also in same build (V7.15, #90): RC+joystick mix moved to axis level (single
+  operator keeps full range; maxOppose dual-mix; joystick Boost cap).
+- **Operator-confirmed working (2026-06-28, PR #93, V7.18):** shared-control mix
+  (#90), dynamic outer-track turn cap 70% (#96), joystick per-gear caps 65/75/90
+  with gain 1.40 (#87), and flat 65% reverse (#87) all behaving as intended on
+  the bench. PR #93 marked ready for review.
+
 ## 2026-06-20 — SAFETY (P0): Wi-Fi serving stalled control loop → runaway under load
 
 - Loaded test (~60 lb): digger made **uncommanded movement (runaway toward operator)**

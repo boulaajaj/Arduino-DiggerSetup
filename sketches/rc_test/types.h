@@ -42,7 +42,7 @@ struct EscTelem {
 // actual scale factors live in the [CONFIG] section of rc_test.ino as
 // GEAR_{LOW,MID,HIGH}_SCALE so they're tunable in one place.
 enum Gear : uint8_t {
-  GEAR_LOW  = 0,   // 40% cap — Eco (training / tight spaces)
-  GEAR_MID  = 1,   // 65% cap — Normal driving
-  GEAR_HIGH = 2,   // 100% cap — Turbo (full throttle authority)
+  GEAR_LOW  = 0,   // 65% cap — Eco (training / tight spaces)
+  GEAR_MID  = 1,   // 80% cap — Normal driving
+  GEAR_HIGH = 2,   // 100% cap — Boost (full throttle authority)
 };

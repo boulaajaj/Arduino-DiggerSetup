@@ -145,10 +145,28 @@ const float EXPO_STEER_CUBIC     = 0.3f;
 // operator-side cable was rewired and right-stick produced a left turn).
 const float JOY_STEER_DIR = -1.0f;
 
-// Joystick throttle gain — the joystick felt underpowered vs the RC throttle, so
-// boost it slightly (2026-06-21). Lifts the mid-range; full deflection still tops
-// out at the gear cap (the gain is clamped to ±1.0 before mixing).
-const float JOY_THROTTLE_GAIN = 1.05f;
+// Joystick throttle gain (#90) — the Genie stick under-ranges: full physical
+// deflection only reaches ~0.75 xSpeed, so the rider couldn't hit the per-gear
+// caps below. Lift it so full travel can reach the cap. Joystick-only; RC
+// unaffected. Tunable.
+const float JOY_THROTTLE_GAIN = 1.40f;
+
+// ── Throttle output caps ──────────────────────────────────────────────────
+// All caps below are MAX TRACK-OUTPUT fractions (0..1). A straight-line track
+// output = xSpeed * gearScale, so each cap is converted to the xSpeed domain
+// via outCapToX() at point of use — one helper, no scattered conversions.
+
+// Per-gear joystick FORWARD cap (#90) — the joystick rider's max forward track
+// output per gear (RC keeps the gear's full authority). Throttle axis only;
+// steering / pivot unaffected.
+const float JOY_CAP_ECO    = 0.65f;  // Eco
+const float JOY_CAP_NORMAL = 0.75f;  // Normal
+const float JOY_CAP_BOOST  = 0.90f;  // Boost
+
+// REVERSE cap (#87) — flat across ALL gears and BOTH inputs (RC + joystick).
+// Replaces the old per-gear REVERSE_LIMIT / REVERSE_LIMIT_LOW. Reverse output is
+// a constant 65% regardless of gear. Within the GL10 Max Reverse Force setting.
+const float REVERSE_CAP    = 0.65f;
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
@@ -165,19 +183,21 @@ const float GEAR_LOW_SCALE  = 0.65f;  // Eco   (+10pp 2026-06-21 for usefulness;
 const float GEAR_MID_SCALE  = 0.80f;  // Normal (+10pp 2026-06-21 — the everyday gear; keeps ~20% turn headroom)
 const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rail)
 
-// Eco gets extra authority on the reverse and pivot input caps so the
-// operator can still maneuver in tight spaces. Forward stays at
-// GEAR_LOW_SCALE (65%). Effective wheel speed = input cap × gear scale:
-//   reverse:  0.625 × 0.65 = 0.41 effective (vs 0.50 × 0.65 = 0.33 unboosted)
-//   pivot:    0.725 × 0.65 = 0.47 effective (vs 0.60 × 0.65 = 0.39 unboosted)
-const float REVERSE_LIMIT_LOW   = 0.625f;
+// Eco gets extra PIVOT authority so the operator can still maneuver in tight
+// spaces (pivot input cap; forward stays at GEAR_LOW_SCALE 65%). Effective pivot
+// wheel speed = pivot cap × gear scale: 0.725 × 0.65 = 0.47 (vs 0.60 × 0.65).
+// (Reverse is no longer Eco-special — it's a flat REVERSE_CAP for all gears.)
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
-// Gear state — declared here so curvatureDrive() and rcDrive() can read
+// Gear state — declared here so curvatureDrive() and rcCommand() can read
 // it for the Eco-only conditional caps above. updateGear() in [GEAR]
 // owns the writes.
 float gearScale  = GEAR_LOW_SCALE;
 Gear  currentGear = GEAR_LOW;
+
+// Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
+// gear (output = xSpeed * gearScale). Single point of truth for every cap.
+inline float outCapToX(float outCap) { return outCap / gearScale; }
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -189,6 +209,14 @@ const float PIVOT_BLEND_START = 0.05f;
 const float PIVOT_BLEND_END   = 0.55f;
 const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 
+// Outer-track turn cap (#96). The #72 outer-track headroom lets the outer wheel
+// borrow up to the ESC rail to hold speed through a turn — but when the INNER
+// track is stopped (full steer) that headroom is wasted (the outer doesn't need
+// ~99% to swing the nose). curvatureDrive fades the outer-track ceiling from the
+// rail (straight, both tracks moving) down to TURN_TRACK_CAP (full steer, inner
+// stopped), driven by |zRotation| — open-loop, smooth, no hard switch.
+const float TURN_TRACK_CAP    = 0.70f;  // outer-track cap at full steer (field-tune)
+
 // RC input gains — neutral baseline (1.0 = no scaling). Stick travel
 // maps directly to curvatureDrive, which already handles inner-track
 // slowdown and pivot/curvature blend. Earlier non-unity values were
@@ -196,12 +224,6 @@ const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 // root cause fixed, the gains return to neutral.
 const float RC_THROTTLE_GAIN = 1.00f;
 const float RC_STEERING_GAIN = 1.00f;
-
-// Reverse speed limit — percentage of forward max (straight-line only).
-// 1.0 = no reverse cap (full 100% reverse authority). The previous 0.35
-// cap was for the older sensored-ESC hardware; GL10 + GL540L can take
-// full reverse without trouble.
-const float REVERSE_LIMIT = 0.50f;  // reverse capped at 50% of forward max
 
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
@@ -261,9 +283,19 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
     curvL = avg * boost;
     curvR = avg * slow;    // turn RIGHT: right is inner (subtract)
   }
+  // Outer-track ceiling fades from the ESC rail (gentle turn — both tracks moving)
+  // down to TURN_TRACK_CAP (full steer — inner track stopped). |zRotation| is the
+  // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
+  // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
+  // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
+  // Forward AND reverse are treated symmetrically: REVERSE_CAP bounds the reverse
+  // *average* speed upstream, and the outer track then borrows the same turn
+  // headroom forward does — so a reverse turn swings precisely instead of slowing
+  // (operator decision, 2026-06-28). No reverse-specific ceiling special-case.
+  float ceiling = 1.0f - (1.0f - TURN_TRACK_CAP) * fabsf(zRotation);
   float peak = fmaxf(fabsf(curvL), fabsf(curvR));
-  if (peak > 1.0f) {       // clamp to the ESC rail, preserving the turn ratio
-    float k = 1.0f / peak;
+  if (peak > ceiling) {    // desaturate against the faded ceiling, preserving the turn ratio
+    float k = ceiling / peak;
     curvL *= k;
     curvR *= k;
   }
@@ -313,16 +345,17 @@ int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH
 int rcSteering() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_STEER])) : SVC; }
 int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SVMIN; }
 
-ServoOutput rcDrive() {
+// RC axis command (xSpeed/zRotation), post-gain and reverse-limit — pre-mix,
+// pre-curvatureDrive. The mix combines RC + joystick at this axis level (#90),
+// then curvatureDrive runs once on the combined command.
+DriveCommand rcCommand() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
-  // Apply tunable input gains, then clamp to the curvatureDrive domain.
-  xSpeed    = constrain(xSpeed    * RC_THROTTLE_GAIN, -1.0f, 1.0f);
+  // Apply tunable input gains, then clamp: RC keeps the gear's full forward
+  // authority (1.0); reverse is the flat REVERSE_CAP for every gear (#87).
+  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(REVERSE_CAP), 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
-  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
-  if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
-  return wheelSpeedsToServo(ws);
+  return {xSpeed, zRotation};
 }
 
 
@@ -369,7 +402,7 @@ int joyDeadband(int adc) {
 }
 
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};
-ServoOutput   cachedJoyOut = {SVC, SVC};
+DriveCommand  cachedJoyCmd = {0.0f, 0.0f};  // joystick axis command, post-gain/cap/rev-limit (#90)
 uint32_t      lastAdcTime = 0;
 const uint32_t ADC_INTERVAL = 10000UL;  // 10 ms = 100 Hz
 
@@ -389,12 +422,16 @@ void updateJoystick(uint32_t now) {
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
   cachedJoy.zRotation = JOY_STEER_DIR * signX * expoCurve(normX, EXPO_STEER_LINEAR, EXPO_STEER_CUBIC);
 
-  float xSpeed = constrain(cachedJoy.xSpeed * JOY_THROTTLE_GAIN, -1.0f, 1.0f);
+  float xSpeed = cachedJoy.xSpeed * JOY_THROTTLE_GAIN;
   float zRotation = cachedJoy.zRotation;
-  float revLimit = (currentGear == GEAR_LOW) ? REVERSE_LIMIT_LOW : REVERSE_LIMIT;
-  if (xSpeed < -revLimit) xSpeed = -revLimit;
-  WheelSpeeds ws = curvatureDrive(xSpeed, zRotation, gearScale);
-  cachedJoyOut = wheelSpeedsToServo(ws);
+  // Clamp throttle: per-gear joystick FORWARD cap, flat REVERSE_CAP backward —
+  // both as track-output fractions converted to the xSpeed domain (#90/#87).
+  // Throttle axis only; steering/pivot untouched. RC unaffected.
+  float fwdCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
+               : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
+                                            : JOY_CAP_NORMAL;
+  xSpeed = constrain(xSpeed, -outCapToX(REVERSE_CAP), outCapToX(fwdCap));
+  cachedJoyCmd = {xSpeed, zRotation};
 }
 
 
@@ -402,24 +439,28 @@ void updateJoystick(uint32_t now) {
 // [MIXER] — Override switch selects authority
 // ═══════════════════════════════════════════════════════════════
 
-ServoOutput mixInputs(int rcL, int rcR, int ovr, int joyL, int joyR) {
-  ServoOutput out;
-  if (ovr < OVR_LO) {
-    out.left = rcL;  out.right = rcR;
-  } else if (ovr > OVR_HI) {
-    out.left  = SVC + ((rcL - SVC) + (joyL - SVC)) / 2;
-    out.right = SVC + ((rcR - SVC) + (joyR - SVC)) / 2;
-  } else {
-    bool rcActive = (rcL != SVC) || (rcR != SVC);
-    if (rcActive) {
-      out.left = rcL;
-      out.right = rcR;
-    } else {
-      out.left = joyL;
-      out.right = joyR;
-    }
+// Max/oppose combine for one axis (#90): the stronger same-direction input wins
+// (NOT summed), opposing inputs subtract. result = max(a,b,0) + min(a,b,0).
+//   same dir  60% & 30% → 60%   (larger wins, no halving)
+//   opposite +100% & −30% → 70% (dominant minus opposing)
+//   single    x & 0 → x         (full range — fixes the old 50/50 halving)
+float maxOppose(float a, float b) {
+  return fmaxf(fmaxf(a, b), 0.0f) + fminf(fminf(a, b), 0.0f);
+}
+
+// Combine RC + joystick at the AXIS level (xSpeed/zRotation), per override mode.
+// curvatureDrive runs ONCE on the result (in loop), so a single operator always
+// gets full range — the old code averaged the final wheel PWMs and halved it.
+DriveCommand mixCommands(DriveCommand rc, int ovr, DriveCommand joy) {
+  if (ovr < OVR_LO) {            // Mode 1 — RC only
+    return rc;
+  } else if (ovr > OVR_HI) {     // Mode 3 — dual: max/oppose per axis
+    return { maxOppose(rc.xSpeed, joy.xSpeed),
+             maxOppose(rc.zRotation, joy.zRotation) };
+  } else {                        // Mode 2 — RC overrides joystick when RC active
+    bool rcActive = (rc.xSpeed != 0.0f) || (rc.zRotation != 0.0f);
+    return rcActive ? rc : joy;
   }
-  return out;
 }
 
 
@@ -1168,9 +1209,10 @@ void loop() {
   if (!sbusValid) {
     mix.left = SVC;  mix.right = SVC;
   } else {
-    ServoOutput rc = rcDrive();
-    mix = mixInputs(rc.left, rc.right, rcOverride(),
-                    cachedJoyOut.left, cachedJoyOut.right);
+    // Combine RC + joystick at the axis level (#90), then run curvatureDrive once
+    // on the combined command so a single operator keeps full range.
+    DriveCommand cmd = mixCommands(rcCommand(), rcOverride(), cachedJoyCmd);
+    mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
   }
 
   // 3. Output — GL10 FOC handles command smoothing internally via its
