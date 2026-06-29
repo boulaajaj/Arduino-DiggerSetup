@@ -288,12 +288,11 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
   // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
   // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
+  // Forward AND reverse are treated symmetrically: REVERSE_CAP bounds the reverse
+  // *average* speed upstream, and the outer track then borrows the same turn
+  // headroom forward does — so a reverse turn swings precisely instead of slowing
+  // (operator decision, 2026-06-28). No reverse-specific ceiling special-case.
   float ceiling = 1.0f - (1.0f - TURN_TRACK_CAP) * fabsf(zRotation);
-  // In reverse the outer track must also honor REVERSE_CAP (#87): the average is
-  // capped upstream, but the turn differential (outer = avg*(1+|z|)) can push the
-  // outer track above it, so clamp the ceiling to REVERSE_CAP when commanding
-  // reverse. Forward is unchanged (keeps the gear→rail turn headroom).
-  if (xSpeed < 0.0f) ceiling = fminf(ceiling, REVERSE_CAP);
   float peak = fmaxf(fabsf(curvL), fabsf(curvR));
   if (peak > ceiling) {    // desaturate against the faded ceiling, preserving the turn ratio
     float k = ceiling / peak;
