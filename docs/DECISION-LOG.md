@@ -5,6 +5,20 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-28 — V7.16 dynamic outer-track turn cap (#96) — CONFIRMED working
+
+- curvatureDrive fades the outer-track ceiling from the ESC rail (straight) down to
+  `TURN_TRACK_CAP = 0.70` at full steer, by |zRotation| (open-loop).
+- Bench-confirmed: joystick full throttle + full steer no longer pins one track to
+  ~99% while the other is stopped; outer caps ~70%, gentle turns keep #72 headroom.
+  Operator: "working really well." 70% kept as the field-test value.
+- Also in same build (V7.15, #90): RC+joystick mix moved to axis level (single
+  operator keeps full range; maxOppose dual-mix; joystick Boost cap).
+- **Operator-confirmed working (2026-06-28, PR #93, V7.18):** shared-control mix
+  (#90), dynamic outer-track turn cap 70% (#96), joystick per-gear caps 65/75/90
+  + gain 1.40 (#87), and flat 65% reverse (#87) all behaving as intended on the
+  bench. PR #93 marked ready for review.
+
 ## 2026-06-20 — SAFETY (P0): Wi-Fi serving stalled control loop → runaway under load
 
 - Loaded test (~60 lb): digger made **uncommanded movement (runaway toward operator)**
