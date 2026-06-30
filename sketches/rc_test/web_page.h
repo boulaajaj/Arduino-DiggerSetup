@@ -459,7 +459,7 @@ function bp(v){
   }
   return 100;
 }
-function bc(p){return p>50?'linear-gradient(90deg,#0c6,#4f8)':p>25?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
+function bc(p){return p>30?'linear-gradient(90deg,#0c6,#4f8)':p>20?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
 function ndl(id,val,max){const e=document.getElementById(id);
   if(e) e.setAttribute('transform',`rotate(${-135+Math.max(0,Math.min(val/max,1))*270},50,50)`);}
 function tc(t){return t<55?'#0c6':t<80?'#fc0':'#f44'}
@@ -537,7 +537,7 @@ function render(){
 
   // Per-battery percentages — each gets its own number and indicator color
   const bL=bp(dL.b), bR=bp(dR.b);
-  const batColor = p => p>50?'#0c6' : p>25?'#fc0' : '#f44';
+  const batColor = p => p>30?'#0c6' : p>20?'#fc0' : '#f44';
   const fL=document.getElementById('batLFill'), fR=document.getElementById('batRFill');
   if(fL){fL.style.width=bL+'%'; fL.style.background=bc(bL);}
   if(fR){fR.style.width=bR+'%'; fR.style.background=bc(bR);}

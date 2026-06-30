@@ -1012,9 +1012,16 @@ void wifiInit() {
   if (st == WL_AP_LISTENING) {
     wifiUp = true;
     wifiServer.begin();
-    // Build the dashboard ETag once. Length + firmware tag, so it changes
-    // whenever the embedded page changes and stale caches auto-invalidate.
-    snprintf(pageEtag, sizeof(pageEtag), "\"d%uv711\"", (unsigned)strlen(INDEX_HTML));
+    // Build the dashboard ETag once — a CONTENT HASH (FNV-1a) of the embedded
+    // page, so ANY edit invalidates stale browser caches, even one that doesn't
+    // change the page length (the old "length + frozen v711 tag" ETag missed
+    // same-length edits → 304 served a stale page). #109.
+    uint32_t etagHash = 2166136261u;
+    for (const char *p = INDEX_HTML; *p; ++p) {
+      etagHash ^= (uint8_t)*p;
+      etagHash *= 16777619u;
+    }
+    snprintf(pageEtag, sizeof(pageEtag), "\"d%08lx\"", (unsigned long)etagHash);
     beepStart(BEEP_WIFI_READY, BEEP_WIFI_READY_LEN);   // "beep beep" — Wi-Fi AP is up/ready
     if (Serial) {
       Serial.print("# WiFi AP '");
