@@ -897,7 +897,10 @@ bool worstPackVoltage(float* worst) {
 void batteryEcoLockUpdate() {        // Stage 1 — force Eco
   if (ecoLockLatched) return;
   float worst;
-  if (!worstPackVoltage(&worst)) { ecoLockStartMs = 0; return; }
+  if (!worstPackVoltage(&worst)) {
+    ecoLockStartMs = 0;
+    return;
+  }
   if (worst < ECO_LOCK_THRESH_V) {
     uint32_t nowMs = millis();
     if (ecoLockStartMs == 0) ecoLockStartMs = nowMs;
@@ -910,7 +913,10 @@ void batteryEcoLockUpdate() {        // Stage 1 — force Eco
 void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   if (batteryCutoffLatched) return;
   float worst;
-  if (!worstPackVoltage(&worst)) { cutoffStartMs = 0; return; }
+  if (!worstPackVoltage(&worst)) {
+    cutoffStartMs = 0;
+    return;
+  }
   if (worst >= CUTOFF_THRESH_V) batteryOkConfirmed = true;  // boot gate: pack confirmed above cutoff
   if (worst < CUTOFF_THRESH_V) {
     uint32_t nowMs = millis();
