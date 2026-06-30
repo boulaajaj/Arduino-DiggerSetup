@@ -522,7 +522,10 @@ void outputUpdate(bool driveAllowed, int mixL, int mixR) {
     return;
   }
   // Disallowed: neutral now, hold, then cut the PWM.
-  if (outState == OUT_ACTIVE) { outState = OUT_HOLD; outHoldMs = nowMs; }
+  if (outState == OUT_ACTIVE) {
+    outState = OUT_HOLD;
+    outHoldMs = nowMs;
+  }
   if (outState == OUT_HOLD) {
     outputWrite(SVC, SVC);            // immediate neutral; GL10 decelerates smoothly
     if (nowMs - outHoldMs >= CUTOFF_HOLD_MS) {
