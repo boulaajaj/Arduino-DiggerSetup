@@ -115,6 +115,15 @@ const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read
 const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
 const uint32_t ALERT_STARTUP_MS = 60000UL;  // suppress low-V alarm until telemetry/EMA settles
 
+// [SAFETY] battery motor-cutoff (#65) — a HARD stop below the audible low-V alarm.
+// Worst-of-two pack EMA < CUTOFF_THRESH_V, validity-gated + debounced + latched →
+// the output gate commands neutral then cuts PWM (motors off, ESCs beep). 10.0 V
+// on a 3S pack = 3.33 V/cell average — conservative, leaves margin above the
+// ~3.0 V/cell damage line even with some cell imbalance. Latches until power-cycle.
+const float    CUTOFF_THRESH_V    = 10.0f;   // worst pack EMA below this → cut motors
+const uint32_t CUTOFF_DEBOUNCE_MS = 2500UL;  // sustained below thresh before cutting (ignore load sag)
+const uint32_t CUTOFF_STARTUP_MS  = 4000UL;  // brief warm-up grace; validity gate guards the rest
+
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
 const int SVMIN = 1000;  // Full reverse
@@ -485,6 +494,46 @@ void outputWrite(int left, int right) {
   escR.writeMicroseconds(outR);
 }
 
+// Fail-safe output gate (#88 / #65). The Arduino drives PWM ONLY when it has a
+// valid reason to (driveAllowed = RC valid AND battery OK). Otherwise:
+//   1. command NEUTRAL immediately — the GL10's internal accel/drag decelerates
+//      the motors smoothly to a stop (no Arduino-side ramp needed), and
+//   2. after CUTOFF_HOLD_MS (motors settled), STOP pulsing entirely (detach) so
+//      the ESCs see no signal and beep.
+// This is safe whatever the GL10 does on lost signal: it has already been
+// commanded neutral before the pulses stop. RC-loss recovers automatically when
+// the signal returns; the battery cutoff latch keeps driveAllowed false until a
+// power-cycle. "Get a command → pass it. Get nothing → pass nothing."
+const uint32_t CUTOFF_HOLD_MS = 700;  // hold neutral this long before cutting PWM (let GL10 settle)
+
+enum OutState { OUT_ACTIVE, OUT_HOLD, OUT_CUT };
+OutState outState   = OUT_ACTIVE;
+uint32_t outHoldMs  = 0;
+
+void outputUpdate(bool driveAllowed, int mixL, int mixR) {
+  uint32_t nowMs = millis();
+  if (driveAllowed) {
+    if (outState == OUT_CUT) {        // resume after an RC-loss cut
+      escL.attach(PIN_ESC_L);
+      escR.attach(PIN_ESC_R);
+    }
+    outState = OUT_ACTIVE;
+    outputWrite(mixL, mixR);
+    return;
+  }
+  // Disallowed: neutral now, hold, then cut the PWM.
+  if (outState == OUT_ACTIVE) { outState = OUT_HOLD; outHoldMs = nowMs; }
+  if (outState == OUT_HOLD) {
+    outputWrite(SVC, SVC);            // immediate neutral; GL10 decelerates smoothly
+    if (nowMs - outHoldMs >= CUTOFF_HOLD_MS) {
+      escL.detach();                  // stop pulsing → ESCs lose signal → beep
+      escR.detach();
+      outState = OUT_CUT;
+    }
+  }
+  // OUT_CUT: emit nothing (no writes while detached).
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // [TELEMETRY] — X.BUS Read Register (0x10) on Serial1 (D0/D1)
@@ -716,6 +765,34 @@ int      alarmLen = 0, alarmIdx = 0;
 uint32_t alarmPhaseMs = 0;
 
 void alertInit() { alertBootMs = millis(); }
+
+// [SAFETY] Battery motor-cutoff latch (#65). Same worst-of-two / validity gating
+// as the low-V alarm, but a lower threshold (10.0 V) that LATCHES and feeds the
+// output gate. Computed before the output each loop. Once latched it stays until
+// power-cycle (the audible low-V alarm at 10.5 V will already be chirping).
+bool     batteryCutoffLatched = false;
+uint32_t cutoffStartMs = 0;
+
+void batteryCutoffUpdate() {
+  if (batteryCutoffLatched) return;
+  uint32_t nowMs = millis();
+  if (nowMs - alertBootMs < CUTOFF_STARTUP_MS) return;   // brief warm-up grace
+  float v0 = telem[0].voltage, v1 = telem[1].voltage;
+  bool bothValid = telem[0].valid && telem[1].valid;
+  bool plausible = (v0 >= LOWV_PLAUS_MIN_V && v0 <= LOWV_PLAUS_MAX_V &&
+                    v1 >= LOWV_PLAUS_MIN_V && v1 <= LOWV_PLAUS_MAX_V);
+  if (bothValid && plausible) {
+    float worst = (v0 < v1) ? v0 : v1;
+    if (worst < CUTOFF_THRESH_V) {
+      if (cutoffStartMs == 0) cutoffStartMs = nowMs;
+      if (nowMs - cutoffStartMs >= CUTOFF_DEBOUNCE_MS) batteryCutoffLatched = true;
+    } else {
+      cutoffStartMs = 0;   // recovered before debounce elapsed
+    }
+  } else {
+    cutoffStartMs = 0;     // can't measure both packs → reset debounce
+  }
+}
 
 // Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
 void alertUpdate(bool rcOn) {
@@ -1204,23 +1281,27 @@ void loop() {
   updateGear();
   updateJoystick(now);
 
-  // 2. RC lockout — no RC signal means immediate stop
+  // 2. Compute the drive mix (meaningful only when RC is valid).
   ServoOutput mix;
-  if (!sbusValid) {
-    mix.left = SVC;  mix.right = SVC;
-  } else {
+  if (sbusValid) {
     // Combine RC + joystick at the axis level (#90), then run curvatureDrive once
     // on the combined command so a single operator keeps full range.
     DriveCommand cmd = mixCommands(rcCommand(), rcOverride(), cachedJoyCmd);
     mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
+  } else {
+    mix.left = SVC;  mix.right = SVC;
   }
 
-  // 3. Output — GL10 FOC handles command smoothing internally via its
-  // Acceleration + Drag Force settings, so the Arduino sends the mixed
-  // command straight through.
-  outputWrite(mix.left, mix.right);
+  // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
+  // battery is above the cutoff. Otherwise command neutral (GL10 decelerates
+  // smoothly) then cut PWM so the ESCs lose signal and beep. RC-loss recovers;
+  // the battery cutoff latches until power-cycle. GL10's internal accel/drag is
+  // the only command smoothing (no Arduino-side ramp).
+  batteryCutoffUpdate();
+  bool driveAllowed = sbusValid && !batteryCutoffLatched;
+  outputUpdate(driveAllowed, mix.left, mix.right);
 
-  // Control path serviced this pass (inputs read + outputs written) — and ONLY
+  // Control path serviced this pass (inputs read + output gate run) — and ONLY
   // now do we kick the watchdog. This is the sole refresh point: if anything
   // below (telemetry/Wi-Fi) ever stalls the loop beyond WDT_TIMEOUT_MS, the
   // refresh is missed, the MCU resets, and the machine stops instead of holding
