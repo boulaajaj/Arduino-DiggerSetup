@@ -15,10 +15,10 @@ source of truth** for what is pending, in progress, and done. Anything being
 worked on **must** show as **In Progress** on the board.
 
 **The rule: starting work = open a draft PR, and every PR gets its own issue.**
-As soon as work begins, open a *draft* PR whose body links its issue (`Closes
-#N`). One PR ↔ one issue — never a PR with no issue (it won't appear on the
-board, by design). A draft PR is the earliest GitHub-visible signal, and the
-board automation keys off it:
+As soon as work begins, open a *draft* PR whose body links its issue with a
+`Closes #N` line. One PR ↔ one issue — never a PR with no issue (it won't appear
+on the board, by design). A draft PR is the earliest GitHub-visible signal, and
+the board automation keys off it:
 
 - `.github/workflows/board-pr-in-review.yml` → when a PR links an **In Progress**
   issue, the PR card is added and set to **In Review**. A PR with no linked
