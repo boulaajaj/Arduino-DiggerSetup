@@ -106,6 +106,14 @@ const uint16_t ALERT_INACT[]   = {500, 1500};                   // one long beep
 const int      ALERT_INACT_LEN = 2;
 const uint16_t ALERT_LOWV[]    = {120, 120, 120, 120, 120, 600};  // three fast chirps / ~1.2 s (low batt)
 const int      ALERT_LOWV_LEN  = 6;
+// Motor/ESC over-temp patterns (#111) — chosen to be unmistakable by ear vs the
+// four above (2 short once / 1 long / 3 short fast / continuous horn):
+const uint16_t ALERT_THERM_WARN[]   = {100, 100};                      // fast nonstop TRILL (>= 80 C)
+const int      ALERT_THERM_WARN_LEN = 2;
+const uint16_t ALERT_THERM_CUT[]    = {500, 150, 500, 150, 500, 1000};  // three LONG beeps (>= 95 C cut)
+const int      ALERT_THERM_CUT_LEN  = 6;
+const uint16_t BEEP_THERM_RESTORED[]   = {120, 100, 120, 100, 120, 100, 120, 1500};  // 4 quick flourish, one-shot (< 75 C)
+const int      BEEP_THERM_RESTORED_LEN = 8;
 
 // [ALERT] tunables
 const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
@@ -139,6 +147,31 @@ const uint32_t BATTERY_CONFIRM_MS = 3000UL;  // no valid battery within this →
 // (Ladder: 10.8 V → Eco lock (15 s) · 10.5 V → beep · 10.0 V → hard cutoff.)
 const float    ECO_LOCK_THRESH_V    = 10.8f;    // worst pack EMA below this → force Eco
 const uint32_t ECO_LOCK_DEBOUNCE_MS = 15000UL;  // sustained below thresh before locking Eco
+
+// [SAFETY] motor / ESC over-temperature protection (#111) — staged, NON-LATCHING
+// with hysteresis. Heat is the OPPOSITE of a drained LiPo: once it cools, driving
+// must resume automatically, so each stage releases on its own (lower) threshold
+// rather than latching to power-cycle like the battery ladder. Source = HOTTEST
+// of all 4 sensors (ESC + motor temp on BOTH ESCs), already EMA-smoothed
+// (TELEM_A_TEMP) + a short trip debounce so a single spike / dropped frame can't
+// flip a stage. A telemetry dropout (no fresh valid reading) HOLDS the last state
+// — it never triggers a cut.
+//   Warning beep  >= 80 C  (release < 78 C) : trill, motors keep running
+//   Eco lock      >= 90 C  (release < 80 C) : force Eco gear
+//   Hard cutoff   >= 95 C  (release < 75 C) : ease PWM to neutral, keep beeping
+// NOTE: 95 C is PROVISIONAL — confirm on the bench that it sits just BELOW the
+// GL10's own internal thermal limit (param 17 = temp-controlled fan; the GL10's
+// internal throttle/cutoff number is unpublished) so our warned graceful cut
+// fires before the ESC's silent one.
+const float    TEMP_WARN_ON_C    = 80.0f;
+const float    TEMP_WARN_OFF_C   = 78.0f;
+const float    TEMP_ECO_ON_C     = 90.0f;
+const float    TEMP_ECO_OFF_C    = 80.0f;
+const float    TEMP_CUT_ON_C     = 95.0f;
+const float    TEMP_CUT_OFF_C    = 75.0f;
+const uint32_t TEMP_DEBOUNCE_MS  = 1000UL;   // sustained past a TRIP threshold before the stage flips on
+const float    TEMP_PLAUS_MIN_C  = -20.0f;   // reading below this = bad / unplugged sensor → ignore
+const float    TEMP_PLAUS_MAX_C  = 200.0f;   // reading above this = bad read → ignore
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -226,6 +259,13 @@ bool batteryCutoffLatched = false;  // worst pack <= CUTOFF_THRESH_V → cut mot
 bool ecoLockLatched       = false;  // worst pack <= ECO_LOCK_THRESH_V → force Eco gear
 bool batteryOkConfirmed   = false;  // a valid reading has confirmed pack ABOVE cutoff (boot gate)
 
+// [SAFETY] motor over-temp stage flags (#111) — NON-LATCHING (hysteresis). Set by
+// thermalUpdate() off the hottest of all 4 sensors; read by updateGear() (Eco),
+// the output gate (cut), alertUpdate() (beeps), and buildTelemJson() (dashboard).
+bool tempWarnActive = false;  // hottest sensor >= TEMP_WARN_ON_C → warning trill
+bool tempEcoActive  = false;  // hottest sensor >= TEMP_ECO_ON_C  → force Eco gear
+bool tempCutActive  = false;  // hottest sensor >= TEMP_CUT_ON_C  → cut motors (auto-recovers)
+
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
 inline float outCapToX(float outCap) { return outCap / gearScale; }
@@ -265,7 +305,7 @@ const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 const uint8_t  WIFI_AP_CHANNEL       = 11;   // 2.4 GHz AP channel — off the crowded 1/6 (issue #54)
 const uint32_t SSE_INTERVAL_MS       = 200;  // dashboard push period = 5 Hz (X.BUS poll rate is independent)
 const uint32_t WIFI_MODEM_TIMEOUT_MS = 50;   // per-call Wi-Fi/modem timeout so one stalled write can't freeze loop()
-const size_t   SSE_FRAME_CAP         = 384;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
+const size_t   SSE_FRAME_CAP         = 448;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
 
 // Safety watchdog (#69). The MCU resets if loop() fails to service the control
 // path (read inputs + write outputs) within WDT_TIMEOUT_MS — a reset stops PWM,
@@ -424,10 +464,11 @@ void updateGear() {
     gearScale = GEAR_MID_SCALE;
     currentGear = GEAR_MID;
   }
-  // Low-battery Eco lockout (#65): once the pack has sagged low for a while,
-  // force Eco regardless of the RC gear switch to ease load on a draining pack.
-  // Latched until power-cycle.
-  if (ecoLockLatched) {
+  // Low-battery Eco lockout (#65, latched) OR motor over-temp Eco lock (#111,
+  // non-latching): force Eco regardless of the RC gear switch to ease load on a
+  // draining pack or a hot motor. The thermal lock clears on its own once the
+  // motor cools below TEMP_ECO_OFF_C.
+  if (ecoLockLatched || tempEcoActive) {
     gearScale = GEAR_LOW_SCALE;
     currentGear = GEAR_LOW;
   }
@@ -845,11 +886,22 @@ void alertUpdate(bool rcOn) {
   }
 
   // --- pick highest-priority alarm ---
+  // Priority (highest first): motor-overheat CUT (3 long) > battery low/cut
+  // (3 short) > motor-overheat WARNING (trill) > inactivity (1 long). The two
+  // hard stops sit above the warnings; among them the motor cut is the loudest,
+  // longest pattern. tempCutActive supersedes tempWarnActive (a cut is also hot),
+  // so the warning trill never plays while the cut alarm is sounding.
   const uint16_t* seq = nullptr;
   int len = 0;
-  if (lowVoltLatched) {
+  if (tempCutActive) {
+    seq = ALERT_THERM_CUT;
+    len = ALERT_THERM_CUT_LEN;
+  } else if (lowVoltLatched) {
     seq = ALERT_LOWV;
     len = ALERT_LOWV_LEN;
+  } else if (tempWarnActive) {
+    seq = ALERT_THERM_WARN;
+    len = ALERT_THERM_WARN_LEN;
   } else if (inactiveAlarm) {
     seq = ALERT_INACT;
     len = ALERT_INACT_LEN;
@@ -938,6 +990,69 @@ void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   } else {
     cutoffStartMs = 0;               // recovered before debounce elapsed
   }
+}
+
+// ── [SAFETY] motor / ESC over-temperature protection (#111) ──────────────────
+// NON-LATCHING with hysteresis (heat ≠ a drained LiPo: once cool, drive resumes).
+// Source = hottest of all 4 sensors among FRESH valid reads only; a telemetry
+// dropout holds the last state and never cuts.
+
+uint32_t tempWarnSinceMs = 0;   // trip-debounce timers (0 = not currently above ON)
+uint32_t tempEcoSinceMs  = 0;
+uint32_t tempCutSinceMs  = 0;
+
+// Hottest plausible temp across both ESCs (ESC + motor sensor each). Returns
+// false if neither ESC has a fresh valid plausible reading → caller HOLDS state.
+bool hottestMotorTemp(float* hot) {
+  float h = -1000.0f;
+  bool any = false;
+  for (uint8_t i = 0; i < NUM_ESCS; i++) {
+    if (!telem[i].valid) continue;
+    float te = telem[i].escTempC;
+    float tm = telem[i].motorTempC;
+    if (te >= TEMP_PLAUS_MIN_C && te <= TEMP_PLAUS_MAX_C) {
+      if (te > h) h = te;
+      any = true;
+    }
+    if (tm >= TEMP_PLAUS_MIN_C && tm <= TEMP_PLAUS_MAX_C) {
+      if (tm > h) h = tm;
+      any = true;
+    }
+  }
+  if (any) *hot = h;
+  return any;
+}
+
+// One hysteresis stage with trip debounce: flips ON when temp stays >= onC for
+// TEMP_DEBOUNCE_MS; flips OFF immediately when temp < offC (the on/off gap makes
+// release chatter impossible, so release needs no debounce).
+void tempStageUpdate(bool* state, uint32_t* since, float temp,
+                     float onC, float offC, uint32_t nowMs) {
+  if (*state) {
+    if (temp < offC) {
+      *state = false;
+      *since = 0;
+    }
+  } else if (temp >= onC) {
+    if (*since == 0) *since = nowMs;
+    if (nowMs - *since >= TEMP_DEBOUNCE_MS) *state = true;
+  } else {
+    *since = 0;                      // dropped back before debounce elapsed
+  }
+}
+
+void thermalUpdate() {
+  float hot;
+  if (!hottestMotorTemp(&hot)) return;   // no fresh reading → hold every stage
+  uint32_t nowMs = millis();
+  bool wasCut = tempCutActive;
+  tempStageUpdate(&tempWarnActive, &tempWarnSinceMs, hot, TEMP_WARN_ON_C, TEMP_WARN_OFF_C, nowMs);
+  tempStageUpdate(&tempEcoActive,  &tempEcoSinceMs,  hot, TEMP_ECO_ON_C,  TEMP_ECO_OFF_C,  nowMs);
+  tempStageUpdate(&tempCutActive,  &tempCutSinceMs,  hot, TEMP_CUT_ON_C,  TEMP_CUT_OFF_C,  nowMs);
+  // Cooled back below the cut-release threshold → queue the one-shot "restored"
+  // flourish (4 quick beeps). The repeating cut alarm has already stopped because
+  // tempCutActive just went false.
+  if (wasCut && !tempCutActive) beepStart(BEEP_THERM_RESTORED, BEEP_THERM_RESTORED_LEN);
 }
 
 
@@ -1066,12 +1181,13 @@ int buildTelemJson(char *body, size_t cap) {
   uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
   int n = snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
-    "\"eco\":%d,\"cut\":%d,\"outL\":%d,\"outR\":%d,"
+    "\"eco\":%d,\"cut\":%d,\"hot\":%d,\"teco\":%d,\"tcut\":%d,\"outL\":%d,\"outR\":%d,"
     "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
     "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
     (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
     sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
     ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
+    tempWarnActive ? 1 : 0, tempEcoActive ? 1 : 0, tempCutActive ? 1 : 0,
     outL, outR,
     telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
     (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
@@ -1090,9 +1206,9 @@ int buildTelemJson(char *body, size_t cap) {
 // One-shot /data JSON. Header + body coalesced into a single write() so the
 // whole response is one modem round-trip (one bounded op this loop pass).
 void wifiSendData(WiFiClient &client) {
-  char body[360];
+  char body[400];
   int n = buildTelemJson(body, sizeof(body));
-  char buf[512];
+  char buf[560];
   int h = snprintf(buf, sizeof(buf),
     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
     "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: %d\r\n\r\n", n);
@@ -1293,7 +1409,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.14 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog + smooth pivot/headroom ===");
+    Serial.println("# === Digger V7.31 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + loop watchdog ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -1376,7 +1492,8 @@ void loop() {
   // Eco lock can override it. Stage 1 (~11 V) forces Eco; Stage 2 (10 V) cuts.
   batteryEcoLockUpdate();
   batteryCutoffUpdate();
-  updateGear();              // honors ecoLockLatched (forces Eco when set)
+  thermalUpdate();           // motor/ESC over-temp stages (#111) — sets Eco/cut flags
+  updateGear();              // honors ecoLockLatched + tempEcoActive (forces Eco when set)
   updateJoystick(now);
 
   // 2. Compute the drive mix (meaningful only when RC is valid).
@@ -1400,7 +1517,10 @@ void loop() {
   // reset wipes the RAM latch. Fail OPEN if telemetry never reports
   // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
   bool batteryReady = batteryOkConfirmed || (millis() - alertBootMs > BATTERY_CONFIRM_MS);
-  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched;
+  // Also cut on motor over-temp (#111). Unlike the battery cutoff this is NOT
+  // latched — when the motor cools below TEMP_CUT_OFF_C the gate re-opens and
+  // outputUpdate() re-attaches the ESCs automatically.
+  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched && !tempCutActive;
   outputUpdate(driveAllowed, mix.left, mix.right);
 
   // Control path serviced this pass (inputs read + output gate run) — and ONLY
