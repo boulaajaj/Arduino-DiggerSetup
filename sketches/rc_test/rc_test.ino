@@ -516,18 +516,19 @@ void outputWrite(int left, int right) {
 
 // Fail-safe output gate (#88 / #65). The Arduino drives PWM ONLY when it has a
 // valid reason to (driveAllowed = RC valid AND battery OK). Otherwise:
-//   1. command NEUTRAL immediately — the GL10's internal accel/drag decelerates
-//      the motors smoothly to a stop (no Arduino-side ramp needed), and
-//   2. after CUTOFF_HOLD_MS (motors settled), STOP pulsing entirely (detach) so
-//      the ESCs see no signal and beep.
-// This is safe whatever the GL10 does on lost signal: it has already been
-// commanded neutral before the pulses stop. RC-loss recovers automatically when
-// the signal returns; the battery cutoff latch keeps driveAllowed false until a
-// power-cycle. "Get a command → pass it. Get nothing → pass nothing."
-// (CUTOFF_HOLD_MS is a tunable in [CONFIG].)
+//   1. EASE OUT — ramp both tracks smoothly from wherever they are down to
+//      neutral over CUTOFF_HOLD_MS (gentle controlled stop, no jerk), then
+//   2. STOP pulsing entirely (detach) so the ESCs see no signal and beep.
+// Easing from the live command (never holding it) keeps it safe whatever the
+// GL10 does on lost signal — by the time pulses stop, output is already neutral.
+// RC-loss recovers automatically when the signal returns; the battery cutoff
+// latch keeps driveAllowed false until a power-cycle. "Get a command → pass it.
+// Get nothing → ease to a stop, then pass nothing." (CUTOFF_HOLD_MS is in [CONFIG].)
 enum OutState { OUT_ACTIVE, OUT_HOLD, OUT_CUT };
 OutState outState   = OUT_ACTIVE;
 uint32_t outHoldMs  = 0;
+int      rampFromL  = SVC;   // output captured when the gate closed (ease-out start)
+int      rampFromR  = SVC;
 
 void outputUpdate(bool driveAllowed, int mixL, int mixR) {
   uint32_t nowMs = millis();
@@ -540,15 +541,20 @@ void outputUpdate(bool driveAllowed, int mixL, int mixR) {
     outputWrite(mixL, mixR);
     return;
   }
-  // Disallowed: neutral now, hold, then cut the PWM.
+  // Disallowed: ease out to neutral from the live command, then cut the PWM.
   if (outState == OUT_ACTIVE) {
     outState = OUT_HOLD;
     outHoldMs = nowMs;
+    rampFromL = outL;                 // ease out FROM wherever the tracks are
+    rampFromR = outR;
   }
   if (outState == OUT_HOLD) {
-    outputWrite(SVC, SVC);            // immediate neutral; GL10 decelerates smoothly
-    if (nowMs - outHoldMs >= CUTOFF_HOLD_MS) {
-      escL.detach();                  // stop pulsing → ESCs lose signal → beep
+    float t = (CUTOFF_HOLD_MS > 0) ? (float)(nowMs - outHoldMs) / (float)CUTOFF_HOLD_MS : 1.0f;
+    if (t > 1.0f) t = 1.0f;
+    outputWrite(rampFromL + (int)((SVC - rampFromL) * t),
+                rampFromR + (int)((SVC - rampFromR) * t));
+    if (t >= 1.0f) {
+      escL.detach();                  // at neutral → stop pulsing → ESCs beep
       escR.detach();
       outState = OUT_CUT;
     }
