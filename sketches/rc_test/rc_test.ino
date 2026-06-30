@@ -109,7 +109,7 @@ const int      ALERT_LOWV_LEN  = 6;
 
 // [ALERT] tunables
 const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
-const float    LOWV_THRESH_V    = 10.6f;   // worst-of-two pack EMA below this → low-batt alarm (heads-up beep before the 10.0 V cutoff)
+const float    LOWV_THRESH_V    = 10.5f;   // worst-of-two pack EMA below this → low-batt alarm (heads-up beep before the 10.0 V cutoff)
 const float    LOWV_PLAUS_MIN_V = 6.0f;    // pack reading below this = not present / bad → ignore
 const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read → ignore
 const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
@@ -134,8 +134,10 @@ const uint32_t BATTERY_CONFIRM_MS = 3000UL;  // no valid battery within this →
 // [SAFETY] low-battery Eco lockout (#65) — a STAGE BEFORE the hard cutoff. When
 // the worst pack sags low for an extended period, force Eco gear regardless of
 // the RC gear switch so a nearly-drained pack isn't hit with Boost/Normal load.
-// Latches until power-cycle. (Staging: ~11.0 V → Eco lock; 10.0 V → hard cutoff.)
-const float    ECO_LOCK_THRESH_V    = 11.0f;    // worst pack EMA below this → force Eco
+// Latches until power-cycle. 10.8 V ≈ 30% on a 3S pack — the LiPo "knee", so the
+// top ~70% keeps full Boost/Normal and Eco only eases the final steep stretch.
+// (Ladder: 10.8 V → Eco lock (15 s) · 10.5 V → beep · 10.0 V → hard cutoff.)
+const float    ECO_LOCK_THRESH_V    = 10.8f;    // worst pack EMA below this → force Eco
 const uint32_t ECO_LOCK_DEBOUNCE_MS = 15000UL;  // sustained below thresh before locking Eco
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
@@ -882,7 +884,7 @@ void alertUpdate(bool rcOn) {
 // MOTOR-AFFECTING (unlike [ALERT], which is audio-only). Two latched stages off
 // the worst-of-two pack EMA, validity-gated + debounced, NO startup grace (the
 // validity gate is the only warm-up guard). Both latch until power-cycle:
-//   Stage 1 — Eco lock   (≤ ECO_LOCK_THRESH_V ~11.0 V): updateGear() forces Eco
+//   Stage 1 — Eco lock   (≤ ECO_LOCK_THRESH_V ~10.8 V): updateGear() forces Eco
 //             regardless of the RC gear switch, to ease load on a draining pack.
 //   Stage 2 — Hard cutoff (≤ CUTOFF_THRESH_V 10.0 V): the output gate stops the
 //             motors, and we assert lowVoltLatched so the D8 alarm chirps WITH
