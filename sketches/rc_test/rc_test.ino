@@ -117,12 +117,13 @@ const uint32_t ALERT_STARTUP_MS = 60000UL;  // suppress low-V alarm until teleme
 
 // [SAFETY] battery motor-cutoff (#65) — a HARD stop below the audible low-V alarm.
 // Worst-of-two pack EMA < CUTOFF_THRESH_V, validity-gated + debounced + latched →
-// the output gate commands neutral then cuts PWM (motors off, ESCs beep). 10.0 V
-// on a 3S pack = 3.33 V/cell average — conservative, leaves margin above the
-// ~3.0 V/cell damage line even with some cell imbalance. Latches until power-cycle.
+// motors cut AND the D8 alarm chirps immediately (no startup grace; the validity
+// gate alone guards the ~1 s telemetry warm-up). 10.0 V on a 3S pack = 3.33 V/cell
+// average — conservative, above the ~3.0 V/cell damage line even with some cell
+// imbalance. Latches until power-cycle. All three timings are tunable here.
 const float    CUTOFF_THRESH_V    = 10.0f;   // worst pack EMA below this → cut motors
-const uint32_t CUTOFF_DEBOUNCE_MS = 2500UL;  // sustained below thresh before cutting (ignore load sag)
-const uint32_t CUTOFF_STARTUP_MS  = 4000UL;  // brief warm-up grace; validity gate guards the rest
+const uint32_t CUTOFF_DEBOUNCE_MS = 1500UL;  // sustained below thresh before cutting (ignore load sag; do NOT set 0)
+const uint32_t CUTOFF_HOLD_MS     = 500UL;   // command neutral this long before cutting PWM (let GL10 wind down)
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -504,8 +505,7 @@ void outputWrite(int left, int right) {
 // commanded neutral before the pulses stop. RC-loss recovers automatically when
 // the signal returns; the battery cutoff latch keeps driveAllowed false until a
 // power-cycle. "Get a command → pass it. Get nothing → pass nothing."
-const uint32_t CUTOFF_HOLD_MS = 700;  // hold neutral this long before cutting PWM (let GL10 settle)
-
+// (CUTOFF_HOLD_MS is a tunable in [CONFIG].)
 enum OutState { OUT_ACTIVE, OUT_HOLD, OUT_CUT };
 OutState outState   = OUT_ACTIVE;
 uint32_t outHoldMs  = 0;
@@ -769,33 +769,10 @@ uint32_t alarmPhaseMs = 0;
 
 void alertInit() { alertBootMs = millis(); }
 
-// [SAFETY] Battery motor-cutoff latch (#65). Same worst-of-two / validity gating
-// as the low-V alarm, but a lower threshold (10.0 V) that LATCHES and feeds the
-// output gate. Computed before the output each loop. Once latched it stays until
-// power-cycle (the audible low-V alarm at 10.5 V will already be chirping).
-bool     batteryCutoffLatched = false;
-uint32_t cutoffStartMs = 0;
-
-void batteryCutoffUpdate() {
-  if (batteryCutoffLatched) return;
-  uint32_t nowMs = millis();
-  if (nowMs - alertBootMs < CUTOFF_STARTUP_MS) return;   // brief warm-up grace
-  float v0 = telem[0].voltage, v1 = telem[1].voltage;
-  bool bothValid = telem[0].valid && telem[1].valid;
-  bool plausible = (v0 >= LOWV_PLAUS_MIN_V && v0 <= LOWV_PLAUS_MAX_V &&
-                    v1 >= LOWV_PLAUS_MIN_V && v1 <= LOWV_PLAUS_MAX_V);
-  if (bothValid && plausible) {
-    float worst = (v0 < v1) ? v0 : v1;
-    if (worst < CUTOFF_THRESH_V) {
-      if (cutoffStartMs == 0) cutoffStartMs = nowMs;
-      if (nowMs - cutoffStartMs >= CUTOFF_DEBOUNCE_MS) batteryCutoffLatched = true;
-    } else {
-      cutoffStartMs = 0;   // recovered before debounce elapsed
-    }
-  } else {
-    cutoffStartMs = 0;     // can't measure both packs → reset debounce
-  }
-}
+// NOTE: [ALERT] below is AUDIO-ONLY — it drives the D8 piezo and never touches the
+// motors. The motor-affecting battery cutoff lives in its own [SAFETY] section
+// (search [SAFETY]); it only *borrows* this module's lowVoltLatched to start the
+// chirp when it cuts.
 
 // Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
 void alertUpdate(bool rcOn) {
@@ -856,6 +833,43 @@ void alertUpdate(bool rcOn) {
     alarmPhaseMs = nowMs;
   }
   alarmOutputOn = (alarmIdx % 2 == 0);   // even index = ON phase
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [SAFETY] — battery motor-cutoff latch (#65)
+// ═══════════════════════════════════════════════════════════════
+// MOTOR-AFFECTING (unlike [ALERT], which is audio-only). Worst-of-two pack EMA
+// below CUTOFF_THRESH_V, validity-gated + debounced → latches. The output gate
+// reads batteryCutoffLatched and stops driving. NO startup grace: a pack already
+// ≤ 10.0 V at plug-in cuts as soon as telemetry is valid (the validity gate is
+// the only warm-up guard). On latch it also asserts lowVoltLatched so the D8
+// alarm chirps WITH the cut — never a silent cutoff. Latches until power-cycle.
+
+bool     batteryCutoffLatched = false;
+uint32_t cutoffStartMs = 0;
+
+void batteryCutoffUpdate() {
+  if (batteryCutoffLatched) return;
+  uint32_t nowMs = millis();
+  float v0 = telem[0].voltage, v1 = telem[1].voltage;
+  bool bothValid = telem[0].valid && telem[1].valid;
+  bool plausible = (v0 >= LOWV_PLAUS_MIN_V && v0 <= LOWV_PLAUS_MAX_V &&
+                    v1 >= LOWV_PLAUS_MIN_V && v1 <= LOWV_PLAUS_MAX_V);
+  if (bothValid && plausible) {
+    float worst = (v0 < v1) ? v0 : v1;
+    if (worst < CUTOFF_THRESH_V) {
+      if (cutoffStartMs == 0) cutoffStartMs = nowMs;
+      if (nowMs - cutoffStartMs >= CUTOFF_DEBOUNCE_MS) {
+        batteryCutoffLatched = true;
+        lowVoltLatched = true;   // start the D8 alarm WITH the cut (no silent cutoff)
+      }
+    } else {
+      cutoffStartMs = 0;   // recovered before debounce elapsed
+    }
+  } else {
+    cutoffStartMs = 0;     // can't measure both packs → reset debounce
+  }
 }
 
 
