@@ -450,7 +450,15 @@ let dOutL=1500, dOutR=1500;
 const SMOOTH=0.18;                       // ease factor per frame (higher = snappier)
 function ez(c,t){ return c + (t - c) * SMOOTH; }
 
-function bp(v){return Math.max(0,Math.min(100,((v-9)/(12.6-9))*100))}
+function bp(v){
+  const C=[[10.0,0],[10.3,10],[10.6,22],[10.8,30],[11.1,40],[11.4,50],[11.7,65],[12.0,80],[12.3,90],[12.6,100]];
+  if(v<=C[0][0])return 0;
+  if(v>=C[C.length-1][0])return 100;
+  for(let i=1;i<C.length;i++){
+    if(v<C[i][0]){const[a,pa]=C[i-1],[b,pb]=C[i];return pa+(pb-pa)*(v-a)/(b-a);}
+  }
+  return 100;
+}
 function bc(p){return p>50?'linear-gradient(90deg,#0c6,#4f8)':p>25?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
 function ndl(id,val,max){const e=document.getElementById(id);
   if(e) e.setAttribute('transform',`rotate(${-135+Math.max(0,Math.min(val/max,1))*270},50,50)`);}
