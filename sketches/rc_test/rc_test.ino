@@ -308,9 +308,14 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   float avg   = xSpeed * gearScale;
   float delta = fabsf(avg) * fabsf(zRotation);   // symmetric steering term, >= 0
   float curvL, curvR;
-  if (zRotation > 0) {        // turn LEFT
-    curvL = avg - delta;     // left = inner  (less forward / harder reverse)
-    curvR = avg + delta;     // right = outer
+  // delta is subtracted from the track on the side we steer toward and added to
+  // the other, regardless of travel direction. Forward that means the steer-side
+  // track goes slower (the "inner" track); in reverse the same maths makes it go
+  // harder-reverse — which is what keeps the nose turning the SAME way backward.
+  // (So avoid the forward-only "inner/outer" framing when reasoning about reverse.)
+  if (zRotation > 0) {        // turn LEFT  (nose-left forward AND reverse)
+    curvL = avg - delta;     // left  track: less forward / harder reverse
+    curvR = avg + delta;     // right track: more forward / less reverse
   } else {                    // turn RIGHT
     curvL = avg + delta;
     curvR = avg - delta;
