@@ -296,21 +296,29 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   float pivotL = (xSpeed - cappedRotation) * gearScale;
   float pivotR = (xSpeed + cappedRotation) * gearScale;
 
-  // Curvature output: the gear caps the AVERAGE (avg); a symmetric add forms the
-  // inner/outer differential. Desaturating against ±1.0 (the ESC rail) lets the
-  // outer climb into the gear→rail headroom so the average — and the vehicle's
-  // speed — is held through the turn (#72).
-  //   inner = avg * (1 - |z|)   outer = avg * (1 + |z|)
+  // Curvature output: the gear caps the AVERAGE (avg); an ADDITIVE steering term
+  // (delta) forms the inner/outer differential. delta's sign is set by the
+  // STEERING STICK alone — never by the throttle direction — so steering stays
+  // consistent in reverse: stick-left = nose-left going forward AND backward
+  // (#86 Part 1). The old multiply, avg*(1±|z|), scaled the differential by avg,
+  // so when avg went negative (reverse) the inner/outer swapped — that was the
+  // mid-range "steering reverses when backing up" bug. Forward is UNCHANGED:
+  // for avg ≥ 0, avg ∓ delta == avg*(1∓|z|). Peak magnitude is still
+  // |avg|+delta = |avg|·(1+|z|), so the #96 ceiling and #72 headroom are intact.
   float avg   = xSpeed * gearScale;
-  float boost = 1.0f + fabsf(zRotation);
-  float slow  = 1.0f - fabsf(zRotation);
+  float delta = fabsf(avg) * fabsf(zRotation);   // symmetric steering term, >= 0
   float curvL, curvR;
-  if (zRotation > 0) {
-    curvL = avg * slow;    // turn LEFT: left is inner (subtract)
-    curvR = avg * boost;   // and outer gets the matching add
-  } else {
-    curvL = avg * boost;
-    curvR = avg * slow;    // turn RIGHT: right is inner (subtract)
+  // delta is subtracted from the track on the side we steer toward and added to
+  // the other, regardless of travel direction. Forward that means the steer-side
+  // track goes slower (the "inner" track); in reverse the same maths makes it go
+  // harder-reverse — which is what keeps the nose turning the SAME way backward.
+  // (So avoid the forward-only "inner/outer" framing when reasoning about reverse.)
+  if (zRotation > 0) {        // turn LEFT  (nose-left forward AND reverse)
+    curvL = avg - delta;     // left  track: less forward / harder reverse
+    curvR = avg + delta;     // right track: more forward / less reverse
+  } else {                    // turn RIGHT
+    curvL = avg + delta;
+    curvR = avg - delta;
   }
   // Outer-track ceiling fades from the ESC rail (gentle turn — both tracks moving)
   // down to TURN_TRACK_CAP (full steer — inner track stopped). |zRotation| is the
