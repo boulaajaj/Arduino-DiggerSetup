@@ -109,7 +109,7 @@ const int      ALERT_LOWV_LEN  = 6;
 
 // [ALERT] tunables
 const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
-const float    LOWV_THRESH_V    = 10.5f;   // worst-of-two pack EMA below this → low-batt alarm
+const float    LOWV_THRESH_V    = 10.6f;   // worst-of-two pack EMA below this → low-batt alarm (heads-up beep before the 10.0 V cutoff)
 const float    LOWV_PLAUS_MIN_V = 6.0f;    // pack reading below this = not present / bad → ignore
 const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read → ignore
 const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
