@@ -109,11 +109,34 @@ const int      ALERT_LOWV_LEN  = 6;
 
 // [ALERT] tunables
 const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
-const float    LOWV_THRESH_V    = 10.5f;   // worst-of-two pack EMA below this → low-batt alarm
+const float    LOWV_THRESH_V    = 10.6f;   // worst-of-two pack EMA below this → low-batt alarm (heads-up beep before the 10.0 V cutoff)
 const float    LOWV_PLAUS_MIN_V = 6.0f;    // pack reading below this = not present / bad → ignore
 const float    LOWV_PLAUS_MAX_V = 13.0f;   // pack reading above this = bad read → ignore
 const uint32_t LOWV_DEBOUNCE_MS = 3000UL;  // must stay below thresh this long before latching
 const uint32_t ALERT_STARTUP_MS = 60000UL;  // suppress low-V alarm until telemetry/EMA settles
+
+// [SAFETY] battery motor-cutoff (#65) — a HARD stop below the audible low-V alarm.
+// Worst-of-two pack EMA < CUTOFF_THRESH_V, validity-gated + debounced + latched →
+// motors cut AND the D8 alarm chirps immediately (no startup grace; the validity
+// gate alone guards the ~1 s telemetry warm-up). 10.0 V on a 3S pack = 3.33 V/cell
+// average — conservative, above the ~3.0 V/cell damage line even with some cell
+// imbalance. Latches until power-cycle. All three timings are tunable here.
+const float    CUTOFF_THRESH_V    = 10.0f;   // worst pack EMA below this → cut motors
+const uint32_t CUTOFF_DEBOUNCE_MS = 1500UL;  // sustained below thresh before cutting (ignore load sag; do NOT set 0)
+const uint32_t CUTOFF_HOLD_MS     = 500UL;   // command neutral this long before cutting PWM (let GL10 wind down)
+// Boot gate (#65): the cutoff latch lives in RAM, so a watchdog/brownout reset
+// would clear it. To stop a low pack from driving in that window, the output is
+// held OFF after boot until a valid battery reading confirms it's ABOVE the
+// cutoff. If telemetry never reports (dead X.BUS), fail OPEN after this timeout
+// so a telemetry fault can't permanently disable driving.
+const uint32_t BATTERY_CONFIRM_MS = 3000UL;  // no valid battery within this → allow drive anyway (telemetry-optional)
+
+// [SAFETY] low-battery Eco lockout (#65) — a STAGE BEFORE the hard cutoff. When
+// the worst pack sags low for an extended period, force Eco gear regardless of
+// the RC gear switch so a nearly-drained pack isn't hit with Boost/Normal load.
+// Latches until power-cycle. (Staging: ~11.0 V → Eco lock; 10.0 V → hard cutoff.)
+const float    ECO_LOCK_THRESH_V    = 11.0f;    // worst pack EMA below this → force Eco
+const uint32_t ECO_LOCK_DEBOUNCE_MS = 15000UL;  // sustained below thresh before locking Eco
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -194,6 +217,12 @@ const float PIVOT_SPEED_CAP_LOW = 0.725f;
 // owns the writes.
 float gearScale  = GEAR_LOW_SCALE;
 Gear  currentGear = GEAR_LOW;
+
+// [SAFETY] latches — set by the [SAFETY] module (search [SAFETY]), read here by
+// updateGear() and by the output gate. Declared early so both can see them.
+bool batteryCutoffLatched = false;  // worst pack <= CUTOFF_THRESH_V → cut motors
+bool ecoLockLatched       = false;  // worst pack <= ECO_LOCK_THRESH_V → force Eco gear
+bool batteryOkConfirmed   = false;  // a valid reading has confirmed pack ABOVE cutoff (boot gate)
 
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
@@ -385,6 +414,13 @@ void updateGear() {
     gearScale = GEAR_MID_SCALE;
     currentGear = GEAR_MID;
   }
+  // Low-battery Eco lockout (#65): once the pack has sagged low for a while,
+  // force Eco regardless of the RC gear switch to ease load on a draining pack.
+  // Latched until power-cycle.
+  if (ecoLockLatched) {
+    gearScale = GEAR_LOW_SCALE;
+    currentGear = GEAR_LOW;
+  }
 }
 
 
@@ -483,6 +519,54 @@ void outputWrite(int left, int right) {
   outR = constrain(right, SVMIN, SVMAX);
   escL.writeMicroseconds(outL);
   escR.writeMicroseconds(outR);
+}
+
+// Fail-safe output gate (#88 / #65). The Arduino drives PWM ONLY when it has a
+// valid reason to (driveAllowed = RC valid AND battery OK). Otherwise:
+//   1. EASE OUT — ramp both tracks smoothly from wherever they are down to
+//      neutral over CUTOFF_HOLD_MS (gentle controlled stop, no jerk), then
+//   2. STOP pulsing entirely (detach) so the ESCs see no signal and beep.
+// Easing from the live command (never holding it) keeps it safe whatever the
+// GL10 does on lost signal — by the time pulses stop, output is already neutral.
+// RC-loss recovers automatically when the signal returns; the battery cutoff
+// latch keeps driveAllowed false until a power-cycle. "Get a command → pass it.
+// Get nothing → ease to a stop, then pass nothing." (CUTOFF_HOLD_MS is in [CONFIG].)
+enum OutState { OUT_ACTIVE, OUT_HOLD, OUT_CUT };
+OutState outState   = OUT_ACTIVE;
+uint32_t outHoldMs  = 0;
+int      rampFromL  = SVC;   // output captured when the gate closed (ease-out start)
+int      rampFromR  = SVC;
+
+void outputUpdate(bool driveAllowed, int mixL, int mixR) {
+  uint32_t nowMs = millis();
+  if (driveAllowed) {
+    if (outState == OUT_CUT) {        // resume after an RC-loss cut
+      escL.attach(PIN_ESC_L);
+      escR.attach(PIN_ESC_R);
+    }
+    outState = OUT_ACTIVE;
+    outputWrite(mixL, mixR);
+    return;
+  }
+  // Disallowed: ease out to neutral from the live command, then cut the PWM.
+  if (outState == OUT_ACTIVE) {
+    outState = OUT_HOLD;
+    outHoldMs = nowMs;
+    rampFromL = outL;                 // ease out FROM wherever the tracks are
+    rampFromR = outR;
+  }
+  if (outState == OUT_HOLD) {
+    float t = (CUTOFF_HOLD_MS > 0) ? (float)(nowMs - outHoldMs) / (float)CUTOFF_HOLD_MS : 1.0f;
+    if (t > 1.0f) t = 1.0f;
+    outputWrite(rampFromL + (int)((SVC - rampFromL) * t),
+                rampFromR + (int)((SVC - rampFromR) * t));
+    if (t >= 1.0f) {
+      escL.detach();                  // at neutral → stop pulsing → ESCs beep
+      escR.detach();
+      outState = OUT_CUT;
+    }
+  }
+  // OUT_CUT: emit nothing (no writes while detached).
 }
 
 
@@ -717,6 +801,11 @@ uint32_t alarmPhaseMs = 0;
 
 void alertInit() { alertBootMs = millis(); }
 
+// NOTE: [ALERT] below is AUDIO-ONLY — it drives the D8 piezo and never touches the
+// motors. The motor-affecting battery cutoff lives in its own [SAFETY] section
+// (search [SAFETY]); it only *borrows* this module's lowVoltLatched to start the
+// chirp when it cuts.
+
 // Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
 void alertUpdate(bool rcOn) {
   uint32_t nowMs = millis();
@@ -776,6 +865,69 @@ void alertUpdate(bool rcOn) {
     alarmPhaseMs = nowMs;
   }
   alarmOutputOn = (alarmIdx % 2 == 0);   // even index = ON phase
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// [SAFETY] — staged low-battery protection (#65)
+// ═══════════════════════════════════════════════════════════════
+// MOTOR-AFFECTING (unlike [ALERT], which is audio-only). Two latched stages off
+// the worst-of-two pack EMA, validity-gated + debounced, NO startup grace (the
+// validity gate is the only warm-up guard). Both latch until power-cycle:
+//   Stage 1 — Eco lock   (≤ ECO_LOCK_THRESH_V ~11.0 V): updateGear() forces Eco
+//             regardless of the RC gear switch, to ease load on a draining pack.
+//   Stage 2 — Hard cutoff (≤ CUTOFF_THRESH_V 10.0 V): the output gate stops the
+//             motors, and we assert lowVoltLatched so the D8 alarm chirps WITH
+//             the cut — never a silent cutoff.
+
+uint32_t cutoffStartMs  = 0;
+uint32_t ecoLockStartMs = 0;
+
+// Worst-of-two pack voltage if BOTH packs read a plausible value; else false
+// (a not-yet-powered pack reads ~0 V and must not trip anything).
+bool worstPackVoltage(float* worst) {
+  float v0 = telem[0].voltage, v1 = telem[1].voltage;
+  if (!(telem[0].valid && telem[1].valid)) return false;
+  if (v0 < LOWV_PLAUS_MIN_V || v0 > LOWV_PLAUS_MAX_V ||
+      v1 < LOWV_PLAUS_MIN_V || v1 > LOWV_PLAUS_MAX_V) return false;
+  *worst = (v0 < v1) ? v0 : v1;
+  return true;
+}
+
+void batteryEcoLockUpdate() {        // Stage 1 — force Eco
+  if (ecoLockLatched) return;
+  float worst;
+  if (!worstPackVoltage(&worst)) {
+    ecoLockStartMs = 0;
+    return;
+  }
+  if (worst < ECO_LOCK_THRESH_V) {
+    uint32_t nowMs = millis();
+    if (ecoLockStartMs == 0) ecoLockStartMs = nowMs;
+    if (nowMs - ecoLockStartMs >= ECO_LOCK_DEBOUNCE_MS) ecoLockLatched = true;
+  } else {
+    ecoLockStartMs = 0;              // recovered before debounce elapsed
+  }
+}
+
+void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
+  if (batteryCutoffLatched) return;
+  float worst;
+  if (!worstPackVoltage(&worst)) {
+    cutoffStartMs = 0;
+    return;
+  }
+  if (worst >= CUTOFF_THRESH_V) batteryOkConfirmed = true;  // boot gate: pack confirmed above cutoff
+  if (worst < CUTOFF_THRESH_V) {
+    uint32_t nowMs = millis();
+    if (cutoffStartMs == 0) cutoffStartMs = nowMs;
+    if (nowMs - cutoffStartMs >= CUTOFF_DEBOUNCE_MS) {
+      batteryCutoffLatched = true;
+      lowVoltLatched = true;         // start the D8 alarm WITH the cut (no silent cutoff)
+    }
+  } else {
+    cutoffStartMs = 0;               // recovered before debounce elapsed
+  }
 }
 
 
@@ -897,11 +1049,12 @@ int buildTelemJson(char *body, size_t cap) {
   uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
   int n = snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
-    "\"outL\":%d,\"outR\":%d,"
+    "\"eco\":%d,\"cut\":%d,\"outL\":%d,\"outR\":%d,"
     "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
     "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
     (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
     sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
+    ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
     outL, outR,
     telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
     (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
@@ -1201,26 +1354,39 @@ void loop() {
   }
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
   hornActive = sbusValid && (sbusData.ch[SBUS_CH_HORN] > HORN_ON_RAW);
-  updateGear();
+
+  // 1.5 Staged low-battery protection (#65) — evaluate BEFORE gear select so the
+  // Eco lock can override it. Stage 1 (~11 V) forces Eco; Stage 2 (10 V) cuts.
+  batteryEcoLockUpdate();
+  batteryCutoffUpdate();
+  updateGear();              // honors ecoLockLatched (forces Eco when set)
   updateJoystick(now);
 
-  // 2. RC lockout — no RC signal means immediate stop
+  // 2. Compute the drive mix (meaningful only when RC is valid).
   ServoOutput mix;
-  if (!sbusValid) {
-    mix.left = SVC;  mix.right = SVC;
-  } else {
+  if (sbusValid) {
     // Combine RC + joystick at the axis level (#90), then run curvatureDrive once
     // on the combined command so a single operator keeps full range.
     DriveCommand cmd = mixCommands(rcCommand(), rcOverride(), cachedJoyCmd);
     mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
+  } else {
+    mix.left = SVC;  mix.right = SVC;
   }
 
-  // 3. Output — GL10 FOC handles command smoothing internally via its
-  // Acceleration + Drag Force settings, so the Arduino sends the mixed
-  // command straight through.
-  outputWrite(mix.left, mix.right);
+  // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
+  // battery is above the cutoff (latched in step 1.5). Otherwise command neutral
+  // (GL10 decelerates smoothly) then cut PWM so the ESCs lose signal and beep.
+  // RC-loss recovers; the battery cutoff latches until power-cycle. GL10's
+  // internal accel/drag is the only command smoothing (no Arduino-side ramp).
+  // Boot gate (#65): don't drive until a valid reading confirms the pack is above
+  // the cutoff — so a low pack can't drive in the brief window after a watchdog
+  // reset wipes the RAM latch. Fail OPEN if telemetry never reports
+  // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
+  bool batteryReady = batteryOkConfirmed || (millis() - alertBootMs > BATTERY_CONFIRM_MS);
+  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched;
+  outputUpdate(driveAllowed, mix.left, mix.right);
 
-  // Control path serviced this pass (inputs read + outputs written) — and ONLY
+  // Control path serviced this pass (inputs read + output gate run) — and ONLY
   // now do we kick the watchdog. This is the sole refresh point: if anything
   // below (telemetry/Wi-Fi) ever stalls the loop beyond WDT_TIMEOUT_MS, the
   // refresh is missed, the MCU resets, and the machine stops instead of holding

@@ -5,6 +5,17 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-06-29 — Eco lock + PWM ease-out cutoff CONFIRMED working (#65)
+
+- Test build (eco 11.3 V / cutoff 11.1 V): worst-pack EMA ≤ 11.3 V for 15 s →
+  gear forced to **Eco** regardless of RC switch + dashboard amber "ECO LOCKED"
+  banner. **Operator-confirmed "works perfectly."**
+- **PWM ease-out:** on cutoff/RC-loss the output gate now ramps the live track
+  command down to neutral over CUTOFF_HOLD_MS (500 ms) before detaching → gentle
+  controlled stop, no jerk. Confirmed good feel.
+- Production thresholds: Eco lock **11.0 V**; hard cutoff **10.0 V** (recommended;
+  3.33 V/cell on 3S, conservative). 10.5 V is the more battery-protective option.
+
 ## 2026-06-28 — Reverse turning is symmetric with forward (#87, #96)
 
 - Decision: reverse is treated the same as forward in `curvatureDrive()`.

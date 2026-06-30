@@ -494,6 +494,24 @@ function showBanner(msg, kind){
   b.style.display = 'block';
 }
 function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.style.display='none';}
+function setSafetyBanner(d){
+  let b=document.getElementById('safetyBanner');
+  if(!b){
+    b=document.createElement('div'); b.id='safetyBanner';
+    b.style.cssText='position:fixed;bottom:0;left:0;right:0;color:#fff;padding:9px 10px;'+
+      'font:bold 15px Orbitron,sans-serif;text-align:center;z-index:9998;letter-spacing:1px';
+    document.body.appendChild(b);
+  }
+  if(d.cut){
+    b.style.background='#b00020'; b.style.display='block';
+    b.textContent='⛔ MOTORS CUT — LOW BATTERY · REPLACE PACK';
+  } else if(d.eco){
+    b.style.background='#c77800'; b.style.display='block';
+    b.textContent='⚡ ECO LOCKED — LOW BATTERY · Boost/Normal disabled';
+  } else {
+    b.style.display='none';
+  }
+}
 
 // ── Render — continuous requestAnimationFrame loop (eases displayed values ~60fps) ──
 function render(){
@@ -602,6 +620,7 @@ function applyData(d){
   const mp=document.getElementById('mRC'); if(mp) mp.className='mode-pill'+(d.mode===0?' on-rc':'');
   const mj=document.getElementById('mJoy'); if(mj) mj.className='mode-pill'+(d.mode===1?' on-joy':'');
   const mb=document.getElementById('mBlend'); if(mb) mb.className='mode-pill'+(d.mode===2?' on-blend':'');
+  setSafetyBanner(d);
 
   applyDir();
 
