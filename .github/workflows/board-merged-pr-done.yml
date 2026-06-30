@@ -47,12 +47,14 @@ jobs:
           # already on the board (never adds a card). Works for PRs and Issues.
           set_done() {
             node_id="$1"; label="$2"
+            # `| head -n1` → single ID even if a node ever appears twice; `|| true`
+            # → a no-match (empty) never trips `set -e`.
             item_id=$(gh api graphql \
               -f query='query($id:ID!){node(id:$id){
                 ... on PullRequest{projectItems(first:20){nodes{id project{id}}}}
                 ... on Issue{projectItems(first:20){nodes{id project{id}}}}}}' \
               -f id="$node_id" \
-              --jq ".data.node.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .id")
+              --jq ".data.node.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .id" | head -n1 || true)
             if [ -z "$item_id" ]; then
               echo "$label not on Project #1 — nothing to do."
               return
@@ -74,7 +76,7 @@ jobs:
             -f query='query($owner:String!,$repo:String!,$pr:Int!){
               repository(owner:$owner,name:$repo){
                 pullRequest(number:$pr){
-                  closingIssuesReferences(first:20){nodes{id number}}
+                  closingIssuesReferences(first:50){nodes{id}}
                 }}}' \
             -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].id')
