@@ -14,14 +14,19 @@ dashboard (monitoring only).
 source of truth** for what is pending, in progress, and done. Anything being
 worked on **must** show as **In Progress** on the board.
 
-**The rule: starting work = open a draft PR.** As soon as work begins on an
-issue, open a *draft* PR whose body links the issue (`Closes #N`). A draft PR is
-the earliest GitHub-visible signal, and the board automation keys off it:
+**The rule: starting work = open a draft PR, and every PR gets its own issue.**
+As soon as work begins, open a *draft* PR whose body links its issue with a
+`Closes #N` line. One PR ↔ one issue — never a PR with no issue (it won't appear
+on the board, by design). A draft PR is the earliest GitHub-visible signal, and
+the board automation keys off it:
 
 - `.github/workflows/board-pr-in-review.yml` → when a PR links an **In Progress**
-  issue, the PR card is added and set to **In Review**.
-- Built-in Project workflows (enabled in the UI) move closed issues / merged PRs
-  to **Done**.
+  issue, the PR card is added and set to **In Review**. A PR with no linked
+  In-Progress issue is left off the board entirely.
+- `.github/workflows/board-merged-pr-done.yml` → when a PR that is already on the
+  board is **merged**, its card moves to **Done** (it never adds a stray card).
+- Built-in Project workflow (enabled in the UI) moves **closed issues** to
+  **Done**.
 
 > **Automation limits (so expectations are right):** the In-Review step only
 > fires when the linked closing issue is already **In Progress**, and it is
