@@ -1,12 +1,13 @@
 name: Board · merged PR → Done
 
-# Moves a merged pull request's card to the "Done" column of Project #1 — with no
-# manual step. Companion to board-pr-in-review.yml (which puts issue-linked PRs
-# into In Review). Together: linked PR → In Review on open → Done on merge.
+# When a PR is merged, move its card AND its linked closing issues to the "Done"
+# column of Project #1 — with no manual step, and without relying on the flaky
+# built-in "issue closed → Done" workflow (which intermittently misses, e.g. #97).
+# Companion to board-pr-in-review.yml. Together: linked PR → In Review on open →
+# PR + issue → Done on merge.
 #
-# Board-hygiene rule: this only moves a PR that is ALREADY on the board (i.e. it
-# went through In Review because it was linked to an In-Progress issue). It never
-# *adds* a PR card — a PR with no linked board issue stays off the board entirely.
+# Board-hygiene rule: only moves cards that are ALREADY on the board. It never
+# *adds* a card — anything not linked through the In-Review flow stays off.
 #
 # Token note: the default GITHUB_TOKEN cannot write to a user-owned Project, so
 # this uses the PROJECTS_TOKEN secret. Fork PRs don't receive secrets — the job
@@ -31,8 +32,9 @@ jobs:
       OWNER: ${{ github.repository_owner }}
       REPO: ${{ github.event.repository.name }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NODE: ${{ github.event.pull_request.node_id }}
     steps:
-      - name: Move merged PR card to Done
+      - name: Move merged PR + its linked issues to Done
         run: |
           set -euo pipefail
 
@@ -41,27 +43,42 @@ jobs:
             exit 0
           fi
 
-          # Find this PR's EXISTING card on Project #1. Do NOT add it if absent —
-          # the board only tracks PRs that were linked to an In-Progress issue.
-          item_id=$(gh api graphql \
+          # Set a content node's Project #1 card to Done — but ONLY if it is
+          # already on the board (never adds a card). Works for PRs and Issues.
+          set_done() {
+            node_id="$1"; label="$2"
+            item_id=$(gh api graphql \
+              -f query='query($id:ID!){node(id:$id){
+                ... on PullRequest{projectItems(first:20){nodes{id project{id}}}}
+                ... on Issue{projectItems(first:20){nodes{id project{id}}}}}}' \
+              -f id="$node_id" \
+              --jq ".data.node.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .id")
+            if [ -z "$item_id" ]; then
+              echo "$label not on Project #1 — nothing to do."
+              return
+            fi
+            gh api graphql \
+              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){
+                updateProjectV2ItemFieldValue(input:{
+                  projectId:$p,itemId:$i,fieldId:$f,
+                  value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
+              -f p="$PROJECT_ID" -f i="$item_id" -f f="$STATUS_FIELD" -f o="$DONE_OPT"
+            echo "✅ $label → Done"
+          }
+
+          # 1. The merged PR card.
+          set_done "$PR_NODE" "PR #$PR_NUMBER"
+
+          # 2. Each issue the PR closes (e.g. "Closes #N").
+          issue_ids=$(gh api graphql \
             -f query='query($owner:String!,$repo:String!,$pr:Int!){
               repository(owner:$owner,name:$repo){
                 pullRequest(number:$pr){
-                  projectItems(first:20){nodes{id project{id}}}
+                  closingIssuesReferences(first:20){nodes{id number}}
                 }}}' \
             -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" \
-            --jq ".data.repository.pullRequest.projectItems.nodes[] | select(.project.id==\"$PROJECT_ID\") | .id")
+            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].id')
 
-          if [ -z "$item_id" ]; then
-            echo "PR #$PR_NUMBER is not on Project #1 (no linked-issue card) — nothing to do."
-            exit 0
-          fi
-
-          gh api graphql \
-            -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){
-              updateProjectV2ItemFieldValue(input:{
-                projectId:$p,itemId:$i,fieldId:$f,
-                value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
-            -f p="$PROJECT_ID" -f i="$item_id" -f f="$STATUS_FIELD" -f o="$DONE_OPT"
-
-          echo "✅ PR #$PR_NUMBER → Done"
+          for iid in $issue_ids; do
+            set_done "$iid" "linked issue"
+          done

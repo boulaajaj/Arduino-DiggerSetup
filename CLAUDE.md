@@ -23,8 +23,9 @@ the board automation keys off it:
 - `.github/workflows/board-pr-in-review.yml` → when a PR links an **In Progress**
   issue, the PR card is added and set to **In Review**. A PR with no linked
   In-Progress issue is left off the board entirely.
-- `.github/workflows/board-merged-pr-done.yml` → when a PR that is already on the
-  board is **merged**, its card moves to **Done** (it never adds a stray card).
+- `.github/workflows/board-merged-pr-done.yml` → when a PR already on the board is
+  **merged**, its card **and its linked closing issues** move to **Done** (only
+  cards already on the board; it never adds a stray card).
 - Built-in Project workflow (enabled in the UI) moves **closed issues** to
   **Done**.
 
