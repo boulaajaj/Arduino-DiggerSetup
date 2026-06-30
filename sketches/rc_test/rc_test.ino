@@ -124,6 +124,12 @@ const uint32_t ALERT_STARTUP_MS = 60000UL;  // suppress low-V alarm until teleme
 const float    CUTOFF_THRESH_V    = 10.0f;   // worst pack EMA below this → cut motors
 const uint32_t CUTOFF_DEBOUNCE_MS = 1500UL;  // sustained below thresh before cutting (ignore load sag; do NOT set 0)
 const uint32_t CUTOFF_HOLD_MS     = 500UL;   // command neutral this long before cutting PWM (let GL10 wind down)
+// Boot gate (#65): the cutoff latch lives in RAM, so a watchdog/brownout reset
+// would clear it. To stop a low pack from driving in that window, the output is
+// held OFF after boot until a valid battery reading confirms it's ABOVE the
+// cutoff. If telemetry never reports (dead X.BUS), fail OPEN after this timeout
+// so a telemetry fault can't permanently disable driving.
+const uint32_t BATTERY_CONFIRM_MS = 3000UL;  // no valid battery within this → allow drive anyway (telemetry-optional)
 
 // [SAFETY] low-battery Eco lockout (#65) — a STAGE BEFORE the hard cutoff. When
 // the worst pack sags low for an extended period, force Eco gear regardless of
@@ -216,6 +222,7 @@ Gear  currentGear = GEAR_LOW;
 // updateGear() and by the output gate. Declared early so both can see them.
 bool batteryCutoffLatched = false;  // worst pack <= CUTOFF_THRESH_V → cut motors
 bool ecoLockLatched       = false;  // worst pack <= ECO_LOCK_THRESH_V → force Eco gear
+bool batteryOkConfirmed   = false;  // a valid reading has confirmed pack ABOVE cutoff (boot gate)
 
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
@@ -904,6 +911,7 @@ void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   if (batteryCutoffLatched) return;
   float worst;
   if (!worstPackVoltage(&worst)) { cutoffStartMs = 0; return; }
+  if (worst >= CUTOFF_THRESH_V) batteryOkConfirmed = true;  // boot gate: pack confirmed above cutoff
   if (worst < CUTOFF_THRESH_V) {
     uint32_t nowMs = millis();
     if (cutoffStartMs == 0) cutoffStartMs = nowMs;
@@ -1364,7 +1372,12 @@ void loop() {
   // (GL10 decelerates smoothly) then cut PWM so the ESCs lose signal and beep.
   // RC-loss recovers; the battery cutoff latches until power-cycle. GL10's
   // internal accel/drag is the only command smoothing (no Arduino-side ramp).
-  bool driveAllowed = sbusValid && !batteryCutoffLatched;
+  // Boot gate (#65): don't drive until a valid reading confirms the pack is above
+  // the cutoff — so a low pack can't drive in the brief window after a watchdog
+  // reset wipes the RAM latch. Fail OPEN if telemetry never reports
+  // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
+  bool batteryReady = batteryOkConfirmed || (millis() - alertBootMs > BATTERY_CONFIRM_MS);
+  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched;
   outputUpdate(driveAllowed, mix.left, mix.right);
 
   // Control path serviced this pass (inputs read + output gate run) — and ONLY

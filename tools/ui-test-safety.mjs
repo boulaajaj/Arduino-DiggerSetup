@@ -17,9 +17,9 @@ const base = { t: 0, seq: 1, gear: 1, mode: 0, fs: 0, lost: 0, outL: 1650, outR:
   e1: { ok: 1, age: 50, rpm: 12, cur: 50, v: 109, tE: 30, tM: 25 } };
 
 const cases = [
-  ['normal',   { eco: 0, cut: 0 }, 'no banner'],
-  ['eco_lock', { eco: 1, cut: 0 }, 'AMBER: ECO LOCKED'],
-  ['cutoff',   { eco: 1, cut: 1 }, 'RED: MOTORS CUT (cut wins)'],
+  ['normal',   { eco: 0, cut: 0 }, { shown: false }],
+  ['eco_lock', { eco: 1, cut: 0 }, { shown: true, text: 'ECO LOCKED' }],
+  ['cutoff',   { eco: 1, cut: 1 }, { shown: true, text: 'MOTORS CUT' }],  // cut wins over eco
 ];
 
 const browser = await chromium.launch({ channel: 'chrome' });
@@ -35,7 +35,11 @@ for (const [name, flags, expect] of cases) {
     return b ? { shown: b.style.display !== 'none', text: b.textContent, bg: b.style.background } : { shown: false, text: '(none)' };
   });
   await page.screenshot({ path: resolve(outDir, name + '.png') });
-  console.log(`${name}: expect ${expect}  →  shown=${banner.shown} "${banner.text}" ${banner.bg||''}`);
+  if (banner.shown !== expect.shown)
+    throw new Error(`${name}: expected shown=${expect.shown}, got ${banner.shown}`);
+  if (expect.text && !banner.text.includes(expect.text))
+    throw new Error(`${name}: expected text containing "${expect.text}", got "${banner.text}"`);
+  console.log(`${name}: ok (shown=${banner.shown} "${banner.text}")`);
 }
 await browser.close();
 console.log('done →', outDir);
