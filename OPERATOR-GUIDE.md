@@ -79,9 +79,9 @@ The motors are very powerful, so top speed is capped by the **gear switch
 
 | Gear | Straight-line speed | Reverse | Pivot (spin in place) |
 | ---- | ------------------- | ------- | --------------------- |
-| **Eco** | 65% | 62.5% | 72.5% |
-| **Normal** | 80% | 50% | 60% |
-| **Boost** | 100% | 50% | 60% |
+| **Eco** | 65% | 55% | 72.5% |
+| **Normal** | 80% | 55% | 60% |
+| **Boost** | 100% | 65% | 60% |
 
 The "straight-line speed" is the cap on **average** track speed. In a turn,
 Eco and Normal let the outer track speed up to keep the machine moving, so it
