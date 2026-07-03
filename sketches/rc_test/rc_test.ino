@@ -221,13 +221,32 @@ const float JOY_CAP_ECO    = 0.65f;  // Eco
 const float JOY_CAP_NORMAL = 0.75f;  // Normal
 const float JOY_CAP_BOOST  = 0.90f;  // Boost
 
-// REVERSE cap (#87) — flat across ALL gears and BOTH inputs (RC + joystick).
-// Replaces the old per-gear REVERSE_LIMIT / REVERSE_LIMIT_LOW. Reverse output is
-// a constant 65% regardless of gear. Within the GL10 Max Reverse Force setting.
-const float REVERSE_CAP    = 0.65f;
+// REVERSE caps (#87/#113) — per gear, flat across BOTH inputs (RC + joystick).
+// Reverse is held below forward authority; Boost is allowed a little more reverse
+// than Eco/Normal. Applied through reverseCap() (defined with the other gear-cap
+// helpers below) so there is ONE source of truth, not a scattered conditional.
+// These are TRUE percentages only because the GL10s were recalibrated to the full
+// 1000/1500/2000 us range on 2026-07-03. Previously they were calibrated while the
+// firmware capped reverse at 65%, so they mislearned 65% as 100% reverse — which
+// made a 65%-commanded reverse drive ~100%. Do NOT lower the firmware reverse cap
+// and recalibrate at the same time, or that mislearning returns.
+const float REVERSE_CAP_STD   = 0.55f;  // Eco + Normal
+const float REVERSE_CAP_BOOST = 0.65f;  // Boost
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
+
+// ── ESC THROTTLE-CALIBRATION MODE (#113) ───────────────────────────────────
+// TEMPORARY. When true, the throttle stick passes STRAIGHT THROUGH to the full
+// ±100% PWM range (1000 / 1500 / 2000 us) on BOTH tracks — ALL caps, gear scaling
+// and steering are bypassed — so the GL10s can learn the Arduino's TRUE endpoints
+// (Option A, docs/GL10-OPERATION.md §5). Needed because the ESCs were previously
+// calibrated while the firmware capped reverse at 65%, so they mislearned 65% as
+// their 100% reverse endpoint (that is why 65%-commanded reverse drove ~100%).
+// After BOTH ESCs are recalibrated, set this back to false and reflash the normal
+// firmware (where REVERSE_CAP etc. become TRUE percentages again).
+// SAFETY: motors reach full power in this mode — tracks clear / wheels up.
+const bool CALIBRATION_MODE = false;
 
 // Gear scaling — RC CH4 selects the AVERAGE-speed cap. 3-position switch:
 //   LOW  → 65% average-speed cap  (training / tight spaces)
@@ -244,7 +263,7 @@ const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rai
 // Eco gets extra PIVOT authority so the operator can still maneuver in tight
 // spaces (pivot input cap; forward stays at GEAR_LOW_SCALE 65%). Effective pivot
 // wheel speed = pivot cap × gear scale: 0.725 × 0.65 = 0.47 (vs 0.60 × 0.65).
-// (Reverse is no longer Eco-special — it's a flat REVERSE_CAP for all gears.)
+// (Reverse is capped per gear via reverseCap(): 55% Eco/Normal, 65% Boost.)
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
 // Gear state — declared here so curvatureDrive() and rcCommand() can read
@@ -269,6 +288,13 @@ bool tempCutActive  = false;  // hottest sensor >= TEMP_CUT_ON_C  → cut motors
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
 inline float outCapToX(float outCap) { return outCap / gearScale; }
+
+// Per-gear reverse cap (#113): Eco/Normal hold 55%, Boost allows 65%. Single
+// source of truth — both rcCommand() and the joystick clamp read this, so the
+// reverse limit lives in exactly one place.
+inline float reverseCap() {
+  return (currentGear == GEAR_HIGH) ? REVERSE_CAP_BOOST : REVERSE_CAP_STD;
+}
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -367,7 +393,7 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
   // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
   // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
-  // Forward AND reverse are treated symmetrically: REVERSE_CAP bounds the reverse
+  // Forward AND reverse are treated symmetrically: reverseCap() bounds the reverse
   // *average* speed upstream, and the outer track then borrows the same turn
   // headroom forward does — so a reverse turn swings precisely instead of slowing
   // (operator decision, 2026-06-28). No reverse-specific ceiling special-case.
@@ -431,8 +457,9 @@ DriveCommand rcCommand() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
   // Apply tunable input gains, then clamp: RC keeps the gear's full forward
-  // authority (1.0); reverse is the flat REVERSE_CAP for every gear (#87).
-  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(REVERSE_CAP), 1.0f);
+  // authority (1.0); reverse is the per-gear reverseCap() (55% Eco/Normal, 65%
+  // Boost) (#87/#113).
+  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(reverseCap()), 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   return {xSpeed, zRotation};
 }
@@ -511,13 +538,13 @@ void updateJoystick(uint32_t now) {
 
   float xSpeed = cachedJoy.xSpeed * JOY_THROTTLE_GAIN;
   float zRotation = cachedJoy.zRotation;
-  // Clamp throttle: per-gear joystick FORWARD cap, flat REVERSE_CAP backward —
-  // both as track-output fractions converted to the xSpeed domain (#90/#87).
+  // Clamp throttle: per-gear joystick FORWARD cap, per-gear reverseCap() backward —
+  // both as track-output fractions converted to the xSpeed domain (#90/#87/#113).
   // Throttle axis only; steering/pivot untouched. RC unaffected.
   float fwdCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
                : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
                                             : JOY_CAP_NORMAL;
-  xSpeed = constrain(xSpeed, -outCapToX(REVERSE_CAP), outCapToX(fwdCap));
+  xSpeed = constrain(xSpeed, -outCapToX(reverseCap()), outCapToX(fwdCap));
   cachedJoyCmd = {xSpeed, zRotation};
 }
 
@@ -1409,7 +1436,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.31 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + loop watchdog ===");
+    Serial.println("# === Digger V7.33 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + per-gear reverse cap (55% Eco/Normal, 65% Boost) + loop watchdog ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -1505,6 +1532,17 @@ void loop() {
     mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
   } else {
     mix.left = SVC;  mix.right = SVC;
+  }
+
+  // 2.5 ESC CALIBRATION MODE (#113, temporary) — bypass ALL mixing/caps/gear and
+  // send the raw throttle stick to the full ±100% range (1000/1500/2000 us) on
+  // BOTH tracks, so the GL10s learn the Arduino's true endpoints. Steering is
+  // ignored so both ESCs see identical full-range signals for a clean capture.
+  if (CALIBRATION_MODE && sbusValid) {
+    float thr = constrain((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
+    int pwm = SVC + (int)(thr * SOFT_RANGE);
+    mix.left = pwm;
+    mix.right = pwm;
   }
 
   // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
