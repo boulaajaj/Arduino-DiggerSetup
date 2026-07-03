@@ -150,7 +150,7 @@ lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms) + `types.h` + `web_page.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.34 — GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`
 
 Signal pipeline:
 
@@ -159,6 +159,9 @@ Signal pipeline:
 3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
    - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
    - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
+   - Feeding throttle mid-pivot: the pivot branch's throttle term is tapered by
+     steering (`PIVOT_THROTTLE_TAPER` 0.70, #114) so the machine arcs out of the
+     pivot (outer holds, inner eases through zero) instead of surging forward
 4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
 5. Gear cap (RC CH4): Eco 65% / Normal 80% / Boost 100% — caps the AVERAGE
    track speed (folded into curvatureDrive), so in a turn the outer track uses
@@ -245,7 +248,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.34 — GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
 sketches/rc_test/web_page.h              — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)

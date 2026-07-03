@@ -310,13 +310,20 @@ const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 // pivot branch at full gain, so 10–20% throttle while steering shifted both
 // tracks forward together — an instant surge (mirrored in reverse). Taper the
 // pivot branch's throttle term by steering: while turning, the outer track
-// holds its pivot speed and the inner keeps a slight counter-rotation that
-// eases through zero as throttle rises; forward speed then builds as the blend
-// hands over to the curvature branch. 0.0 = old behavior, 1.0 = throttle fully
-// suppressed at full steer. Straight-line (z = 0), pure pivot (x = 0), and
-// at-speed turns (|xSpeed| >= PIVOT_BLEND_END → pure curvature) are
-// mathematically unchanged. Field-tune.
-const float PIVOT_THROTTLE_TAPER = 0.70f;
+// keeps most of its pivot speed (it still gains (1−taper)·throttle) and the
+// inner keeps a slight counter-rotation that eases through zero as throttle
+// rises; forward speed then builds as the blend hands over to the curvature
+// branch. The taper deliberately follows the RAW steering stick, not
+// cappedRotation: past the pivot cap extra deflection adds no rotation, but it
+// still reads as "hold the pivot", so full lock holds hardest (2026-07-03,
+// field-validated — see docs/DECISION-LOG.md). 0.0 = old behavior, 1.0 =
+// throttle fully suppressed at full steer. Straight-line (z = 0), pure pivot
+// (x = 0), and at-speed turns (|xSpeed| >= PIVOT_BLEND_END → pure curvature)
+// are mathematically unchanged. Field-tune WITHIN [0, 1] — enforced below
+// because above 1.0 the term flips sign (forward stick would command reverse).
+constexpr float PIVOT_THROTTLE_TAPER = 0.70f;
+static_assert(PIVOT_THROTTLE_TAPER >= 0.0f && PIVOT_THROTTLE_TAPER <= 1.0f,
+              "PIVOT_THROTTLE_TAPER outside [0,1] inverts pivot-branch throttle");
 
 // Outer-track turn cap (#96). The #72 outer-track headroom lets the outer wheel
 // borrow up to the ESC rail to hold speed through a turn — but when the INNER

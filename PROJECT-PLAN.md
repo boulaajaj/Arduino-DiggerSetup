@@ -109,10 +109,13 @@ through corners; Boost is already at the rail.
 | Normal | 80% | normal driving — the everyday gear (~20% turn headroom) |
 | Boost | 100% | full authority (at the rail) |
 
-Reverse is capped at 50% of forward stick travel (62.5% in Eco); pivot at 60%
-(72.5% in Eco). The pivot↔drive hand-off smoothstep-blends across |throttle|
-5–55% so there's no snap at low speed. The joystick throttle carries a ×1.05
-gain (clamped to the gear cap at full deflection).
+Reverse is capped per gear (55% Eco/Normal, 65% Boost — true percentages since
+the 2026-07-03 ESC recalibration); pivot at 60% (72.5% in Eco). The
+pivot↔drive hand-off smoothstep-blends across |throttle| 5–55% so there's no
+snap at low speed, and the pivot branch's throttle is tapered by steering
+(#114) so feeding throttle mid-turn arcs the machine out of the pivot instead
+of surging it forward. The joystick throttle carries a ×1.40 gain (clamped to
+the per-gear caps).
 
 > Failsafe: when S.BUS is invalid, the controller holds neutral and gear stays at Eco.
 

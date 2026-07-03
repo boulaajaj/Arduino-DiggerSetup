@@ -167,10 +167,12 @@ top of the file:
 | `GEAR_LOW_SCALE` | 0.65 | Eco average-speed cap (fraction of full) |
 | `GEAR_MID_SCALE` | 0.80 | Normal average-speed cap |
 | `GEAR_HIGH_SCALE` | 1.00 | Boost average-speed cap |
-| `REVERSE_LIMIT` | 0.50 | Reverse cap (Normal/Boost) as a fraction of forward |
+| `REVERSE_CAP_STD` | 0.55 | Reverse cap in Eco/Normal (true % after the 2026-07-03 ESC recalibration) |
+| `REVERSE_CAP_BOOST` | 0.65 | Reverse cap in Boost |
 | `PIVOT_SPEED_CAP` | 0.60 | Spin-in-place (pivot) cap |
 | `PIVOT_BLEND_END` | 0.55 | Throttle where pivot fully blends into drive (wider = gentler hand-off) |
-| `JOY_THROTTLE_GAIN` | 1.05 | Joystick throttle boost (clamped to the gear cap at full deflection) |
+| `PIVOT_THROTTLE_TAPER` | 0.70 | How strongly steering holds the pivot when you feed throttle (higher = pivot holds longer / exits into an arc more gradually; 0 = old surge behavior) |
+| `JOY_THROTTLE_GAIN` | 1.40 | Joystick throttle boost (clamped to the per-gear caps) |
 | `RC_DEADBAND` | 50 | How far RC sticks must move to register (μs) |
 | `JOY_DEADBAND` | 480 | How far the joystick must move to register (ADC units, ~6% of travel) |
 
