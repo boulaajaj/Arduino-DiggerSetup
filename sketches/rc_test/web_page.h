@@ -161,7 +161,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 </head>
 <body>
 <!-- Discrete firmware-version badge (top-left). Bump with the sketch version. -->
-<div id="fwVer" style="position:fixed;top:3px;left:5px;z-index:9999;font:10px monospace;color:#6b8;opacity:.6;letter-spacing:.5px;pointer-events:none">V7.31</div>
+<div id="fwVer" style="position:fixed;top:3px;left:5px;z-index:9999;font:10px monospace;color:#6b8;opacity:.6;letter-spacing:.5px;pointer-events:none">V7.33</div>
 <div class="dash-frame">
 
 <div class="top-bar">
@@ -505,19 +505,21 @@ function setSafetyBanner(d){
       'font:bold 15px Orbitron,sans-serif;text-align:center;z-index:9998;letter-spacing:1px';
     document.body.appendChild(b);
   }
-  // Hottest of all 4 motor/ESC sensors — named in the overheat banners.
-  const hs=Math.round(Math.max(d.e0?d.e0.tE:0,d.e0?d.e0.tM:0,d.e1?d.e1.tE:0,d.e1?d.e1.tM:0));
+  // Hottest of all 4 motor/ESC sensors + its label (L/R + ESC/mot) for the banners.
+  const S=[['L-ESC',d.e0?d.e0.tE:-99],['L-mot',d.e0?d.e0.tM:-99],['R-ESC',d.e1?d.e1.tE:-99],['R-mot',d.e1?d.e1.tM:-99]];
+  let H=S[0]; for(const s of S){ if(s[1]>H[1]) H=s; }
+  const hs=Math.round(H[1]), hn=H[0];
   // Edge-detect the thermal-cut release to flash "restored" for 3 s.
   const now=Date.now();
   if(_tcutPrev&&!d.tcut)_restoreUntil=now+3000;
   _tcutPrev=!!d.tcut;
   const show=(bg,txt)=>{b.style.background=bg;b.style.display='block';b.textContent=txt;};
   // Priority: overheat-cut > battery-cut > overheat-eco > battery-eco > hot-warn > restored-flash.
-  if(d.tcut)               show('#b00020','🛑 MOTORS CUT — OVERHEAT '+hs+'°C · COOLING…');
+  if(d.tcut)               show('#b00020','🛑 MOTORS CUT — OVERHEAT '+hn+' '+hs+'°C · COOLING…');
   else if(d.cut)           show('#b00020','⛔ MOTORS CUT — LOW BATTERY · REPLACE PACK');
-  else if(d.teco)          show('#c77800','🔥 ECO LOCKED — MOTOR HOT '+hs+'°C');
+  else if(d.teco)          show('#c77800','🔥 ECO LOCKED — MOTOR HOT '+hn+' '+hs+'°C');
   else if(d.eco)           show('#c77800','⚡ ECO LOCKED — LOW BATTERY · Boost/Normal disabled');
-  else if(d.hot)           show('#c77800','⚠ MOTOR HOT '+hs+'°C — ease off');
+  else if(d.hot)           show('#c77800','⚠ MOTOR HOT — '+hn+' '+hs+'°C — ease off');
   else if(now<_restoreUntil) show('#0a7d2c','✅ MOTORS RESTORED');
   else b.style.display='none';
 }

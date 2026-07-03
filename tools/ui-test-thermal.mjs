@@ -19,10 +19,10 @@ const base = () => ({ t:0,seq:1,gear:1,mode:0,fs:0,lost:0,outL:1500,outR:1500,
 const RED='rgb(176, 0, 32)', AMBER='rgb(199, 120, 0)', GREEN='rgb(10, 125, 44)';
 const cases = [
   ['cool → hidden',        d=>d,                                              null,            null],
-  ['hot warn 82°C',        d=>{d.hot=1; d.e1.tE=82;},                         'MOTOR HOT 82',  AMBER],
-  ['thermal eco 91°C',     d=>{d.teco=1; d.hot=1; d.e0.tM=91;},               'ECO LOCKED — MOTOR HOT 91', AMBER],
-  ['thermal cut 96°C',     d=>{d.tcut=1; d.teco=1; d.hot=1; d.e1.tM=96;},     'MOTORS CUT — OVERHEAT 96',  RED],
-  ['cut>batt-cut priority', d=>{d.tcut=1; d.cut=1; d.e0.tE=97;},              'OVERHEAT 97',   RED],
+  ['hot warn 82°C',        d=>{d.hot=1; d.e1.tE=82;},                         'MOTOR HOT — R-ESC 82',  AMBER],
+  ['thermal eco 91°C',     d=>{d.teco=1; d.hot=1; d.e0.tM=91;},               'ECO LOCKED — MOTOR HOT L-mot 91', AMBER],
+  ['thermal cut 96°C',     d=>{d.tcut=1; d.teco=1; d.hot=1; d.e1.tM=96;},     'OVERHEAT R-mot 96',  RED],
+  ['cut>batt-cut priority', d=>{d.tcut=1; d.cut=1; d.e0.tE=97;},              'OVERHEAT L-ESC 97',   RED],
   ['batt cut (no heat)',   d=>{d.cut=1;},                                     'LOW BATTERY',   RED],
   ['batt eco (no heat)',   d=>{d.eco=1;},                                     'ECO LOCKED — LOW BATTERY', AMBER],
 ];

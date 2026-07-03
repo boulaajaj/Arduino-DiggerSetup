@@ -163,9 +163,13 @@ Signal pipeline:
 5. Gear cap (RC CH4): Eco 65% / Normal 80% / Boost 100% — caps the AVERAGE
    track speed (folded into curvatureDrive), so in a turn the outer track uses
    the gear→rail headroom and Eco/Normal hold speed through corners; Boost is at
-   the rail. In Eco the pivot and reverse caps get a boost so the operator keeps
-   usable maneuvering authority. Joystick throttle carries a ×1.05 gain (clamped
-   to the gear cap).
+   the rail. In Eco the pivot cap gets a boost so the operator keeps usable
+   maneuvering authority. **Reverse is capped per gear via `reverseCap()`: 55%
+   Eco/Normal, 65% Boost (#113)** — a TRUE percentage only because the GL10s were
+   recalibrated to the full 1000/1500/2000 µs range on 2026-07-03 (they had been
+   calibrated while reverse was capped at 65%, so they mislearned 65% as 100%
+   reverse; see DECISION-LOG). Joystick throttle carries a gain (clamped to the
+   gear cap).
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
 7. X.BUS 0x10 telemetry polled read-only on Serial1; EMA-smoothed and streamed to the Wi-Fi dashboard (monitoring only).
 
