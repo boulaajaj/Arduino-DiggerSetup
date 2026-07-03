@@ -5,6 +5,33 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-03 — Pivot-branch throttle taper CONFIRMED working (#114, V7.34)
+
+- **Problem (field-observed):** feeding 10–20% throttle while steering shifted
+  both tracks forward together (mirrored in reverse) — the machine surged out
+  of a pivot instead of easing. Cause: throttle entered both tracks of
+  `curvatureDrive()`'s pivot branch at full gain; the #72 blend-band width
+  cannot fix this (both branches carry the same full-gain forward term).
+- **Fix:** `pivotThr = xSpeed * (1 − PIVOT_THROTTLE_TAPER·|zRotation|)` with
+  `PIVOT_THROTTLE_TAPER = 0.70` in [CONFIG]. Outer track keeps most of its
+  pivot speed, inner keeps a slight counter-rotation that eases through zero;
+  the machine tightens into an arc. **Operator-confirmed feel on the machine
+  (2026-07-03): "really good."**
+- **Proven invariants (swept, max |old−new| = 0.000000):** straight line
+  fwd/rev (z = 0), pure pivot (x = 0), at-speed turns (|x| ≥ PIVOT_BLEND_END
+  0.55). Reverse caps (#113), outer headroom (#72), turn ceiling (#96), and
+  reverse-steer consistency (#86) untouched.
+- **Deliberate choices:** taper follows the RAW steering stick (not
+  `cappedRotation`) — past the pivot cap extra deflection adds no rotation but
+  still means "hold the pivot", so full lock holds hardest. `fabsf(z)`
+  introduces a slope kink at z = 0 (≤ ~1–2% output per 0.1 z mid-band) —
+  value-continuous, judged imperceptible; revisit with a z² taper only if ever
+  felt. Range [0,1] enforced by `static_assert` (above 1.0 the term flips
+  sign: forward stick would command reverse).
+- `tools/drive-trace.mjs` re-synced to the V7.34 math (#86 additive delta,
+  #96 ceiling, #114 taper) — it had drifted three revisions behind the
+  firmware.
+
 ## 2026-07-03 — GL10 throttle endpoints RECALIBRATED; reverse cap now per-gear (#113)
 
 - **Root cause of reverse overshoot (field-observed):** the GL10s had been

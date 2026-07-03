@@ -306,6 +306,25 @@ const float PIVOT_BLEND_START = 0.05f;
 const float PIVOT_BLEND_END   = 0.55f;
 const float PIVOT_SPEED_CAP   = 0.60f;  // pivot rotation cap (~60% wheel power)
 
+// Pivot-branch throttle taper (#114). Throttle used to enter BOTH tracks of the
+// pivot branch at full gain, so 10–20% throttle while steering shifted both
+// tracks forward together — an instant surge (mirrored in reverse). Taper the
+// pivot branch's throttle term by steering: while turning, the outer track
+// keeps most of its pivot speed (it still gains (1−taper)·throttle) and the
+// inner keeps a slight counter-rotation that eases through zero as throttle
+// rises; forward speed then builds as the blend hands over to the curvature
+// branch. The taper deliberately follows the RAW steering stick, not
+// cappedRotation: past the pivot cap extra deflection adds no rotation, but it
+// still reads as "hold the pivot", so full lock holds hardest (2026-07-03,
+// field-validated — see docs/DECISION-LOG.md). 0.0 = old behavior, 1.0 =
+// throttle fully suppressed at full steer. Straight-line (z = 0), pure pivot
+// (x = 0), and at-speed turns (|xSpeed| >= PIVOT_BLEND_END → pure curvature)
+// are mathematically unchanged. Field-tune WITHIN [0, 1] — enforced below
+// because above 1.0 the term flips sign (forward stick would command reverse).
+constexpr float PIVOT_THROTTLE_TAPER = 0.70f;
+static_assert(PIVOT_THROTTLE_TAPER >= 0.0f && PIVOT_THROTTLE_TAPER <= 1.0f,
+              "PIVOT_THROTTLE_TAPER outside [0,1] inverts pivot-branch throttle");
+
 // Outer-track turn cap (#96). The #72 outer-track headroom lets the outer wheel
 // borrow up to the ESC rail to hold speed through a turn — but when the INNER
 // track is stopped (full steer) that headroom is wasted (the outer doesn't need
@@ -361,8 +380,12 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   // gears pivot gently. Eco uses a looser cap to keep usable pivot authority.
   float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW : PIVOT_SPEED_CAP;
   float cappedRotation = constrain(zRotation, -pivotCap, pivotCap);
-  float pivotL = (xSpeed - cappedRotation) * gearScale;
-  float pivotR = (xSpeed + cappedRotation) * gearScale;
+  // Throttle is tapered by steering in THIS branch only (#114): while turning,
+  // low throttle no longer shoves both tracks the same way — the
+  // counter-rotation persists and decays smoothly instead of surging.
+  float pivotThr = xSpeed * (1.0f - PIVOT_THROTTLE_TAPER * fabsf(zRotation));
+  float pivotL = (pivotThr - cappedRotation) * gearScale;
+  float pivotR = (pivotThr + cappedRotation) * gearScale;
 
   // Curvature output: the gear caps the AVERAGE (avg); an ADDITIVE steering term
   // (delta) forms the inner/outer differential. delta's sign is set by the
@@ -1436,7 +1459,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.33 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + per-gear reverse cap (55% Eco/Normal, 65% Boost) + loop watchdog ===");
+    Serial.println("# === Digger V7.34 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + per-gear reverse cap (55% Eco/Normal, 65% Boost) + loop watchdog ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
