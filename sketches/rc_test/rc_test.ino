@@ -106,6 +106,14 @@ const uint16_t ALERT_INACT[]   = {500, 1500};                   // one long beep
 const int      ALERT_INACT_LEN = 2;
 const uint16_t ALERT_LOWV[]    = {120, 120, 120, 120, 120, 600};  // three fast chirps / ~1.2 s (low batt)
 const int      ALERT_LOWV_LEN  = 6;
+// Motor/ESC over-temp patterns (#111) — chosen to be unmistakable by ear vs the
+// four above (2 short once / 1 long / 3 short fast / continuous horn):
+const uint16_t ALERT_THERM_WARN[]   = {100, 100};                      // fast nonstop TRILL (>= 80 C)
+const int      ALERT_THERM_WARN_LEN = 2;
+const uint16_t ALERT_THERM_CUT[]    = {500, 150, 500, 150, 500, 1000};  // three LONG beeps (>= 95 C cut)
+const int      ALERT_THERM_CUT_LEN  = 6;
+const uint16_t BEEP_THERM_RESTORED[]   = {120, 100, 120, 100, 120, 100, 120, 1500};  // 4 quick flourish, one-shot (< 75 C)
+const int      BEEP_THERM_RESTORED_LEN = 8;
 
 // [ALERT] tunables
 const uint32_t INACT_RC_OFF_MS  = 60000UL;  // RC off this long → inactivity beep ("unplug me")
@@ -139,6 +147,31 @@ const uint32_t BATTERY_CONFIRM_MS = 3000UL;  // no valid battery within this →
 // (Ladder: 10.8 V → Eco lock (15 s) · 10.5 V → beep · 10.0 V → hard cutoff.)
 const float    ECO_LOCK_THRESH_V    = 10.8f;    // worst pack EMA below this → force Eco
 const uint32_t ECO_LOCK_DEBOUNCE_MS = 15000UL;  // sustained below thresh before locking Eco
+
+// [SAFETY] motor / ESC over-temperature protection (#111) — staged, NON-LATCHING
+// with hysteresis. Heat is the OPPOSITE of a drained LiPo: once it cools, driving
+// must resume automatically, so each stage releases on its own (lower) threshold
+// rather than latching to power-cycle like the battery ladder. Source = HOTTEST
+// of all 4 sensors (ESC + motor temp on BOTH ESCs), already EMA-smoothed
+// (TELEM_A_TEMP) + a short trip debounce so a single spike / dropped frame can't
+// flip a stage. A telemetry dropout (no fresh valid reading) HOLDS the last state
+// — it never triggers a cut.
+//   Warning beep  >= 80 C  (release < 78 C) : trill, motors keep running
+//   Eco lock      >= 90 C  (release < 80 C) : force Eco gear
+//   Hard cutoff   >= 95 C  (release < 75 C) : ease PWM to neutral, keep beeping
+// NOTE: 95 C is PROVISIONAL — confirm on the bench that it sits just BELOW the
+// GL10's own internal thermal limit (param 17 = temp-controlled fan; the GL10's
+// internal throttle/cutoff number is unpublished) so our warned graceful cut
+// fires before the ESC's silent one.
+const float    TEMP_WARN_ON_C    = 80.0f;
+const float    TEMP_WARN_OFF_C   = 78.0f;
+const float    TEMP_ECO_ON_C     = 90.0f;
+const float    TEMP_ECO_OFF_C    = 80.0f;
+const float    TEMP_CUT_ON_C     = 95.0f;
+const float    TEMP_CUT_OFF_C    = 75.0f;
+const uint32_t TEMP_DEBOUNCE_MS  = 1000UL;   // sustained past a TRIP threshold before the stage flips on
+const float    TEMP_PLAUS_MIN_C  = -20.0f;   // reading below this = bad / unplugged sensor → ignore
+const float    TEMP_PLAUS_MAX_C  = 200.0f;   // reading above this = bad read → ignore
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
 const int SVC   = 1500;  // Center (neutral)
@@ -188,13 +221,32 @@ const float JOY_CAP_ECO    = 0.65f;  // Eco
 const float JOY_CAP_NORMAL = 0.75f;  // Normal
 const float JOY_CAP_BOOST  = 0.90f;  // Boost
 
-// REVERSE cap (#87) — flat across ALL gears and BOTH inputs (RC + joystick).
-// Replaces the old per-gear REVERSE_LIMIT / REVERSE_LIMIT_LOW. Reverse output is
-// a constant 65% regardless of gear. Within the GL10 Max Reverse Force setting.
-const float REVERSE_CAP    = 0.65f;
+// REVERSE caps (#87/#113) — per gear, flat across BOTH inputs (RC + joystick).
+// Reverse is held below forward authority; Boost is allowed a little more reverse
+// than Eco/Normal. Applied through reverseCap() (defined with the other gear-cap
+// helpers below) so there is ONE source of truth, not a scattered conditional.
+// These are TRUE percentages only because the GL10s were recalibrated to the full
+// 1000/1500/2000 us range on 2026-07-03. Previously they were calibrated while the
+// firmware capped reverse at 65%, so they mislearned 65% as 100% reverse — which
+// made a 65%-commanded reverse drive ~100%. Do NOT lower the firmware reverse cap
+// and recalibrate at the same time, or that mislearning returns.
+const float REVERSE_CAP_STD   = 0.55f;  // Eco + Normal
+const float REVERSE_CAP_BOOST = 0.65f;  // Boost
 
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
+
+// ── ESC THROTTLE-CALIBRATION MODE (#113) ───────────────────────────────────
+// TEMPORARY. When true, the throttle stick passes STRAIGHT THROUGH to the full
+// ±100% PWM range (1000 / 1500 / 2000 us) on BOTH tracks — ALL caps, gear scaling
+// and steering are bypassed — so the GL10s can learn the Arduino's TRUE endpoints
+// (Option A, docs/GL10-OPERATION.md §5). Needed because the ESCs were previously
+// calibrated while the firmware capped reverse at 65%, so they mislearned 65% as
+// their 100% reverse endpoint (that is why 65%-commanded reverse drove ~100%).
+// After BOTH ESCs are recalibrated, set this back to false and reflash the normal
+// firmware (where REVERSE_CAP etc. become TRUE percentages again).
+// SAFETY: motors reach full power in this mode — tracks clear / wheels up.
+const bool CALIBRATION_MODE = false;
 
 // Gear scaling — RC CH4 selects the AVERAGE-speed cap. 3-position switch:
 //   LOW  → 65% average-speed cap  (training / tight spaces)
@@ -211,7 +263,7 @@ const float GEAR_HIGH_SCALE = 1.00f;  // Boost  (no turn headroom — at the rai
 // Eco gets extra PIVOT authority so the operator can still maneuver in tight
 // spaces (pivot input cap; forward stays at GEAR_LOW_SCALE 65%). Effective pivot
 // wheel speed = pivot cap × gear scale: 0.725 × 0.65 = 0.47 (vs 0.60 × 0.65).
-// (Reverse is no longer Eco-special — it's a flat REVERSE_CAP for all gears.)
+// (Reverse is capped per gear via reverseCap(): 55% Eco/Normal, 65% Boost.)
 const float PIVOT_SPEED_CAP_LOW = 0.725f;
 
 // Gear state — declared here so curvatureDrive() and rcCommand() can read
@@ -226,9 +278,23 @@ bool batteryCutoffLatched = false;  // worst pack <= CUTOFF_THRESH_V → cut mot
 bool ecoLockLatched       = false;  // worst pack <= ECO_LOCK_THRESH_V → force Eco gear
 bool batteryOkConfirmed   = false;  // a valid reading has confirmed pack ABOVE cutoff (boot gate)
 
+// [SAFETY] motor over-temp stage flags (#111) — NON-LATCHING (hysteresis). Set by
+// thermalUpdate() off the hottest of all 4 sensors; read by updateGear() (Eco),
+// the output gate (cut), alertUpdate() (beeps), and buildTelemJson() (dashboard).
+bool tempWarnActive = false;  // hottest sensor >= TEMP_WARN_ON_C → warning trill
+bool tempEcoActive  = false;  // hottest sensor >= TEMP_ECO_ON_C  → force Eco gear
+bool tempCutActive  = false;  // hottest sensor >= TEMP_CUT_ON_C  → cut motors (auto-recovers)
+
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
 inline float outCapToX(float outCap) { return outCap / gearScale; }
+
+// Per-gear reverse cap (#113): Eco/Normal hold 55%, Boost allows 65%. Single
+// source of truth — both rcCommand() and the joystick clamp read this, so the
+// reverse limit lives in exactly one place.
+inline float reverseCap() {
+  return (currentGear == GEAR_HIGH) ? REVERSE_CAP_BOOST : REVERSE_CAP_STD;
+}
 
 // Curvature drive — pivot/curvature blend band.
 // |xSpeed| <= START: pure pivot (counter-rotate at PIVOT_SPEED_CAP)
@@ -265,7 +331,7 @@ const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 const uint8_t  WIFI_AP_CHANNEL       = 11;   // 2.4 GHz AP channel — off the crowded 1/6 (issue #54)
 const uint32_t SSE_INTERVAL_MS       = 200;  // dashboard push period = 5 Hz (X.BUS poll rate is independent)
 const uint32_t WIFI_MODEM_TIMEOUT_MS = 50;   // per-call Wi-Fi/modem timeout so one stalled write can't freeze loop()
-const size_t   SSE_FRAME_CAP         = 384;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
+const size_t   SSE_FRAME_CAP         = 448;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
 
 // Safety watchdog (#69). The MCU resets if loop() fails to service the control
 // path (read inputs + write outputs) within WDT_TIMEOUT_MS — a reset stops PWM,
@@ -327,7 +393,7 @@ WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
   // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
   // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
   // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
-  // Forward AND reverse are treated symmetrically: REVERSE_CAP bounds the reverse
+  // Forward AND reverse are treated symmetrically: reverseCap() bounds the reverse
   // *average* speed upstream, and the outer track then borrows the same turn
   // headroom forward does — so a reverse turn swings precisely instead of slowing
   // (operator decision, 2026-06-28). No reverse-specific ceiling special-case.
@@ -391,8 +457,9 @@ DriveCommand rcCommand() {
   float xSpeed    = (float)(rcThrottle() - SVC) / SOFT_RANGE;
   float zRotation = (float)(rcSteering() - SVC) / SOFT_RANGE;
   // Apply tunable input gains, then clamp: RC keeps the gear's full forward
-  // authority (1.0); reverse is the flat REVERSE_CAP for every gear (#87).
-  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(REVERSE_CAP), 1.0f);
+  // authority (1.0); reverse is the per-gear reverseCap() (55% Eco/Normal, 65%
+  // Boost) (#87/#113).
+  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(reverseCap()), 1.0f);
   zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   return {xSpeed, zRotation};
 }
@@ -424,10 +491,11 @@ void updateGear() {
     gearScale = GEAR_MID_SCALE;
     currentGear = GEAR_MID;
   }
-  // Low-battery Eco lockout (#65): once the pack has sagged low for a while,
-  // force Eco regardless of the RC gear switch to ease load on a draining pack.
-  // Latched until power-cycle.
-  if (ecoLockLatched) {
+  // Low-battery Eco lockout (#65, latched) OR motor over-temp Eco lock (#111,
+  // non-latching): force Eco regardless of the RC gear switch to ease load on a
+  // draining pack or a hot motor. The thermal lock clears on its own once the
+  // motor cools below TEMP_ECO_OFF_C.
+  if (ecoLockLatched || tempEcoActive) {
     gearScale = GEAR_LOW_SCALE;
     currentGear = GEAR_LOW;
   }
@@ -470,13 +538,13 @@ void updateJoystick(uint32_t now) {
 
   float xSpeed = cachedJoy.xSpeed * JOY_THROTTLE_GAIN;
   float zRotation = cachedJoy.zRotation;
-  // Clamp throttle: per-gear joystick FORWARD cap, flat REVERSE_CAP backward —
-  // both as track-output fractions converted to the xSpeed domain (#90/#87).
+  // Clamp throttle: per-gear joystick FORWARD cap, per-gear reverseCap() backward —
+  // both as track-output fractions converted to the xSpeed domain (#90/#87/#113).
   // Throttle axis only; steering/pivot untouched. RC unaffected.
   float fwdCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
                : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
                                             : JOY_CAP_NORMAL;
-  xSpeed = constrain(xSpeed, -outCapToX(REVERSE_CAP), outCapToX(fwdCap));
+  xSpeed = constrain(xSpeed, -outCapToX(reverseCap()), outCapToX(fwdCap));
   cachedJoyCmd = {xSpeed, zRotation};
 }
 
@@ -845,11 +913,22 @@ void alertUpdate(bool rcOn) {
   }
 
   // --- pick highest-priority alarm ---
+  // Priority (highest first): motor-overheat CUT (3 long) > battery low/cut
+  // (3 short) > motor-overheat WARNING (trill) > inactivity (1 long). The two
+  // hard stops sit above the warnings; among them the motor cut is the loudest,
+  // longest pattern. tempCutActive supersedes tempWarnActive (a cut is also hot),
+  // so the warning trill never plays while the cut alarm is sounding.
   const uint16_t* seq = nullptr;
   int len = 0;
-  if (lowVoltLatched) {
+  if (tempCutActive) {
+    seq = ALERT_THERM_CUT;
+    len = ALERT_THERM_CUT_LEN;
+  } else if (lowVoltLatched) {
     seq = ALERT_LOWV;
     len = ALERT_LOWV_LEN;
+  } else if (tempWarnActive) {
+    seq = ALERT_THERM_WARN;
+    len = ALERT_THERM_WARN_LEN;
   } else if (inactiveAlarm) {
     seq = ALERT_INACT;
     len = ALERT_INACT_LEN;
@@ -938,6 +1017,69 @@ void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   } else {
     cutoffStartMs = 0;               // recovered before debounce elapsed
   }
+}
+
+// ── [SAFETY] motor / ESC over-temperature protection (#111) ──────────────────
+// NON-LATCHING with hysteresis (heat ≠ a drained LiPo: once cool, drive resumes).
+// Source = hottest of all 4 sensors among FRESH valid reads only; a telemetry
+// dropout holds the last state and never cuts.
+
+uint32_t tempWarnSinceMs = 0;   // trip-debounce timers (0 = not currently above ON)
+uint32_t tempEcoSinceMs  = 0;
+uint32_t tempCutSinceMs  = 0;
+
+// Hottest plausible temp across both ESCs (ESC + motor sensor each). Returns
+// false if neither ESC has a fresh valid plausible reading → caller HOLDS state.
+bool hottestMotorTemp(float* hot) {
+  float h = -1000.0f;
+  bool any = false;
+  for (uint8_t i = 0; i < NUM_ESCS; i++) {
+    if (!telem[i].valid) continue;
+    float te = telem[i].escTempC;
+    float tm = telem[i].motorTempC;
+    if (te >= TEMP_PLAUS_MIN_C && te <= TEMP_PLAUS_MAX_C) {
+      if (te > h) h = te;
+      any = true;
+    }
+    if (tm >= TEMP_PLAUS_MIN_C && tm <= TEMP_PLAUS_MAX_C) {
+      if (tm > h) h = tm;
+      any = true;
+    }
+  }
+  if (any) *hot = h;
+  return any;
+}
+
+// One hysteresis stage with trip debounce: flips ON when temp stays >= onC for
+// TEMP_DEBOUNCE_MS; flips OFF immediately when temp < offC (the on/off gap makes
+// release chatter impossible, so release needs no debounce).
+void tempStageUpdate(bool* state, uint32_t* since, float temp,
+                     float onC, float offC, uint32_t nowMs) {
+  if (*state) {
+    if (temp < offC) {
+      *state = false;
+      *since = 0;
+    }
+  } else if (temp >= onC) {
+    if (*since == 0) *since = nowMs;
+    if (nowMs - *since >= TEMP_DEBOUNCE_MS) *state = true;
+  } else {
+    *since = 0;                      // dropped back before debounce elapsed
+  }
+}
+
+void thermalUpdate() {
+  float hot;
+  if (!hottestMotorTemp(&hot)) return;   // no fresh reading → hold every stage
+  uint32_t nowMs = millis();
+  bool wasCut = tempCutActive;
+  tempStageUpdate(&tempWarnActive, &tempWarnSinceMs, hot, TEMP_WARN_ON_C, TEMP_WARN_OFF_C, nowMs);
+  tempStageUpdate(&tempEcoActive,  &tempEcoSinceMs,  hot, TEMP_ECO_ON_C,  TEMP_ECO_OFF_C,  nowMs);
+  tempStageUpdate(&tempCutActive,  &tempCutSinceMs,  hot, TEMP_CUT_ON_C,  TEMP_CUT_OFF_C,  nowMs);
+  // Cooled back below the cut-release threshold → queue the one-shot "restored"
+  // flourish (4 quick beeps). The repeating cut alarm has already stopped because
+  // tempCutActive just went false.
+  if (wasCut && !tempCutActive) beepStart(BEEP_THERM_RESTORED, BEEP_THERM_RESTORED_LEN);
 }
 
 
@@ -1066,12 +1208,13 @@ int buildTelemJson(char *body, size_t cap) {
   uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
   int n = snprintf(body, cap,
     "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
-    "\"eco\":%d,\"cut\":%d,\"outL\":%d,\"outR\":%d,"
+    "\"eco\":%d,\"cut\":%d,\"hot\":%d,\"teco\":%d,\"tcut\":%d,\"outL\":%d,\"outR\":%d,"
     "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
     "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
     (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
     sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
     ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
+    tempWarnActive ? 1 : 0, tempEcoActive ? 1 : 0, tempCutActive ? 1 : 0,
     outL, outR,
     telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
     (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
@@ -1090,9 +1233,9 @@ int buildTelemJson(char *body, size_t cap) {
 // One-shot /data JSON. Header + body coalesced into a single write() so the
 // whole response is one modem round-trip (one bounded op this loop pass).
 void wifiSendData(WiFiClient &client) {
-  char body[360];
+  char body[400];
   int n = buildTelemJson(body, sizeof(body));
-  char buf[512];
+  char buf[560];
   int h = snprintf(buf, sizeof(buf),
     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
     "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: %d\r\n\r\n", n);
@@ -1293,7 +1436,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.14 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog + smooth pivot/headroom ===");
+    Serial.println("# === Digger V7.33 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + per-gear reverse cap (55% Eco/Normal, 65% Boost) + loop watchdog ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -1376,7 +1519,8 @@ void loop() {
   // Eco lock can override it. Stage 1 (~11 V) forces Eco; Stage 2 (10 V) cuts.
   batteryEcoLockUpdate();
   batteryCutoffUpdate();
-  updateGear();              // honors ecoLockLatched (forces Eco when set)
+  thermalUpdate();           // motor/ESC over-temp stages (#111) — sets Eco/cut flags
+  updateGear();              // honors ecoLockLatched + tempEcoActive (forces Eco when set)
   updateJoystick(now);
 
   // 2. Compute the drive mix (meaningful only when RC is valid).
@@ -1390,6 +1534,17 @@ void loop() {
     mix.left = SVC;  mix.right = SVC;
   }
 
+  // 2.5 ESC CALIBRATION MODE (#113, temporary) — bypass ALL mixing/caps/gear and
+  // send the raw throttle stick to the full ±100% range (1000/1500/2000 us) on
+  // BOTH tracks, so the GL10s learn the Arduino's true endpoints. Steering is
+  // ignored so both ESCs see identical full-range signals for a clean capture.
+  if (CALIBRATION_MODE && sbusValid) {
+    float thr = constrain((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
+    int pwm = SVC + (int)(thr * SOFT_RANGE);
+    mix.left = pwm;
+    mix.right = pwm;
+  }
+
   // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
   // battery is above the cutoff (latched in step 1.5). Otherwise command neutral
   // (GL10 decelerates smoothly) then cut PWM so the ESCs lose signal and beep.
@@ -1400,7 +1555,10 @@ void loop() {
   // reset wipes the RAM latch. Fail OPEN if telemetry never reports
   // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
   bool batteryReady = batteryOkConfirmed || (millis() - alertBootMs > BATTERY_CONFIRM_MS);
-  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched;
+  // Also cut on motor over-temp (#111). Unlike the battery cutoff this is NOT
+  // latched — when the motor cools below TEMP_CUT_OFF_C the gate re-opens and
+  // outputUpdate() re-attaches the ESCs automatically.
+  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched && !tempCutActive;
   outputUpdate(driveAllowed, mix.left, mix.right);
 
   // Control path serviced this pass (inputs read + output gate run) — and ONLY

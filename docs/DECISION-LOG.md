@@ -5,6 +5,33 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-03 — GL10 throttle endpoints RECALIBRATED; reverse cap now per-gear (#113)
+
+- **Root cause of reverse overshoot (field-observed):** the GL10s had been
+  throttle-calibrated while the firmware capped reverse at 65%, so each ESC
+  learned **65% PWM (1175 µs) as its 100% reverse endpoint**. A 65%-commanded
+  reverse therefore drove ~100% motor. Straight-line, no steering — NOT the
+  turn-headroom path. Confirmed by the operator.
+- **Fix:** flashed a temporary calibration build (`CALIBRATION_MODE=true`) that
+  passes the throttle stick straight to the full ±100% range (1000/1500/2000 µs)
+  on both tracks, all caps/gear/steering bypassed. Operator recalibrated both
+  ESCs (Option A, GL10-OPERATION §5) — **"lo, ro, do" ×4 success tone on both.**
+  ESCs now know the true 1000/1500/2000 endpoints.
+- **Decision:** reverse cap is now **per gear** via a single `reverseCap()` helper:
+  **55% Eco/Normal, 65% Boost**. These are TRUE percentages post-recalibration.
+- **Rule reinforced:** never lower the firmware reverse cap AND recalibrate at the
+  same time, or the ESC re-learns the capped value as 100%.
+
+## 2026-07-03 — Motor/ESC thermal cutoff is PROVISIONAL at 95 °C (#111)
+
+- Staged thermal ladder shipped (V7.31/V7.33): warn 80 / Eco 90 / hard cutoff 95 °C,
+  non-latching with hysteresis (rel 78/80/75), hottest-of-4 sensors, EMA + 1 s
+  debounce, telemetry-dropout holds state (never cuts).
+- **95 °C cutoff is PROVISIONAL** — must be bench-confirmed to sit *below* the
+  GL10's own internal thermal limit (param 17 is a temp-controlled fan; the ESC's
+  internal throttle/cutoff number is unpublished) so our warned graceful cut fires
+  before the ESC's silent one. Do not rely on 95 °C until verified on the bench.
+
 ## 2026-06-29 — Eco lock + PWM ease-out cutoff CONFIRMED working (#65)
 
 - Test build (eco 11.3 V / cutoff 11.1 V): worst-pack EMA ≤ 11.3 V for 15 s →
