@@ -196,6 +196,18 @@ const float REVERSE_CAP    = 0.65f;
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
+// ── ESC THROTTLE-CALIBRATION MODE (#113) ───────────────────────────────────
+// TEMPORARY. When true, the throttle stick passes STRAIGHT THROUGH to the full
+// ±100% PWM range (1000 / 1500 / 2000 us) on BOTH tracks — ALL caps, gear scaling
+// and steering are bypassed — so the GL10s can learn the Arduino's TRUE endpoints
+// (Option A, docs/GL10-OPERATION.md §5). Needed because the ESCs were previously
+// calibrated while the firmware capped reverse at 65%, so they mislearned 65% as
+// their 100% reverse endpoint (that is why 65%-commanded reverse drove ~100%).
+// After BOTH ESCs are recalibrated, set this back to false and reflash the normal
+// firmware (where REVERSE_CAP etc. become TRUE percentages again).
+// SAFETY: motors reach full power in this mode — tracks clear / wheels up.
+const bool CALIBRATION_MODE = true;
+
 // Gear scaling — RC CH4 selects the AVERAGE-speed cap. 3-position switch:
 //   LOW  → 65% average-speed cap  (training / tight spaces)
 //   MID  → 80% average-speed cap  (normal driving — the everyday gear)
@@ -1293,7 +1305,7 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.14 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + loop watchdog + smooth pivot/headroom ===");
+    Serial.println("# === Digger V7.32-CAL — ESC THROTTLE CALIBRATION BUILD — throttle passes through to FULL +/-100% (1000/1500/2000us), all caps/gear/steer BYPASSED (#113) ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
@@ -1388,6 +1400,17 @@ void loop() {
     mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
   } else {
     mix.left = SVC;  mix.right = SVC;
+  }
+
+  // 2.5 ESC CALIBRATION MODE (#113, temporary) — bypass ALL mixing/caps/gear and
+  // send the raw throttle stick to the full ±100% range (1000/1500/2000 us) on
+  // BOTH tracks, so the GL10s learn the Arduino's true endpoints. Steering is
+  // ignored so both ESCs see identical full-range signals for a clean capture.
+  if (CALIBRATION_MODE && sbusValid) {
+    float thr = constrain((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
+    int pwm = SVC + (int)(thr * SOFT_RANGE);
+    mix.left = pwm;
+    mix.right = pwm;
   }
 
   // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
