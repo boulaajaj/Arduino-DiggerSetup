@@ -59,7 +59,9 @@ sketches/dual_track_control/
     │       ├── SafetySupervisor.h/.cpp   (battery + thermal + RC freshness → decision)
     │       └── OutputGate.h/.cpp         (ACTIVE/HOLD/CUT state machine, ease-out ramp)
     │
-    ├── ports/                    ← tiny headers; domain-side contracts for hardware
+    ├── ports/                    ← tiny headers; hardware contracts consumed by
+    │                               application/ — they speak domain types, but
+    │                               domain/ itself never includes them
     │   ├── ClockPort.h           (now µs/ms)
     │   ├── RcInputPort.h         (channels + freshness)
     │   ├── JoystickPort.h        (raw ADC pair)

@@ -634,10 +634,10 @@ Permanent cure remains #55 (offload Wi-Fi to the ESP32-S3). Diagnostic method
 ## 2026-07-05 — Adopt domain-oriented target architecture (epic #116, ADR-0001)
 
 Decided: migrate the production firmware to a layered, domain-oriented
-structure under `sketches/dual_track_control/src/` — `application/` /
-`domain/` (drive, operator_input, battery, thermal, safety) / `ports/` /
-`infrastructure/` (arduino, radiolink, xc, network) / `telemetry/` / `alerts/`
-/ `config/` / `generated/`. Full spec: `docs/architecture/ARCHITECTURE-TARGET.md`.
+structure under `sketches/dual_track_control/src/` with these layers:
+`application/`, `domain/` (drive, operator_input, battery, thermal, safety),
+`ports/`, `infrastructure/` (arduino, radiolink, xc, network), `telemetry/`,
+`alerts/`, `config/`, `generated/`. Full spec: `docs/architecture/ARCHITECTURE-TARGET.md`.
 Key rules: pure domain (no Arduino includes, no mutable namespace-scope state,
 time as parameter), one owner per state, ports with link-time substitution
 (virtuals only for genuine runtime swapping), observers read an immutable
@@ -664,4 +664,5 @@ bench tests. Every refactor PR must (a) compile locally via arduino-cli before
 push, (b) preserve behavior via characterization/host tests (#47), (c) change
 no control-path behavior. Physical checks accumulate in
 `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`; one bench pass runs the
-whole checklist when hardware returns, then is logged in FIRMWARE-UPLOAD-LOG.
+whole checklist when hardware returns, then is logged in
+`docs/FIRMWARE-UPLOAD-LOG.md`.
