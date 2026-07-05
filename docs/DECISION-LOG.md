@@ -630,3 +630,38 @@ reconnect can be accepted. Add a stale-SSE guard (no successful write for ~3 s �
 stop) and, as a fallback only if testing still shows wedges, a server/AP recycle.
 Permanent cure remains #55 (offload Wi-Fi to the ESP32-S3). Diagnostic method
 (serial `clients_seq` watch) is reusable for verification.
+
+## 2026-07-05 — Adopt domain-oriented target architecture (epic #116, ADR-0001)
+
+Decided: migrate the production firmware to a layered, domain-oriented
+structure under `sketches/dual_track_control/src/` — `application/` /
+`domain/` (drive, operator_input, battery, thermal, safety) / `ports/` /
+`infrastructure/` (arduino, radiolink, xc, network) / `telemetry/` / `alerts/`
+/ `config/` / `generated/`. Full spec: `docs/architecture/ARCHITECTURE-TARGET.md`.
+Key rules: pure domain (no Arduino includes, no mutable namespace-scope state,
+time as parameter), one owner per state, ports with link-time substitution
+(virtuals only for genuine runtime swapping), observers read an immutable
+per-cycle SystemSnapshot. File policy ≤150 lines soft / 250 hard, generic
+names (Utils/Helpers/Manager/…) banned. CI fitness functions (#129) will
+enforce. Rationale + rejected alternatives: ADR-0001.
+
+Compile feasibility PROVEN before adoption: spike sketch with nested
+`src/{application,domain,ports,infrastructure}` compiled clean on
+`arduino:renesas_uno:unor4wifi` (arduino-cli 1.4.1), domain file with zero
+Arduino includes. Arduino sketch spec compiles `src/` recursively.
+
+## 2026-07-05 — Production sketch to be renamed rc_test → dual_track_control (#118)
+
+Operator-chosen name; reflects that the firmware is a generic dual-track/tank
+drive controller (no hydraulics/attachment control). Directory stays
+lowercase_snake_case per structure-check CI; PascalCase reserved for C++ type
+names inside src/.
+
+## 2026-07-05 — Refactor verification strategy while hardware is unavailable
+
+No machine access for the duration of the #116 remediation: no flashing, no
+bench tests. Every refactor PR must (a) compile locally via arduino-cli before
+push, (b) preserve behavior via characterization/host tests (#47), (c) change
+no control-path behavior. Physical checks accumulate in
+`docs/architecture/BENCH-VERIFICATION-DEFERRED.md`; one bench pass runs the
+whole checklist when hardware returns, then is logged in FIRMWARE-UPLOAD-LOG.
