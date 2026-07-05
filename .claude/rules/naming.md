@@ -24,6 +24,21 @@ every identifier** — types, functions, variables, files, folders.
    naming — keep them short and document the mapping next to the encoder.
 5. **`config`** as the conventional name for the tunables layer.
 
+## White-label rule — branding is data, not code
+
+This platform is generic: it must be buildable for any vehicle, any rider, any
+slogan. Therefore:
+
+- **No person or brand names** in code identifiers, file/folder names, issue
+  and board titles, or architecture documents. "Malaki SuperTracks" is one
+  *skin* of the dashboard, not the platform's name — the platform is
+  Dual Track Control.
+- Product branding (display name, subtitle/slogan, logo/badge, accent colors)
+  lives in **one configuration block** in the dashboard source so it can be
+  swapped without touching logic (issue #136).
+- People's names are fine where they document reality (operator guide, wiring
+  history, decision log) — that is documentation, not branding.
+
 ## Why identifier length is free (and where brevity actually matters)
 
 Identifiers are compile-time only — they cost zero flash and zero RAM in the
