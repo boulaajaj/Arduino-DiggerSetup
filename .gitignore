@@ -28,3 +28,4 @@ node_modules/
 
 # Screenshot artifacts
 .shots/
+.claude/settings.local.json
