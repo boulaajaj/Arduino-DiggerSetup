@@ -42,6 +42,11 @@
             "type": "command",
             "command": "cat <<'HOOK_EOF'\n[DECISION-LOG WRITE GUARD]\nThis fires after EVERY Write/Edit — act ONLY if the target file is docs/DECISION-LOG.md (otherwise do nothing). If writing to the decision log, verify:\n1. Every line contains ONLY technical facts (circuit, firmware, protocol, hardware)\n2. NO personal information, names (except component/product names), email addresses, or conversation tone\n3. NO subjective commentary — only what was built, tested, measured, or decided\n4. Entries are dated and terse (one line per fact when possible)\nIf any line fails these checks, remove it before writing.\nHOOK_EOF",
             "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "cat <<'HOOK_EOF'\n[GENERATED-FILE GUARD]\nThis fires after EVERY Write/Edit — act ONLY if the target file is web_page.h or lives under a src/generated/ directory (otherwise do nothing and say nothing).\n- web_page.h (until issue #120's generator lands): a hand-edit is allowed ONLY if the same PR applies the identical change to dashboard/index.html — verify the mirror is in sync before finishing the task, and say so explicitly.\n- src/generated/** (after #120): hand-edits are FORBIDDEN. Revert the edit, change the source (dashboard/index.html) instead, and regenerate.\nHOOK_EOF",
+            "timeout": 5000
           }
         ]
       }

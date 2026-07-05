@@ -68,13 +68,15 @@ jobs:
             fi
           done < <(find . -name '*.py' -not -path './.git/*' -not -path './node_modules/*')
 
-          # Check: .md files only in root, docs/ (any depth), or .github/ (any depth)
+          # Check: .md files only in root, docs/ (any depth), .github/ (any depth),
+          # or .claude/ (any depth — agent rules/skills live there, issue #134)
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
             if [ "$dir" != "." ] &&
                [ "$dir" != "docs" ] && [[ "$dir" != docs/* ]] &&
-               [ "$dir" != ".github" ] && [[ "$dir" != .github/* ]]; then
+               [ "$dir" != ".github" ] && [[ "$dir" != .github/* ]] &&
+               [ "$dir" != ".claude" ] && [[ "$dir" != .claude/* ]]; then
               echo "ERROR: Markdown file in unexpected location: $f"
               errors=$((errors + 1))
             fi
