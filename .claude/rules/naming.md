@@ -11,7 +11,7 @@ every identifier** — types, functions, variables, files, folders.
 
 ## Permitted exceptions (closed list — extending it requires operator sign-off)
 
-1. **Universal domain acronyms**, uppercase per convention: `PWM`, `ADC`,
+1. **Universal domain acronyms**, cased per each term's own convention: `PWM`, `ADC`,
    `ESC`, `RC`, `RPM`, `SBUS`, `XBUS`, `JSON`, `HTTP`, `SSE`, `CSV`, `URL`,
    `ID`, `WiFi`, `LiPo`, `AP`, `WDT`. These are clearer than their expansions
    (`pulseWidthModulation` self-documents worse than `PWM`).
