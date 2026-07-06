@@ -16,7 +16,7 @@ echo "$staged" | grep -qE '^(sketches/|tests/|\.github/workflows/unit-tests\.yml
 # changes must update the characterization suite in the same commit. For a
 # genuinely test-neutral change (comments, debug text), re-run with:
 #     DIGGER_NO_TEST_CHANGE=1 git commit ...   (and say why in the PR)
-if [ "$firmware_changed" = 1 ] && [ "$tests_changed" = 0 ] && [ -z "$DIGGER_NO_TEST_CHANGE" ]; then
+if [ "$firmware_changed" = 1 ] && [ "$tests_changed" = 0 ] && [ "$DIGGER_NO_TEST_CHANGE" != "1" ]; then
   echo "COMMIT BLOCKED (#47 gate): sketches/rc_test/ is staged but tests/ is not." >&2
   echo "Update the characterization tests with the behavior change, or for a"    >&2
   echo "test-neutral edit re-run with DIGGER_NO_TEST_CHANGE=1."                   >&2

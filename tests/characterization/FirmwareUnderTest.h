@@ -41,7 +41,10 @@ inline void resetFirmwareState() {
   cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};
   cachedJoyCmd = {0.0f, 0.0f};
   lastAdcTime = 0;
-  // [OUTPUT]
+  // [OUTPUT] — fresh Servo objects too: a stale pin binding from a previous
+  // test case would otherwise let outputWrite() log into the cleared capture.
+  escL = Servo{};
+  escR = Servo{};
   outL = SVC;
   outR = SVC;
   outState = OUT_ACTIVE;
@@ -84,6 +87,8 @@ inline void resetFirmwareState() {
   tempEcoSinceMs = 0;
   tempCutSinceMs = 0;
   // [WIFI]
+  sseClient = WiFiClient{};
+  pageClient = WiFiClient{};
   wifiUp = false;
   wifiSeq = 0;
   snprintf(pageEtag, sizeof(pageEtag), "\"d0\"");

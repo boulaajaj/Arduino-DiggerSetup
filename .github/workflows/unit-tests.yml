@@ -18,5 +18,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # read-only job — no push, no token needed
       - name: Build and run host characterization suite
         run: make -C tests run
