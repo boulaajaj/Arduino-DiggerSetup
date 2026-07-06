@@ -5,6 +5,42 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-06 — Safety-invariant + fault-injection suite; two firmware gaps found and locked (#131)
+
+- **Suite:** `tests/invariants/` — 6 property suites (35 test cases, ~800
+  assertions) on the #47 harness, one binary per file, auto-discovered by the
+  extended `tests/Makefile`. `InvariantChecks.h` provides the reusable
+  checker: `runControlPasses()` drives the real `loop()` and re-checks the
+  universal invariants (`checkInvariantsNow()`) after EVERY pass.
+- **Registry decision:** invariants listed verbatim in **`docs/SAFETY.md`**
+  (the #131 acceptance's first-named option) — survives the
+  `rc_test → dual_track_control` rename; ARCHITECTURE-TARGET §11 and the
+  future #126 `docs/ARCHITECTURE.md` link to it instead of duplicating.
+  #69 (Wi-Fi stall runaway) recorded there as the motivating incident.
+- **Verified invariants (all hold):** outputs within [1000, 2000] µs for any
+  input incl. NaN/Inf (double constrain — the int-domain clamp stops even
+  non-finite floats); stale/failsafe RC ⇒ neutral in every override mode with
+  the joystick railed; cutoff latch ⇒ monotone ramp to SVC within 500 ms then
+  detach, permanent through voltage recovery; boot with 9.5 V packs never
+  emits one non-neutral pulse (1.5 s cutoff debounce beats the 3 s fail-open);
+  thermal derating monotone (2000 → 2000 → 1825 → cut) with dropout holding
+  the active stage; sub-debounce voltage/temperature spikes rejected with
+  timer reset; gear/reverse caps hold on the AVERAGE track command across a
+  675-combination sweep.
+- **Gap 1 (locked, not fixed): NaN pack voltage** passes the [6, 13] V
+  plausibility band (NaN comparisons all false); `worstPackVoltage()`'s
+  ternary makes it slot-asymmetric — slot-1 NaN freezes the ladder, slot-0
+  NaN is masked by the healthy pack and can set `batteryOkConfirmed`.
+  Unreachable via the uint16 X.BUS parse path today. Temperature path immune.
+- **Gap 2 (locked, not fixed): reverse-cap transient on gear upshift** — full
+  reverse joystick held through Eco/Normal→Boost keeps the stale Eco-domain
+  clamp (−0.846) for ≤ one 10 ms joystick-cache window: ~1077 µs average vs
+  the 1175 µs Boost floor for 1–5 passes. RC path re-clamps every pass;
+  joystick cache does not.
+- Both gaps documented in `docs/SAFETY.md` known-gaps; follow-up hardening
+  issues drafted (operator to file); fixes are behavior changes requiring
+  their own issues + updated test expectations.
+
 ## 2026-07-03 — Pivot-branch throttle taper CONFIRMED working (#114, V7.34)
 
 - **Problem (field-observed):** feeding 10–20% throttle while steering shifted

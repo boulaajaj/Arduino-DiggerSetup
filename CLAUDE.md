@@ -239,6 +239,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 - [x] V7.14: smooth pivot↔drive blend + Eco/Normal turn headroom + gear step-up + joystick gain (#72)
 - [x] Field test at reduced power
 - [x] Host characterization suite + commit test gate (#47 — epic #116 Phase B)
+- [x] Safety invariants + fault-injection suite, docs/SAFETY.md registry (#131 — epic #116 Phase B)
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
 - [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
@@ -264,8 +265,9 @@ docs/XBUS-PROTOCOL.md                    — XC X.BUS protocol reference (used b
 docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
 docs/MISSION.md                          — Project design philosophy (smoothness above all)
 docs/DECISION-LOG.md                     — Technical decision log
-docs/TESTING.md                          — Host characterization suite + commit gate (#47)
-tests/                                   — Host test harness: stub Arduino env + doctest suites
+docs/TESTING.md                          — Host characterization + invariants suites + commit gate (#47, #131)
+docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
+tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/)
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor
