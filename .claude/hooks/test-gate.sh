@@ -15,8 +15,12 @@ case "$input" in
   *) exit 0 ;;                       # not a commit — stay out of the way
 esac
 
+# Match -n mid-command, at end-of-command inside the JSON (` -n"`), and at
+# end-of-input (bare command). Best-effort defense-in-depth: the primary
+# control is the workflow rule (agents never bypass hooks) + the pre-commit
+# hook itself.
 case "$input" in
-  *--no-verify*|*" -n "*)
+  *--no-verify*|*" -n "*|*' -n"'*|*" -n")
     echo "Blocked (#47 gate): --no-verify is not available to agents." >&2
     echo "Fix the failing tests (or the missing test update) instead." >&2
     exit 2

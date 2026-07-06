@@ -21,7 +21,7 @@ tests/
 │   ├── WiFiS3.h                inert AP/server/client + modem stub
 │   ├── WDT.h                   counts refresh() calls
 │   ├── sbus.h                  scripted S.BUS frames (bfs::SbusRx/SbusData)
-│   └── StubState.h             one reset + scripting surface for all stubs
+│   └── SerialPortStub.h        Serial/Serial1/UART fakes — scripted RX, captured TX
 └── characterization/
     ├── FirmwareUnderTest.h     includes the REAL rc_test.ino + firmware state reset
     └── test_*.cpp              one focused suite per behavior area
@@ -29,9 +29,11 @@ tests/
 
 The stub headers shadow the real Arduino/library headers via include order
 (`-I tests/stubs` first), so `#include <Arduino.h>` inside the sketch resolves
-to the fake. Tests then script inputs (S.BUS frames, ADC values, telemetry
-voltages, the clock) and assert on captured outputs (servo microseconds, pin
-states, alarm patterns).
+to the fake. Each stub owns its scripting state and reset (all under
+`namespace stub`); `resetHarness()` in `FirmwareUnderTest.h` resets every stub
+plus the firmware globals. Tests then script inputs (S.BUS frames, ADC values,
+telemetry voltages, the clock) and assert on captured outputs (servo
+microseconds, pin states, alarm patterns).
 
 Because tests live in the same translation unit as the firmware, they can read
 every internal (including `const` globals) — that is deliberate: this is a
