@@ -5,6 +5,9 @@
 - **Starting work = draft PR.** Branch `agent/<role-tag>/<description>`, one
   PR ↔ one issue, body contains `Closes #N` + summary + role tag + test plan.
   Active work must show In Progress on Project #1.
+- **One open PR at a time** (operator rule, 2026-07-05). Do not start the next
+  work item until the current PR is merged or closed — no parallel PRs, no
+  merge-order dependencies to keep track of.
 - **Behavior-preserving refactors only** during epic #116 Phase D: no logic
   changes mixed into structural PRs; characterization tests green before and
   after; local `arduino-cli` compile before every push.
