@@ -10,7 +10,7 @@ TEST_CASE("maxOppose: stronger same-direction input wins, opposing subtract") {
   CHECK(maxOppose(1.0f, -0.3f) == doctest::Approx(0.7f));   // dominant minus opposing
   CHECK(maxOppose(0.5f, 0.0f) == doctest::Approx(0.5f));    // single input at full value
   CHECK(maxOppose(0.0f, -0.4f) == doctest::Approx(-0.4f));
-  CHECK(maxOppose(-0.6f, -0.2f) == doctest::Approx(-0.6f)); // both reverse: larger wins
+  CHECK(maxOppose(-0.6f, -0.2f) == doctest::Approx(-0.6f));  // both reverse: larger wins
   CHECK(maxOppose(0.5f, -0.5f) == doctest::Approx(0.0f));   // exact opposition cancels
 }
 
@@ -44,7 +44,7 @@ TEST_CASE("Mode 3 (override > 1600): max/oppose blend per axis") {
   DriveCommand joy{0.3f, 0.5f};
   DriveCommand out = mixCommands(rc, 2000, joy);
   CHECK(out.xSpeed == doctest::Approx(0.6f));    // same direction: larger wins
-  CHECK(out.zRotation == doctest::Approx(0.0f)); // opposition cancels
+  CHECK(out.zRotation == doctest::Approx(0.0f));  // opposition cancels
 }
 
 TEST_CASE("Mode boundaries: exactly 1400 and 1600 fall into Mode 2") {
