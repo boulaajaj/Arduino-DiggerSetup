@@ -16,7 +16,10 @@ jobs:
       - name: Install cpplint
         run: pip install cpplint
       - name: Run cpplint
-        run: find . -name '*.ino' -o -name '*.cpp' -o -name '*.h' | xargs cpplint
+        # tests/vendor is vendored third-party code (doctest) — not ours to lint.
+        run: |
+          find . \( -name '*.ino' -o -name '*.cpp' -o -name '*.h' \) \
+            -not -path './tests/vendor/*' | xargs cpplint
 
   markdownlint:
     runs-on: ubuntu-latest

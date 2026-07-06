@@ -16,8 +16,12 @@ jobs:
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
       - name: Run cppcheck
+        # tests/ is host-side doctest code; the macro-heavy framework confuses
+        # cppcheck's parser. That tree's quality gate is the unit-tests job
+        # itself (the suite must build and run green). Firmware stays covered.
         run: |
-          find . -name '*.ino' -o -name '*.cpp' -o -name '*.h' | \
+          find . \( -name '*.ino' -o -name '*.cpp' -o -name '*.h' \) \
+            -not -path './tests/*' | \
           xargs cppcheck \
             --enable=warning,style,performance,portability \
             --suppress=missingIncludeSystem \

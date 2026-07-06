@@ -1,0 +1,22 @@
+name: Unit Tests
+
+# Host characterization suite (#47, epic #116 Phase B). Compiles the REAL
+# rc_test.ino inside the stub Arduino environment (tests/stubs) and runs
+# every doctest suite. This is the behavior-parity gate for all Phase D
+# refactor PRs — required status check for merging.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run host characterization suite
+        run: make -C tests run

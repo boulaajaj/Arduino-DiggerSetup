@@ -51,6 +51,7 @@ review otherwise — see the PR checklist in the workflow rules).
 | `test_battery_ladder` | plausibility gating, worst-of-two, Eco-lock 10.8 V/15 s, cutoff 10.0 V/1.5 s latch + alarm assertion, boot gate + fail-open (#65) |
 | `test_thermal_stages` | 80/90/95 °C stages, hysteresis releases, 1 s trip debounce, telemetry-dropout hold, restored flourish (#111) |
 | `test_output_gate` | ACTIVE→HOLD ease-out ramp→CUT detach, RC-loss auto-recovery, cutoff latch (#88) |
+| `test_alerts` | horn OR-ing, one-shot patterns, alarm priority ladder, inactivity 60 s, low-V debounce/latch + startup grace (#51/#68) |
 | `test_telemetry_parse` | X.BUS checksum, 0x10 response parsing, register scaling, EMA weights, per-ESC staleness watchdog |
 | `test_control_loop` | end-to-end `setup()`+`loop()`: scripted S.BUS → servo µs, failsafe to neutral, exactly one `WDT.refresh()` per pass |
 
@@ -72,19 +73,33 @@ On this project's Windows dev machine the suite runs through WSL:
 
 ## Commit gate (hard block)
 
-Two layers, per issue #47:
+Three layers, per issue #47:
 
-1. **`.githooks/pre-commit`** — native git hook: runs the suite (plus a
-   "firmware changed but no test changed" guard) before every commit.
-   Activate once per clone: `git config core.hooksPath .githooks`.
+1. **`.githooks/pre-commit`** — native git hook, the primary gate for EVERY
+   commit (agent or human): runs the suite whenever firmware/tests/workflow
+   files are staged, plus the firmware-without-tests guard below. Activate
+   once per clone: `git config core.hooksPath .githooks`.
    Emergency human bypass: `git commit --no-verify` (document why in the PR).
-2. **`.claude/hooks/test-gate.sh`** — Claude Code `PreToolUse` hook: the same
-   gate for agent-made commits, plus it refuses `--no-verify` outright —
-   agents never bypass the gate.
+2. **`.claude/hooks/test-gate.sh`** — Claude Code `PreToolUse[Bash]` hook
+   that makes layer 1 agent-proof: it refuses `--no-verify` outright and
+   blocks commits in a clone where `core.hooksPath` was never activated.
+   Wire it in `.claude/settings.json`:
+
+   ```json
+   "PreToolUse": [
+     {
+       "matcher": "Bash",
+       "hooks": [
+         { "type": "command", "command": "bash .claude/hooks/test-gate.sh", "timeout": 30000 }
+       ]
+     }
+   ]
+   ```
+
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.
 
 The firmware-without-tests guard blocks a commit that stages changes under
-`sketches/rc_test/` without staging any change under `tests/`. If the firmware
-change genuinely needs no test update (comment-only, string tweak), add
-`[no-test-change]` to the commit message and say why in the PR.
+`sketches/rc_test/` without staging any change under `tests/`. If the
+firmware change genuinely needs no test update (comment-only, debug text),
+re-run as `DIGGER_NO_TEST_CHANGE=1 git commit ...` and say why in the PR.
