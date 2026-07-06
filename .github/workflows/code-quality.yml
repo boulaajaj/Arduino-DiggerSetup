@@ -26,7 +26,8 @@ jobs:
           find . -name '*.ino' -not -path './.git/*' | while read f; do
             cp "$f" "${f%.ino}.cpp.tmp"
           done
-          find . \( -name '*.cpp' -o -name '*.h' -o -name '*.cpp.tmp' \) -not -path './.git/*' | \
+          find . \( -name '*.cpp' -o -name '*.h' -o -name '*.cpp.tmp' \) -not -path './.git/*' \
+            -not -path './tests/vendor/*' | \
             xargs lizard -C 10 -L 50 -a 6 -w || true
           # Clean up temp files
           find . -name '*.cpp.tmp' -delete

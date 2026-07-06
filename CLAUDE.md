@@ -238,6 +238,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 - [x] V7.13: loop watchdog + incremental Wi-Fi serving (#69)
 - [x] V7.14: smooth pivot↔drive blend + Eco/Normal turn headroom + gear step-up + joystick gain (#72)
 - [x] Field test at reduced power
+- [x] Host characterization suite + commit test gate (#47 — epic #116 Phase B)
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
 - [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
@@ -263,6 +264,9 @@ docs/XBUS-PROTOCOL.md                    — XC X.BUS protocol reference (used b
 docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
 docs/MISSION.md                          — Project design philosophy (smoothness above all)
 docs/DECISION-LOG.md                     — Technical decision log
+docs/TESTING.md                          — Host characterization suite + commit gate (#47)
+tests/                                   — Host test harness: stub Arduino env + doctest suites
+.githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor
 ```
@@ -285,6 +289,19 @@ monitor.py                               — Simple serial monitor
 - Structs go in `types.h` (solves Arduino auto-prototype limitation)
 - All tunable constants go in the `[CONFIG]` section — no magic numbers in code
 - When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
+
+### Testing (#47 — details in docs/TESTING.md)
+
+- The host characterization suite (`make -C tests run`, WSL/Linux) is the
+  behavior-parity gate for every firmware-touching PR. It compiles the REAL
+  `rc_test.ino` — keep it green before and after any change.
+- Commits are hard-blocked by `.githooks/pre-commit`: red tests block, and a
+  `sketches/rc_test/` change without a `tests/` change blocks
+  (`DIGGER_NO_TEST_CHANGE=1` for genuinely test-neutral edits).
+- A changed test EXPECTATION is a behavior change, not a refactor — needs its
+  own issue + operator sign-off.
+- New mutable firmware global ⇒ add it to `resetFirmwareState()` in
+  `tests/characterization/FirmwareUnderTest.h`.
 
 ### Real-Time Safety
 

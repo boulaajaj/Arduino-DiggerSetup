@@ -11,6 +11,10 @@
 - **Behavior-preserving refactors only** during epic #116 Phase D: no logic
   changes mixed into structural PRs; characterization tests green before and
   after; local `arduino-cli` compile before every push.
+- **Commit test gate (#47)**: `.githooks/pre-commit` hard-blocks commits when
+  the host suite (`make -C tests run`) is red or when `sketches/rc_test/`
+  changes without a `tests/` change. Agents never use `--no-verify` — fix the
+  tests instead. Details: `docs/TESTING.md`.
 - **Decisions get logged** in `docs/DECISION-LOG.md` as they are made (terse:
   date, what, why). Physical checks we cannot run (no hardware) go to
   `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.

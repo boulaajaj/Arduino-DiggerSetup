@@ -1,0 +1,41 @@
+#!/bin/sh
+# Commit-time test gate (#47, epic #116 Phase B) — HARD BLOCK, per the
+# 2026-06-01 decision on issue #47. Activate once per clone:
+#     git config core.hooksPath .githooks
+# Human emergency bypass: git commit --no-verify (explain why in the PR).
+# Agents cannot bypass: .claude/hooks/test-gate.sh refuses --no-verify.
+
+staged=$(git diff --cached --name-only)
+
+echo "$staged" | grep -q '^sketches/rc_test/'  && firmware_changed=1 || firmware_changed=0
+echo "$staged" | grep -q '^tests/'             && tests_changed=1    || tests_changed=0
+echo "$staged" | grep -qE '^(sketches/|tests/|\.github/workflows/unit-tests\.yml)' \
+  && suite_run_needed=1 || suite_run_needed=0
+
+# Gate 1 — production firmware changed without any test change. Behavior
+# changes must update the characterization suite in the same commit. For a
+# genuinely test-neutral change (comments, debug text), re-run with:
+#     DIGGER_NO_TEST_CHANGE=1 git commit ...   (and say why in the PR)
+if [ "$firmware_changed" = 1 ] && [ "$tests_changed" = 0 ] && [ "$DIGGER_NO_TEST_CHANGE" != "1" ]; then
+  echo "COMMIT BLOCKED (#47 gate): sketches/rc_test/ is staged but tests/ is not." >&2
+  echo "Update the characterization tests with the behavior change, or for a"    >&2
+  echo "test-neutral edit re-run with DIGGER_NO_TEST_CHANGE=1."                   >&2
+  exit 1
+fi
+
+# Gate 2 — the host suite must be green whenever firmware, tests, or the
+# test workflow are staged. Docs-only commits skip this and stay fast.
+if [ "$suite_run_needed" = 1 ]; then
+  if command -v g++ >/dev/null 2>&1 && command -v make >/dev/null 2>&1; then
+    make -C tests run || { echo "COMMIT BLOCKED (#47 gate): host test suite is red." >&2; exit 1; }
+  elif command -v wsl.exe >/dev/null 2>&1; then
+    wsl.exe -e make -C tests run || { echo "COMMIT BLOCKED (#47 gate): host test suite is red (WSL)." >&2; exit 1; }
+  else
+    echo "COMMIT BLOCKED (#47 gate): no host toolchain found to run tests/." >&2
+    echo "Install g++ + make (or WSL on Windows). CI would still gate the merge," >&2
+    echo "but the whole point of this hook is catching it before the push."      >&2
+    exit 1
+  fi
+fi
+
+exit 0

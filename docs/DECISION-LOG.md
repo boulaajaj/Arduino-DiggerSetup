@@ -666,3 +666,38 @@ no control-path behavior. Physical checks accumulate in
 `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`; one bench pass runs the
 whole checklist when hardware returns, then is logged in
 `docs/FIRMWARE-UPLOAD-LOG.md`.
+
+## 2026-07-05 — Characterization harness compiles the real .ino with stub headers (#47)
+
+Phase B safety net built as a host test suite (`tests/`): stub
+Arduino/Servo/WiFiS3/WDT/sbus headers shadow the real ones via include order,
+and each doctest binary `#include`s the unmodified `rc_test.ino` — zero
+firmware changes, so V7.34 behavior is captured exactly as flashed. 9 suites /
+59 cases / 751 assertions lock in curvature mixing (#72/#86/#96/#114), input
+shaping, gear/reverse caps (#113), max/oppose mixer (#90), battery ladder
+(#65), thermal stages (#111), output gate (#88), X.BUS parsing, and the
+end-to-end loop (incl. exactly one WDT refresh per pass). Framework: doctest
+2.4.12 vendored at `tests/vendor/` (lint-exempt). Verified the suite can fail
+(mutation check). Test expectations are behavior law: changing one requires an
+issue + operator sign-off.
+
+Firmware behavior facts confirmed on the host while characterizing (all
+consistent with field behavior, none changed): `telemTryParse` does not verify
+the response checksum (header/address/function/length only); integer servo
+conversion truncates toward zero (±235.625 µs → 1735/1265 symmetric);
+boot-gate fail-open verified at exactly BATTERY_CONFIRM_MS with silent
+X.BUS.
+
+## 2026-07-05 — Commit-time test gate: hard block at three layers (#47)
+
+Per the 2026-06-01 decision (hard block, no soft warnings): (1)
+`.githooks/pre-commit` runs the host suite whenever firmware/tests/workflow
+files are staged + blocks firmware-without-tests commits
+(`DIGGER_NO_TEST_CHANGE=1` escape for test-neutral edits; `--no-verify` is the
+human emergency bypass); (2) `.claude/hooks/test-gate.sh` (PreToolUse[Bash])
+makes it agent-proof — refuses `--no-verify` and unactivated `core.hooksPath`;
+(3) CI `unit-tests` job (ubuntu, `make -C tests run`) as required status
+check. Local runner on the Windows dev box is WSL Ubuntu g++ 11.4 (no native
+toolchain). tests/vendor excluded from cpplint/lizard; tests/ excluded from
+cppcheck (doctest macros defeat its parser — the unit-tests job gates that
+tree).
