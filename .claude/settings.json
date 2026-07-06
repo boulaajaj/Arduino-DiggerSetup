@@ -45,7 +45,7 @@
           },
           {
             "type": "command",
-            "command": "cat <<'HOOK_EOF'\n[GENERATED-FILE GUARD]\nThis fires after EVERY Write/Edit — act ONLY if the target file is web_page.h or lives under a src/generated/ directory (otherwise do nothing and say nothing).\n- web_page.h (until issue #120's generator lands): a hand-edit is allowed ONLY if the same PR applies the identical change to dashboard/index.html — verify the mirror is in sync before finishing the task, and say so explicitly.\n- src/generated/** (after #120): hand-edits are FORBIDDEN. Revert the edit, change the source (dashboard/index.html) instead, and regenerate.\nHOOK_EOF",
+            "command": "cat <<'HOOK_EOF'\n[GENERATED-FILE GUARD]\nThis fires after EVERY Write/Edit — act ONLY if the target file's path ends with web_page.h (any location, e.g. sketches/rc_test/web_page.h) or contains a src/generated/ directory segment (otherwise do nothing and say nothing).\n- web_page.h (until issue #120's generator lands): a hand-edit is allowed ONLY if the same PR applies the identical change to dashboard/index.html — verify the mirror is in sync before finishing the task, and say so explicitly.\n- src/generated/** (after #120): hand-edits are FORBIDDEN. Revert the edit, change the source (dashboard/index.html) instead, and regenerate.\nHOOK_EOF",
             "timeout": 5000
           }
         ]
