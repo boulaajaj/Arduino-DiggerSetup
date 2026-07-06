@@ -269,6 +269,16 @@ monitor.py                               — Simple serial monitor
 
 ## Coding Rules
 
+> **Rule system (epic #116):** detailed, path-scoped rules live in
+> `.claude/rules/` (architecture, naming, state ownership, real-time firmware,
+> dashboard, workflow) and the canonical architecture spec is
+> `docs/architecture/ARCHITECTURE-TARGET.md` (+ ADRs in
+> `docs/architecture/adr/`). Those files win over the summaries below; this
+> section stays as the quick reference. While the epic #116 migration runs:
+> refactors are behavior-preserving, compile locally before every push, and
+> no hardware is available — physical checks go to
+> `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.
+
 ### Architecture
 
 - All code in `rc_test.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
