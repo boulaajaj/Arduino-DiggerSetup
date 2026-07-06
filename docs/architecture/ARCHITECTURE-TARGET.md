@@ -105,11 +105,18 @@ subfolders plus `characterization/` and `invariants/`.
 | --- | --- | --- |
 | `domain/` | other `domain/` headers, `config/` | `Arduino.h`, `WiFiS3.h`, `Servo.h`, SBUS lib, X.BUS/GL10 code, `ports/`, `infrastructure/`, `application/` |
 | `ports/` | plain types from `domain/` | any hardware library |
-| `application/` | `domain/`, `ports/`, `telemetry/`, `alerts/`, `config/` | `infrastructure/` internals (talks through ports) |
+| `application/` (incl. its observer submodules `telemetry/`, `alerts/`) | `domain/`, `ports/`, `config/` | `infrastructure/` internals (talks through ports) |
 | `infrastructure/` | `ports/`, hardware libraries, `config/` | `domain/` internals (plain types via ports only), `application/` |
-| `telemetry/`, `alerts/` | `application/SystemSnapshot.h`, `domain/` types, `config/` | hardware libraries, domain *internals* (mutable state) |
+| `telemetry/`, `alerts/` (observer ring of the application layer) | `application/SystemSnapshot.h` ONLY from application/, plus `domain/` types, `config/` | hardware libraries, any other `application/` header, domain *internals* (mutable state) |
 | `generated/` | — | hand edits |
 | `.ino` | `application/` only | everything else |
+
+`telemetry/` and `alerts/` are part of the **application layer** (its observer
+ring), not a separate layer — so application orchestration calling them is
+within-layer, not a cross-layer cycle. At file level the graph stays acyclic:
+`SystemSnapshot.h` includes nothing from `telemetry/` or `alerts/`, and those
+folders may include no `application/` header except `SystemSnapshot.h`. The
+fitness checks (#129) enforce exactly that file-level rule.
 
 Three non-negotiables, enforced by #129:
 
