@@ -62,8 +62,11 @@ stops PWM is physical behavior — tracked in
 Both gaps below are **locked as current behavior** by `// #131 FINDING:` test
 cases; fixing either is a behavior change requiring its own issue + operator
 sign-off (behavior-preserving constraint during epic #116). Follow-up
-hardening issues are drafted in PR #138's description, pending operator
-filing.
+hardening issues are pending operator filing; until then the full drafts live
+in the appendix of the PR that introduced this registry
+([PR #138](https://github.com/boulaajaj/Arduino-DiggerSetup/pull/138) — the
+implementation PR for issue #131). Replace this pointer with the real issue
+links once filed.
 
 - **NaN pack voltage passes the plausibility band, asymmetrically by slot**:
   every comparison against NaN is false, so the [6, 13] V band never rejects

@@ -105,7 +105,12 @@ TEST_CASE("dead RC + railed joystick (#131): no propulsion in ANY override mode,
 
       CHECK_FALSE(stub::servoOnPin(PIN_ESC_L).attached);
       CHECK_FALSE(stub::servoOnPin(PIN_ESC_R).attached);
-      checkNeutralPulsesSince(neutralDeadlineAfterSilence(lossStartMs));
+      // The failsafe bit is detected on the FIRST flagged frame — its neutral
+      // deadline must not include the 100 ms silence timeout, or the window
+      // right after detection goes unchecked.
+      checkNeutralPulsesSince(useFailsafeBit
+                                  ? lossStartMs + CUTOFF_HOLD_MS + RAMP_MARGIN_MS
+                                  : neutralDeadlineAfterSilence(lossStartMs));
       checkInvariants();
       scenariosChecked++;
     }
