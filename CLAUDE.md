@@ -305,6 +305,7 @@ docs/DECISION-LOG.md                     — Technical decision log
 docs/TESTING.md                          — Host characterization + invariants suites + commit gate (#47, #131)
 docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
 docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
+docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
 tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/)
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor
