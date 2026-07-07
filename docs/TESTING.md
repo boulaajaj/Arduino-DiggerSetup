@@ -1,9 +1,11 @@
-# Host Testing — Characterization Harness (#47, Epic #116 Phase B)
+# Host Testing — Characterization + Safety Invariants (#47, #131 — Epic #116 Phase B)
 
 The firmware's control logic runs on a laptop, byte-for-byte unchanged, inside
-a fake Arduino environment. This suite is the **primary safety net for the
-Phase D refactor**: every extraction PR must keep it green, proving behavior
-parity while no hardware is available.
+a fake Arduino environment. Two suites share the harness: **characterization**
+(#47) locks in example behavior, and **invariants** (#131) asserts safety
+properties that must always hold, under injected faults. Together they are the
+**primary safety net for the Phase D refactor**: every extraction PR must keep
+them green, proving behavior parity while no hardware is available.
 
 ## How it works — zero firmware changes
 
@@ -22,9 +24,12 @@ tests/
 │   ├── WDT.h                   counts refresh() calls
 │   ├── sbus.h                  scripted S.BUS frames (bfs::SbusRx/SbusData)
 │   └── SerialPortStub.h        Serial/Serial1/UART fakes — scripted RX, captured TX
-└── characterization/
-    ├── FirmwareUnderTest.h     includes the REAL rc_test.ino + firmware state reset
-    └── test_*.cpp              one focused suite per behavior area
+├── characterization/
+│   ├── FirmwareUnderTest.h     includes the REAL rc_test.ino + firmware state reset
+│   └── test_*.cpp              one focused suite per behavior area
+└── invariants/
+    ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
+    └── test_invariant_*.cpp    one property suite per safety invariant
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
@@ -61,6 +66,30 @@ Characterization tests capture **current behavior** — including behavior that
 might look odd. If a test fails after a refactor, the refactor changed
 behavior; fix the code, not the test. Changing an expected value requires an
 issue + operator sign-off (it is a behavior change, not a refactor).
+
+## Safety invariants + fault injection (#131)
+
+`tests/invariants/` asserts **properties**, not examples: things that must hold
+for any input combination, under injected faults. The invariant list — verbatim
+from issue #131, with constants and per-file links — lives in
+[`docs/SAFETY.md`](SAFETY.md); the motivating incident is #69 (blocking Wi-Fi
+send froze `loop()` while the ESCs held the last PWM).
+
+| Suite | Property held |
+| --- | --- |
+| `test_invariant_output_bounds` | outputs within [1000, 2000] µs for any input, incl. NaN/Inf/out-of-range |
+| `test_invariant_stale_rc_neutral` | stale/failsafe RC ⇒ neutral in every override mode, joystick live or not |
+| `test_invariant_cutoff_dominates` | battery-cutoff latch ⇒ neutral within 500 ms then silence, forever; boot-with-low-pack never drives |
+| `test_invariant_thermal_monotone` | rising thermal stage never increases propulsion authority; dropout holds state |
+| `test_invariant_plausibility` | implausible/stale/spiking telemetry never trips or releases the ladders |
+| `test_invariant_gear_reverse_caps` | average track speed never exceeds the active gear/reverse cap |
+
+Mechanics: `InvariantChecks.h` provides `runControlPasses()`, which drives the
+real `loop()` at flight cadence and re-checks the universal invariants
+(`checkInvariantsNow()`) after **every** pass — each scenario is a continuous
+property check, not an endpoint assertion. Same rule as characterization:
+weakening an invariant expectation is a behavior change → own issue + operator
+sign-off.
 
 ## Running
 

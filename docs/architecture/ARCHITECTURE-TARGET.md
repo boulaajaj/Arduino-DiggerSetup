@@ -272,3 +272,6 @@ lands they are review-enforced.
 | 4 Invariants + faults | outputs bounded, stale-RC ⇒ neutral, cutoff dominates, monotone derating | `tests/invariants/` (#131) |
 | 5 Adapters | S.BUS decode, X.BUS framing/checksum, JSON/CSV encoding | `tests/` |
 | 6 Bench (deferred) | physical behavior per BENCH-VERIFICATION-DEFERRED.md | hardware, when available |
+
+Level 4 landed with #131; the invariant registry (verbatim list, constants,
+test links) is `docs/SAFETY.md`.
