@@ -1,8 +1,8 @@
 # Agent governance
 
 How AI agents (Claude Code, Copilot, CodeRabbit) are steered in this repo —
-the Karpathy method (#53) plus the behavior-preservation covenant (epic
-#116).
+the Karpathy method (#53) plus the behavior-preservation covenant
+(epic #116).
 
 - **Working Agreement** — four principles (think before coding, simplicity
   first, surgical changes, goal-driven execution with a verifiable gate):
