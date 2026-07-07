@@ -5,6 +5,37 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-06 — Karpathy method adopted repo-wide; #53 re-prioritized FIRST; behavior-preservation covenant codified
+
+- **Reprioritization (operator):** #53 moves from Phase E to NOW — before any
+  Phase C/D refactoring. Rationale: the guardrails must exist before the
+  code-moving starts, or the refactor risks destroying the field-tuned
+  behavior it exists to preserve.
+- **The covenant (operator, verbatim):** "organizing, refactoring and
+  improving the code should never ever, ever cause change of controls or
+  change of behavior unless we explicitly discuss it … we're not messing with
+  the timing, the behavior, the parameters. Nothing should be touched.
+  Everything that was handling inputs and outputs should remain exactly the
+  same … if we upload the firmware again, I would like the machine to perform
+  exactly like it used to perform before." Codified as
+  `.claude/rules/behavior-preservation.md` (highest-priority rule).
+- **Pragmatism amendment (operator):** severity triage, not dogma — blatantly
+  dangerous findings get raised immediately and fixed in their own dedicated
+  PR (safety outranks the covenant); bounded/latent findings get locked in
+  tests + a follow-up issue; odd-but-intended behavior is law.
+- **Fix protocol (operator, final form):** a behavior fix must be visible,
+  discussed, deliberate, and have its OWN GitHub issue (what/why/how) created
+  BEFORE the fix; never inside any other PR, never as a PR-review correction
+  — no exceptions.
+- **Surfaces:** CLAUDE.md Working Agreement (4 principles + goal-and-gate
+  pattern wired to the real CI workflows), `.coderabbit.yaml` (NEW —
+  epic-scoped path_instructions so bot reviews stop proposing behavior
+  changes; TEMPORARY, relax at epic end), `.github/copilot-instructions.md`
+  covenant section + principle mirror, `docs/AGENT-EXAMPLES.md` (5 good/bad
+  pairs from real project history: Max-Reverse-Force checklist, the 1825 µs
+  probe refutation, the NaN gap lock-don't-fix, failing-test-first, goal+gate
+  framing).
+
 ## 2026-07-06 — Safety-invariant + fault-injection suite; two firmware gaps found and locked (#131)
 
 - **Suite:** `tests/invariants/` — 6 property suites (35 test cases, ~800
