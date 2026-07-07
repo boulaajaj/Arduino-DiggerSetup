@@ -20,6 +20,15 @@ HARNESS  := $(wildcard stubs/*.h) characterization/FirmwareUnderTest.h \
 TESTS := $(wildcard characterization/test_*.cpp) $(wildcard invariants/test_*.cpp)
 BINS  := $(addprefix build/,$(notdir $(TESTS:.cpp=)))
 
+# A duplicate basename across suite directories would silently shadow one
+# binary (flat build/ + same-target pattern rules) while CI stayed green —
+# fail the build loudly instead.
+DUPLICATE_BASENAMES := $(filter $(notdir $(wildcard characterization/test_*.cpp)),\
+                                $(notdir $(wildcard invariants/test_*.cpp)))
+ifneq ($(DUPLICATE_BASENAMES),)
+$(error duplicate test file basenames across suite directories: $(DUPLICATE_BASENAMES))
+endif
+
 all: $(BINS)
 
 build/%: characterization/%.cpp $(HARNESS) $(FIRMWARE)

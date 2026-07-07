@@ -87,6 +87,10 @@ TEST_CASE("outputWrite (#131): hardware boundary clamps arbitrary integers") {
 TEST_CASE("end-to-end (#131): corrupt S.BUS raws + railed ADC never escape bounds") {
   resetHarness();
   setup();
+  // Healthy confirmed packs so the output gate actually OPENS — without this
+  // the boot gate holds every output at neutral and the sweep would pass
+  // vacuously without a single corrupt command reaching the servos.
+  setPackVoltages(12.6f, 12.6f);
   // Corrupt/degenerate raw channel values (S.BUS channels are 11-bit 0..2047;
   // feed beyond that too), Mode 3 blend so the railed joystick contributes,
   // Boost gear for zero cap headroom.
@@ -105,5 +109,12 @@ TEST_CASE("end-to-end (#131): corrupt S.BUS raws + railed ADC never escape bound
       }
     }
   }
+  // Meaningfulness guard: the corrupt commands genuinely drove the tracks —
+  // at least one recorded pulse was non-neutral (railed throttle = 2000 us).
+  int nonNeutralPulses = 0;
+  for (const auto& write : stub::servoOnPin(PIN_ESC_L).writes) {
+    if (write.second != SVC) nonNeutralPulses++;
+  }
+  CHECK(nonNeutralPulses > 0);
   checkInvariants();
 }

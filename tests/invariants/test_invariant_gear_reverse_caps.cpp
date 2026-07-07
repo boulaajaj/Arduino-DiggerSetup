@@ -100,8 +100,11 @@ TEST_CASE("forward cap attained (#131): Boost straight line reaches the 2000 rai
       1811, stub::SBUS_RAW_CENTER, RAW_SWITCH_LOW, RAW_SWITCH_LOW);
   runControlPasses(20, &ecoForward, 2, true);
   float ecoAverage = averageTrackMicroseconds();
-  CHECK(ecoAverage >= 1823.0f);     // 1825 - 2 (int truncation lands on 1824)
-  CHECK(ecoAverage <= 1827.0f);
+  // Exactly 1825: the float multiply 0.65f * 500.0f rounds UP to 325.0f (the
+  // real product 324.999988 is nearer 325.0 than the next float down), so the
+  // int cast sees 325.0 — no truncation loss on this path (probe-verified).
+  CHECK(ecoAverage >= 1824.0f);
+  CHECK(ecoAverage <= 1826.0f);
   checkInvariants();
 }
 

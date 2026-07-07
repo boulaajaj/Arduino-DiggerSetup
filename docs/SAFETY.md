@@ -6,8 +6,10 @@ executable: it has a host test in `tests/invariants/` that drives the real
 firmware (see `docs/TESTING.md`), runs in CI with the #47 characterization
 suite, and hard-blocks commits via `.githooks/pre-commit`.
 
-This registry lists the invariants verbatim from issue
-[#131](https://github.com/boulaajaj/Arduino-DiggerSetup/issues/131). The
+This registry lists the invariants from issue
+[#131](https://github.com/boulaajaj/Arduino-DiggerSetup/issues/131) verbatim,
+with scope clarifications added in parentheses where the issue wording alone
+could over-promise. The
 human-facing safety-model narrative (battery ladder, thermal stages, output
 gate, watchdog) will live in `docs/ARCHITECTURE.md` when #126 lands; this file
 stays the single list the tests are named after.
@@ -31,7 +33,7 @@ incremental serving; see `docs/DECISION-LOG.md` entries 2026-06-20 and
 | 4 | Rising thermal stage never increases allowed propulsion (monotone derating) | 80/90/95 °C stages, 78/80/75 °C releases, 1 s trip debounce | `tests/invariants/test_invariant_thermal_monotone.cpp` |
 | 5 | Implausible battery/temperature readings are never trusted (plausibility gates hold under fault injection) | voltage band [6, 13] V both packs, temperature band [−20, 200] °C per sensor, `TELEM_STALE_MS` 5 s | `tests/invariants/test_invariant_plausibility.cpp` |
 | 6 | Output gate closed ⇒ commands ease to neutral within `CUTOFF_HOLD_MS`, then no pulses | `CUTOFF_HOLD_MS` 500 ms ramp, then `detach()` — signal loss, not neutral pulses | `tests/invariants/test_invariant_cutoff_dominates.cpp` (timing + monotone ramp), `test_invariant_stale_rc_neutral.cpp` |
-| 7 | No joystick + RC combination exceeds the active gear / reverse caps | gear 0.65/0.80/1.00, reverse 0.55/0.55/0.65 — caps bound the **average** track speed; single-track excursions in turns are design headroom (#72/#113) | `tests/invariants/test_invariant_gear_reverse_caps.cpp` |
+| 7 | No joystick + RC combination exceeds the active gear / reverse caps (on the **average** track command) | gear 0.65/0.80/1.00, reverse 0.55/0.55/0.65 — single-track excursions in turns are design headroom (#72/#113), so per-track values may legitimately exceed the caps | `tests/invariants/test_invariant_gear_reverse_caps.cpp` |
 
 `tests/invariants/InvariantChecks.h` holds the reusable checker the issue asked
 for: `checkInvariants()` (full pulse-history bounds) plus a per-pass
@@ -60,7 +62,7 @@ stops PWM is physical behavior — tracked in
 Both gaps below are **locked as current behavior** by `// #131 FINDING:` test
 cases; fixing either is a behavior change requiring its own issue + operator
 sign-off (behavior-preserving constraint during epic #116). Follow-up
-hardening issues are drafted in PR #131's description, pending operator
+hardening issues are drafted in PR #138's description, pending operator
 filing.
 
 - **NaN pack voltage passes the plausibility band, asymmetrically by slot**:
@@ -77,7 +79,9 @@ filing.
   joystick held (Mode 2/3), flipping CH4 Eco/Normal → Boost mixes the stale
   Eco-domain joystick clamp (−0.846 xSpeed) with the new Boost `gearScale`
   for up to one 100 Hz joystick-cache window — ~1077 µs average versus the
-  1175 µs Boost reverse floor for 1–5 loop passes, inside the servo rails.
+  1175 µs Boost reverse floor for up to 10 ms, inside the servo rails (the
+  pass count depends on loop rate: a handful at the host test cadence, ~200
+  at the real ~20 kHz loop).
   `rcCommand()` re-clamps every pass; only the cached joystick path has the
   gap. Locked in `test_invariant_gear_reverse_caps.cpp`.
 

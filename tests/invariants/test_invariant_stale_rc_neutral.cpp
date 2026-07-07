@@ -73,38 +73,45 @@ TEST_CASE("receiver failsafe bit mid-drive (#131): TX off with RX alive stops th
   checkInvariants();
 }
 
-TEST_CASE("dead RC + railed joystick (#131): no propulsion in ANY override mode") {
+TEST_CASE("dead RC + railed joystick (#131): no propulsion in ANY override mode, via BOTH loss paths") {
   resetHarness();
   const int16_t overrideModes[] = {RAW_SWITCH_LOW, RAW_SWITCH_MID, RAW_SWITCH_HIGH};
-  int modesChecked = 0;
+  const bool lossViaFailsafeBit[] = {false, true};   // S.BUS silence / failsafe flag
+  int scenariosChecked = 0;
   int joystickDroveWhileRcValid = 0;   // Modes 2 and 3 must drive BEFORE the loss
-  for (int16_t overrideRaw : overrideModes) {
-    resetHarness();
-    setup();
-    setPackVoltages(11.1f, 11.2f);
-    // Rail BOTH joystick axes: full forward throttle + full steer.
-    stub::setAnalogValue(PIN_JOY_Y, 16383);
-    stub::setAnalogValue(PIN_JOY_X, 0);
-    // Establish the override mode with valid, stick-centered RC frames (Boost).
-    bfs::SbusData modeFrame = driveFrame(stub::SBUS_RAW_CENTER, stub::SBUS_RAW_CENTER,
-                                         overrideRaw, RAW_SWITCH_HIGH);
-    runControlPasses(30, &modeFrame, 1, true);
-    if (overrideRaw != RAW_SWITCH_LOW &&
-        (leftEscMicroseconds() != SVC || rightEscMicroseconds() != SVC)) {
-      joystickDroveWhileRcValid++;     // scenario is meaningful: joystick had authority
+  for (bool useFailsafeBit : lossViaFailsafeBit) {
+    for (int16_t overrideRaw : overrideModes) {
+      resetHarness();
+      setup();
+      setPackVoltages(11.1f, 11.2f);
+      // Rail BOTH joystick axes: full forward throttle + full steer.
+      stub::setAnalogValue(PIN_JOY_Y, 16383);
+      stub::setAnalogValue(PIN_JOY_X, 0);
+      // Establish the override mode with valid, stick-centered RC frames (Boost).
+      bfs::SbusData modeFrame = driveFrame(stub::SBUS_RAW_CENTER, stub::SBUS_RAW_CENTER,
+                                           overrideRaw, RAW_SWITCH_HIGH);
+      runControlPasses(30, &modeFrame, 1, true);
+      if (overrideRaw != RAW_SWITCH_LOW &&
+          (leftEscMicroseconds() != SVC || rightEscMicroseconds() != SVC)) {
+        joystickDroveWhileRcValid++;   // scenario is meaningful: joystick had authority
+      }
+
+      // RC dies; joystick stays railed. Loss path 1: total S.BUS silence.
+      // Loss path 2: frames keep arriving flagged failsafe (TX off, RX alive).
+      uint32_t lossStartMs = millis();
+      bfs::SbusData failsafeFrame = modeFrame;
+      failsafeFrame.failsafe = true;
+      runControlPasses(700, useFailsafeBit ? &failsafeFrame : nullptr, 1, true);
+
+      CHECK_FALSE(stub::servoOnPin(PIN_ESC_L).attached);
+      CHECK_FALSE(stub::servoOnPin(PIN_ESC_R).attached);
+      checkNeutralPulsesSince(neutralDeadlineAfterSilence(lossStartMs));
+      checkInvariants();
+      scenariosChecked++;
     }
-
-    uint32_t silenceStartMs = millis();
-    runControlPasses(700, nullptr, 1, true);   // RC dies; joystick stays railed
-
-    CHECK_FALSE(stub::servoOnPin(PIN_ESC_L).attached);
-    CHECK_FALSE(stub::servoOnPin(PIN_ESC_R).attached);
-    checkNeutralPulsesSince(neutralDeadlineAfterSilence(silenceStartMs));
-    checkInvariants();
-    modesChecked++;
   }
-  CHECK(modesChecked == 3);
-  CHECK(joystickDroveWhileRcValid == 2);
+  CHECK(scenariosChecked == 2 * 3);
+  CHECK(joystickDroveWhileRcValid == 2 * 2);
 }
 
 TEST_CASE("no valid RC ever + railed joystick (#131): not one non-neutral pulse from boot") {

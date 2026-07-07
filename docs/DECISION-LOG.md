@@ -35,8 +35,8 @@ Updated by session hooks — only technical content, no personal info.
 - **Gap 2 (locked, not fixed): reverse-cap transient on gear upshift** — full
   reverse joystick held through Eco/Normal→Boost keeps the stale Eco-domain
   clamp (−0.846) for ≤ one 10 ms joystick-cache window: ~1077 µs average vs
-  the 1175 µs Boost floor for 1–5 passes. RC path re-clamps every pass;
-  joystick cache does not.
+  the 1175 µs Boost floor for up to 10 ms (pass count scales with loop rate).
+  RC path re-clamps every pass; joystick cache does not.
 - Both gaps documented in `docs/SAFETY.md` known-gaps; follow-up hardening
   issues drafted (operator to file); fixes are behavior changes requiring
   their own issues + updated test expectations.
