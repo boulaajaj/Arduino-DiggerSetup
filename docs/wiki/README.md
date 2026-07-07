@@ -18,9 +18,12 @@ interconnected notes; humans read and visualize them** (issue #141).
 ## Rules for this folder (anti-drift)
 
 - **Navigation layer, not a second copy.** Notes describe stable concepts and
-  link to the canonical source. Constants, thresholds, pin numbers, and
-  versions live ONLY in the canonical docs (`CLAUDE.md`, `docs/SAFETY.md`,
-  …) — a wiki note that restates a number is a bug.
+  link to the canonical source. Tunable values — constants, thresholds, pin
+  numbers, versions — live ONLY in the canonical docs (`CLAUDE.md`,
+  `docs/SAFETY.md`, …); a wiki note that restates one is a bug. Stable
+  identity is fine: component model names and ordinary descriptive
+  quantities ("three-position switch") make notes readable and only change
+  when the thing itself changes.
 - **Agents own this folder.** A PR that adds, removes, or renames a doc — or
   changes what a subsystem IS — updates the affected wiki notes in the same
   PR. Link fixes are cheap; that is the point of keeping content out.
