@@ -3,8 +3,10 @@
 Properties of the propulsion path that must **always** hold — for any input
 combination, in any override mode, under any injected fault. Each invariant is
 executable: it has a host test in `tests/invariants/` that drives the real
-firmware (see `docs/TESTING.md`), runs in CI with the #47 characterization
-suite, and hard-blocks commits via `.githooks/pre-commit`.
+firmware (see `docs/TESTING.md`) and runs in CI with the #47 characterization
+suite (the `unit-tests` check — the layer that binds every contributor).
+Locally, `.githooks/pre-commit` hard-blocks red commits once activated in the
+clone (`git config core.hooksPath .githooks`, see docs/TESTING.md).
 
 This registry lists the invariants from issue
 [#131](https://github.com/boulaajaj/Arduino-DiggerSetup/issues/131) verbatim,
@@ -52,9 +54,12 @@ low pack (boot gate) · NaN voltage (see known gaps).
 ## Host-testable vs bench-only
 
 The watchdog (#69, `WDT_TIMEOUT_MS` 250 ms) cannot fire in the host stub; the
-host suite asserts its *contract* (exactly one `WDT.refresh()` per loop pass,
-after the control path — `test_control_loop.cpp`). That the WDT reset actually
-stops PWM is physical behavior — tracked in
+host suite asserts its *contract* — exactly one `WDT.refresh()` per loop pass
+(`tests/characterization/test_control_loop.cpp`; the stub counts calls, it
+does not assert ordering). That the single refresh sits *after* the control
+path is a code-placement rule (`[MODULE]` loop order in `rc_test.ino`,
+enforced by review + `.claude/rules/firmware-realtime.md`). That a WDT reset
+actually stops PWM is physical behavior — tracked in
 `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.
 
 ## Known gaps (documented, not silently fixed)
