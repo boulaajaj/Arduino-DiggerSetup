@@ -8,6 +8,42 @@ input: RC transmitter (Jason) and joystick (Malaki/rider). 3-position override
 switch selects who has authority. X.BUS telemetry is streamed to a Wi-Fi
 dashboard (monitoring only).
 
+## Working Agreement (#53 — the Karpathy method, adapted)
+
+Behavioral guardrails for every agent working in this repo. The
+**behavior-preservation covenant** (`.claude/rules/behavior-preservation.md`)
+sits above all four: during epic #116, organization changes NOTHING observable
+— firmware flashed after a refactor must drive exactly as before.
+
+1. **Think before coding — never guess on safety-relevant ambiguity.**
+   Ambiguity on pin assignments, ESC parameters, safety caps/thresholds, or
+   timing → stop and ask. Before any XC-Link / ESC parameter suggestion, run
+   the command-path checklist (see "ESC / motor configuration changes" below)
+   — that checklist IS this principle for our domain. State assumptions
+   explicitly; push back on needless complexity instead of silently building it.
+2. **Simplicity first.** Senior-engineer default: no speculative features, no
+   abstraction for one caller, 100 lines over 1000. The file policy (150
+   soft / 250 hard, `.claude/rules/architecture.md`) is the mechanical
+   backstop, not the goal.
+3. **Surgical changes.** Touch only what the task needs: no reformatting, no
+   renaming, no drive-by "improvements" to code the diff didn't have to
+   visit. Naming fixes happen when a file is extracted/moved (per
+   `.claude/rules/naming.md`), never as ride-alongs. A reviewer should be
+   able to read the diff and see exactly one intent.
+4. **Goal-driven execution — hand the agent the goal + the gate, not steps.**
+   The standing, verifiable success criteria for any firmware-touching change:
+   - host suite green: `wsl -e make -C tests run` (characterization +
+     invariants — compiles the REAL `rc_test.ino`; also CI `unit-tests.yml`)
+   - compiles clean locally:
+     `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test`
+   - CI green: `arduino-ci.yml`, `lint.yml`, `static-analysis.yml`,
+     `code-quality.yml`, `structure-check.yml`, `unit-tests.yml`
+   - no blocking calls in `loop()` (`delay()`, `pulseIn()`, unbounded `while`)
+   - zero behavior change unless the task's own issue explicitly authorizes it
+
+   An agent that satisfies the gate is done; an agent that can't must say why
+   — see `docs/AGENT-EXAMPLES.md` for good/bad task-framing pairs.
+
 ## Project Board — Single Source of Truth
 
 [Project #1](https://github.com/users/boulaajaj/projects/1) is the **single
@@ -240,6 +276,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 - [x] Field test at reduced power
 - [x] Host characterization suite + commit test gate (#47 — epic #116 Phase B)
 - [x] Safety invariants + fault-injection suite, docs/SAFETY.md registry (#131 — epic #116 Phase B)
+- [x] Karpathy method + behavior-preservation covenant on every agent surface (#53)
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
 - [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
@@ -267,6 +304,7 @@ docs/MISSION.md                          — Project design philosophy (smoothne
 docs/DECISION-LOG.md                     — Technical decision log
 docs/TESTING.md                          — Host characterization + invariants suites + commit gate (#47, #131)
 docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
+docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
 tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/)
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor

@@ -1,0 +1,77 @@
+# CodeRabbit review configuration.
+#
+# EPIC #116 SCOPE (TEMPORARY): the sections marked [epic #116] steer reviews
+# during the architecture-remediation program (organize code, split files,
+# domain-driven design, doc-code sync, meaningful tests) under a strict
+# behavior-preservation covenant. Relax/remove those sections when epic #116
+# completes — tracked in the epic's definition of done.
+language: en-US
+
+tone_instructions: >-
+  Safety-critical child-ridden vehicle, mid behavior-preserving refactor
+  (epic #116). Never suggest changes to behavior, timing, parameters, or
+  test expectations; propose follow-up issues instead. Verify numeric
+  claims against the code first.
+
+reviews:
+  path_instructions:
+    - path: "**"
+      instructions: >-
+        [epic #116 — behavior-preservation covenant] This repo is mid
+        refactor whose ONLY goals are: organize code, split large files,
+        follow domain-driven design (docs/architecture/ARCHITECTURE-TARGET.md),
+        keep documentation synchronized with code, and keep tests readable and
+        meaningful. Organization must change NOTHING observable: no timing,
+        no parameter or constant values, no input/output handling, no control
+        flow that alters outputs. Do NOT suggest behavior changes, constant
+        retunes, or "simplifications" that alter what the firmware does — even
+        when the current behavior looks wrong. If you believe you found a REAL
+        defect, describe it as an observation and recommend filing a follow-up
+        issue; do not provide a committable suggestion that changes behavior.
+        SEVERITY MATTERS: if a suspected defect looks SAFETY-CRITICAL (rider
+        harm, runaway, ignored cutoff), flag it as a prominent potential_issue
+        and say explicitly it needs its own GitHub issue (what/why/how) and an
+        immediate dedicated fix PR — do not soften it to fit the covenant; the
+        covenant forbids silent changes, not fixes. Behavior fixes NEVER enter
+        a PR via review corrections.
+        Before claiming a numeric expectation is wrong, verify it against the
+        actual code including float32 rounding (precedent: forced-Eco output is
+        1825 us because 0.65f*500.0f rounds UP to exactly 325.0f — a suggested
+        "fix" to 1824 was refuted by an on-firmware probe).
+        Known INTENTIONAL behaviors — never flag as bugs: thermal stages hold
+        anywhere inside their hysteresis bands (warn 80/78, eco 90/80,
+        cut 95/75 C — e.g. eco correctly HOLDS at 85 C); telemetry dropout
+        freezes the safety ladders (no trip, no release); the battery boot
+        gate fails OPEN after 3 s (telemetry-optional driving); gear/reverse
+        caps bound the AVERAGE track speed and single tracks legitimately
+        exceed them in turns (#72/#113); battery cutoff latches until power
+        cycle while thermal cut auto-recovers; alarms are sound-only.
+        DO actively review for: real code-move errors (dropped, duplicated, or
+        reordered logic during extraction), dependency-rule violations
+        (.claude/rules/architecture.md), naming-rule violations
+        (.claude/rules/naming.md — full words), file-size policy (150 soft /
+        250 hard), and documentation that drifted from the code — those are
+        exactly the review comments this program needs.
+    - path: "sketches/**"
+      instructions: >-
+        [epic #116] Production firmware behavior is LAW during the refactor.
+        Structural review only: verify moved code is byte-equivalent in
+        effect, includes/layers follow the architecture rules, and nothing
+        "extra" snuck into a move. Any behavior, timing, or parameter concern
+        becomes an issue recommendation, never a committable suggestion.
+    - path: "tests/**"
+      instructions: >-
+        [epic #116] Test EXPECTATIONS are behavior law: changing an expected
+        value requires its own issue + operator sign-off first — never suggest
+        editing an expectation to "correct" it. Welcome suggestions:
+        readability, meaningful scenario coverage (tests should exercise
+        situations that can actually occur in the field, with meaningfulness
+        guards proving the dangerous input had authority), and STRENGTHENING
+        assertions — provided the suite stays green against the unmodified
+        firmware.
+    - path: "docs/**"
+      instructions: >-
+        [epic #116] Doc-code synchronization is a first-class review goal:
+        flag any constant, threshold, pin, file path, or behavior description
+        that no longer matches the code. Do not propose changing the CODE to
+        match stale docs — docs follow code.
