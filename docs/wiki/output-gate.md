@@ -1,10 +1,12 @@
 # Output gate
 
 The final authority between the mixer and the servo pins. When any
-closing condition fires — [battery cutoff](battery-ladder.md),
-[thermal cut](thermal-derating.md) — commands ease to neutral over a bounded
-ramp, then the servo signal **detaches entirely** (no pulses at all, which an
-ESC treats as signal loss, not as "hold neutral").
+closing condition fires — RC signal loss ([sbus-input](sbus-input.md)),
+[battery cutoff](battery-ladder.md), [thermal cut](thermal-derating.md), or
+the boot gate still awaiting battery confirmation — commands ease to neutral
+over a bounded ramp, then the servo signal **detaches entirely** (no pulses
+at all, which an ESC treats as signal loss, not as "hold neutral"). RC loss
+and thermal cut reopen the gate when they clear; battery cutoff latches.
 
 - Current ramp timing and gate conditions: [CLAUDE.md](../../CLAUDE.md) and
   [SAFETY](../SAFETY.md) (canonical)

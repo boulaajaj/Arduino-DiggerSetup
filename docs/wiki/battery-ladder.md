@@ -4,7 +4,8 @@ Staged response to falling pack voltage, always keyed to the **worse** of the
 two packs: first a forced-Eco lock (machine keeps driving, slower), then an
 audible low-voltage alarm ([alerts and alarms](alerts-and-alarms.md)), and at
 the bottom a **latched cutoff** — the [output gate](output-gate.md) closes
-and stays closed until power-cycle, even if voltage recovers.
+and stays closed until power-cycle, even if voltage recovers. The alarm keeps
+chirping through the cut, so a cutoff is never silent.
 
 - Current thresholds, debounce times, and the boot-gate behavior:
   [CLAUDE.md](../../CLAUDE.md) and [SAFETY](../SAFETY.md) (canonical)

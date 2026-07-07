@@ -15,7 +15,9 @@ throttle-over-bus function would fight our PWM and is never used.
   [thermal derating](thermal-derating.md), and the
   [Wi-Fi dashboard](wifi-dashboard.md) — monitoring-only by permanent
   decision ([telemetry and dashboard](telemetry-and-dashboard.md))
-- Plausibility gates reject implausible readings; dropout freezes the safety
-  ladders ([SAFETY](../SAFETY.md), including the known NaN edge case)
+- Plausibility gates reject implausible readings — with one documented
+  exception: NaN pack voltage passes the voltage band ([SAFETY](../SAFETY.md)
+  "Known gaps"; unreachable today via the integer parse path). Dropout
+  freezes the safety ladders rather than releasing them.
 - Bus wiring and the X.BUS merge on the interface board:
   [hardware](hardware.md)
