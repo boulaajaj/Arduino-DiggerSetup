@@ -29,3 +29,6 @@ node_modules/
 # Screenshot artifacts
 .shots/
 .claude/settings.local.json
+
+# Obsidian vault settings (local-only; repo root is the vault, docs/wiki/ is the graph layer)
+.obsidian/

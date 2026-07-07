@@ -5,6 +5,21 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-07 — AI-maintained knowledge graph at docs/wiki/ (#141, Karpathy LLM-wiki)
+
+- **What:** `docs/wiki/` — 19 link-dense Markdown notes (root hub, 7 domain
+  hubs, 11 concept notes) forming a graph layer over the canonical docs,
+  visualizable in Obsidian (vault = repo root; `.obsidian/` gitignored).
+- **Anti-drift rules (the design):** notes carry stable concepts and links
+  ONLY — constants/thresholds/pins stay exclusively in canonical docs; a wiki
+  note restating a number is a bug. Standard relative Markdown links (no
+  `[[wikilink]]` syntax) so notes read on GitHub and lint clean; Obsidian
+  graphs them natively. Agents own the folder: doc-changing PRs update
+  affected notes in the same PR.
+- **Placement:** `docs/wiki/` not top-level `wiki/` — structure-check CI
+  restricts `.md` locations to root/docs/.github/.claude; no CI change
+  needed.
+
 ## 2026-07-06 — Karpathy method adopted repo-wide; #53 re-prioritized FIRST; behavior-preservation covenant codified
 
 - **Reprioritization (operator):** #53 moves from Phase E to NOW — before any

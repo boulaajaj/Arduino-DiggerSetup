@@ -239,9 +239,11 @@ percentage-based plan was implemented as a simpler **voltage** threshold:
 | Inactivity ("unplug me") | one long beep / 2 s | RC off > 60 s (`INACT_RC_OFF_MS`) |
 | Low battery | three fast chirps / ~1.2 s, **latched** | worse pack EMA < 10.5 V (`LOWV_THRESH_V`), debounced 3 s, suppressed first 60 s |
 
-Alarms are **sound-only** — they do not stop or slow the motors. A low-battery
-motor cutoff is still pending (issue #65). See OPERATOR-GUIDE.md for the
-operator-facing beep table.
+The alarms themselves are **sound-only** — motor-affecting protection lives in
+the separate `[SAFETY]` staged ladder (#65, shipped): Eco lock at 10.8 V and a
+latched hard cutoff at 10.0 V, with the alarm chirping along with the cut so a
+cutoff is never silent. See OPERATOR-GUIDE.md for the operator-facing beep
+table.
 
 ## Key Design Decisions
 
@@ -279,7 +281,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 - [x] Karpathy method + behavior-preservation covenant on every agent surface (#53)
 - [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
 - [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
-- [ ] Low-battery motor cutoff (issue #65 — alarm is sound-only today)
+- [x] Staged low-battery protection: Eco lock 10.8 V + latched motor cutoff 10.0 V (#65)
 - [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
 
 ## File Map
@@ -305,6 +307,7 @@ docs/DECISION-LOG.md                     — Technical decision log
 docs/TESTING.md                          — Host characterization + invariants suites + commit gate (#47, #131)
 docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
 docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
+docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
 tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/)
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor

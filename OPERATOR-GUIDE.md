@@ -141,7 +141,7 @@ each pattern means one thing, and nothing else.
 | **Two short beeps** (once, right after power-on) | Wi-Fi telemetry is up | Connect your phone to `Digger-Telemetry` to see the dashboard (optional) |
 | **Steady tone** (only while held) | Someone is pressing the horn button on the RC remote | Nothing — that's the horn |
 | **One long beep, every 2 seconds** | The **RC remote has been turned off for over a minute** | **Unplug the LiPo batteries.** Left plugged in, they slowly drain and can be ruined within a week or two |
-| **Three fast chirps, over and over, won't stop** | A **battery is low** (below 10.5 V) | **Stop and charge the batteries.** This is a *warning only* — it does **not** stop the motors. The packs are protected by you stopping and charging them, not by the firmware. The alarm will NOT turn off until you unplug and re-power the digger. (An automatic motor cutoff is planned — issue #65.) |
+| **Three fast chirps, over and over, won't stop** | A **battery is low** (below 10.5 V) | **Stop and charge the batteries.** At this stage it is a warning — the motors keep running. If a battery keeps dropping, the firmware protects the packs in stages: below 10.8 V it locks the digger into Eco (slower), and below 10.0 V it **stops the motors entirely** (the chirping continues so the cutoff is never silent). The alarm and the cutoff will NOT reset until you unplug and re-power the digger. |
 
 **Notes:**
 
@@ -151,8 +151,9 @@ each pattern means one thing, and nothing else.
 - The low-battery alarm checks **both** batteries and sounds for the weaker one.
 - It only triggers when both batteries are reporting — if one isn't plugged in
   yet, it stays quiet (so it won't false-alarm while you're powering up).
-- These alarms are **sound only.** They do not stop or slow the motors. (A
-  separate low-battery motor cutoff is planned — see issue #65.)
+- The alarms themselves are **sound only** — but the firmware's separate staged
+  battery protection (#65) does act on the motors: Eco lock below 10.8 V, full
+  motor cutoff below 10.0 V (latched until power-cycle).
 
 ---
 
