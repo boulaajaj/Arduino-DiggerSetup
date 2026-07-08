@@ -27,4 +27,7 @@ interconnected notes; humans read and visualize them** (issue #141).
 - **Agents own this folder.** A PR that adds, removes, or renames a doc — or
   changes what a subsystem IS — updates the affected wiki notes in the same
   PR. Link fixes are cheap; that is the point of keeping content out.
+- **CI enforces this** (`wiki-lint` workflow, `scripts/check_wiki.py`, #145):
+  broken links, orphan notes, notes unreachable from [home](home.md), and
+  tunable-looking values all fail the build.
 - Start at [home](home.md).

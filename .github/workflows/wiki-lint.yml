@@ -1,0 +1,27 @@
+name: Wiki Lint
+
+# Health check for the docs/wiki/ knowledge graph (#145) — the "lint"
+# operation of the Karpathy LLM-wiki pattern (#141): link integrity,
+# orphan notes, reachability from home.md, and the anti-drift rule
+# (no tunable values outside canonical docs).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  wiki-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test (every failure mode must fire)
+        run: python scripts/check_wiki_selftest.py
+      - name: Lint the wiki
+        run: python scripts/check_wiki.py
