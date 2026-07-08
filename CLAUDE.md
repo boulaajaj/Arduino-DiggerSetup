@@ -38,7 +38,8 @@ sits above all four: during epic #116, organization changes NOTHING observable
      `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test`
    - CI green: `arduino-ci.yml`, `lint.yml`, `static-analysis.yml`,
      `code-quality.yml`, `structure-check.yml`, `unit-tests.yml`,
-     `architecture-fitness.yml` (#129 — layer/size/naming rules on `src/` trees)
+     `architecture-fitness.yml` (#129 — layer/size/naming rules on `src/`
+     trees), `wiki-lint.yml` (#145 — docs/wiki graph health)
    - no blocking calls in `loop()` (`delay()`, `pulseIn()`, unbounded `while`)
    - zero behavior change unless the task's own issue explicitly authorizes it
 

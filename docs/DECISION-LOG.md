@@ -5,6 +5,18 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-07 — Wiki lint in CI (#145) — the Karpathy "lint" operation
+
+- **What:** `scripts/check_wiki.py` + self-test, run by the `wiki-lint`
+  workflow: link integrity, orphan notes, reachability from `home.md`, and a
+  tunable-drift heuristic (numbers with units fail — the #141 anti-drift rule
+  is now machine-enforced). Completes the Karpathy LLM-wiki operation triad:
+  ingest (same-PR note updates), query (reading/Obsidian), lint (this).
+- Pattern source verified: Karpathy's `llm-wiki.md` idea-file gist (Apr
+  2026) — three layers (raw/wiki/schema) + three operations. Our mapping:
+  canonical docs = raw, docs/wiki = wiki, README rules = schema, git
+  history + this log = his log.md.
+
 ## 2026-07-07 — Architecture fitness functions in CI (#129, Phase C)
 
 - **What:** `scripts/check_architecture.py` + `architecture_rules.py`
