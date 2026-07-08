@@ -77,6 +77,10 @@ UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
 // [CONFIG] — All tunable constants
 // ═══════════════════════════════════════════════════════════════
 
+// Firmware version — SINGLE SOURCE OF TRUTH (#124). The debug banner prints
+// it; docs and FIRMWARE-UPLOAD-LOG reference it. Bump here, nowhere else.
+const char FIRMWARE_VERSION[] = "V7.35";
+
 // Pins
 const uint8_t PIN_JOY_Y  = A0;  // Throttle
 const uint8_t PIN_JOY_X  = A1;  // Steering
@@ -1459,7 +1463,11 @@ void debugInit() {
   Serial.begin(115200);
   delay(50);
   if (Serial) {
-    Serial.println("# === Digger V7.34 — GL10 FOC + S.BUS + Gear + X.BUS telem + Wi-Fi AP + beeper/alarms + battery & motor-thermal protection + per-gear reverse cap (55% Eco/Normal, 65% Boost) + loop watchdog ===");
+    // Version + short tag only (#124) — the changelog lives in git history
+    // and docs/FIRMWARE-UPLOAD-LOG.md, not in a string constant.
+    Serial.print("# === Digger ");
+    Serial.print(FIRMWARE_VERSION);
+    Serial.println(" — dual-input track control, GL10 FOC ===");
     Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }

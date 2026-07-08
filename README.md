@@ -19,7 +19,7 @@ Wi-Fi dashboard you open on your phone.
   left/right track control; counter-rotating **pivot turn** on the spot at a standstill.
 - **Two drivers, one machine** — RC transmitter *and* a rider joystick, with a
   3-position override switch (RC-only / RC-priority / 50-50 blend).
-- **Gear caps** — Eco / Normal / Turbo wheel-speed limits selectable from the remote.
+- **Gear caps** — Eco / Normal / Boost wheel-speed limits selectable from the remote.
 - **Exponential response curves** — separate throttle and steering expo for fine,
   controllable low-speed handling.
 - **Instant failsafe** — loss of the RC signal holds both tracks at neutral.
@@ -53,7 +53,7 @@ PWM throttle (1000–2000 µs) per track on D9/D10. Full wiring lives in
 - **Trigger = throttle, wheel = steering** — the Arduino mixes these into the two
   tracks.
 - **3-position switch (CH5)** selects the override mode (below).
-- **Gear switch (CH4)** selects Eco / Normal / Turbo.
+- **Gear switch (CH4)** selects Eco / Normal / Boost.
 - Moving the controls takes priority over the joystick in RC-priority mode, so the
   supervisor can always step in.
 
@@ -68,11 +68,11 @@ The rider drives with a single dual-axis stick:
 | **Right** | Left track forward + right track back — turn right |
 | **Left** | Right track forward + left track back — turn left |
 | **Diagonal** | Blends forward/back with turning (curvature drive) |
-| **Right/left at a standstill** | **Pivot turn** — tracks counter-rotate on the spot (capped at 60%) |
+| **Right/left at a standstill** | **Pivot turn** — tracks counter-rotate on the spot (speed-capped, with extra authority in Eco) |
 
 A deadband around center keeps the machine still when the stick is released, and
 an expo curve makes small movements gentle for precise maneuvering. The
-joystick throttle also carries a slight boost (×1.05) so it doesn't feel weaker
+joystick throttle also carries a configured gain so it doesn't feel weaker
 than the RC throttle — full deflection still tops out at the active gear cap.
 
 ### Override modes (3-position switch)
@@ -90,14 +90,16 @@ In a turn, Eco and Normal let the *outer* track climb into the headroom up to th
 ESC rail, so the machine **holds its speed through corners** instead of bogging
 down. Boost is already at the rail, so it has no extra turn headroom.
 
-| Gear | Straight-line cap | Use |
+| Gear | Straight-line speed | Use |
 | --- | --- | --- |
-| **Eco** | 65% | Training / tight spaces (~35% turn headroom; reverse & pivot get extra authority) |
-| **Normal** | 80% | Everyday driving (~20% turn headroom) |
-| **Boost** | 100% | Full authority (at the rail — no turn headroom) |
+| **Eco** | Slowest | Training / tight spaces (largest turn headroom; reverse & pivot get extra authority) |
+| **Normal** | Medium | Everyday driving |
+| **Boost** | Fastest | Full authority (at the rail — no turn headroom) |
 
-Reverse is capped to 50% of forward stick travel (62.5% in Eco), and pivoting in
-place is capped at 60% (72.5% in Eco) — all gear-scaled.
+Reverse is additionally capped below forward speed per gear, and pivot rotation
+has its own speed cap. The exact percentages are tunables — see the current
+values in `[CONFIG]` (`sketches/rc_test/rc_test.ino`) and the operator-facing
+table in [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md).
 
 ---
 

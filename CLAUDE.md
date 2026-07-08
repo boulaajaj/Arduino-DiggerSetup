@@ -188,7 +188,8 @@ lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (V7.34 — GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`
+Sketch: `sketches/rc_test/rc_test.ino` (V7.35 — GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The
+version string is defined ONCE: `FIRMWARE_VERSION` at the top of `[CONFIG]` (#124).
 
 Signal pipeline:
 
@@ -292,7 +293,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.34 — GL10 FOC + telemetry + Wi-Fi + alarms + safety)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.35 — GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
@@ -367,6 +368,10 @@ monitor.py                               — Simple serial monitor
 - Use `constrain()` at all servo output boundaries
 - Comment each `[MODULE]` section header with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
+- **README describes behavior, never tunable numbers** (#124): current values
+  live in `[CONFIG]`. PROJECT-PLAN and OPERATOR-GUIDE are technical
+  references — numbers are allowed there but must match `[CONFIG]` (drift is
+  a doc bug)
 
 ### ESC / motor configuration changes
 
