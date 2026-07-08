@@ -40,7 +40,12 @@ def load_allowlist(repo_root: Path) -> tuple[dict[str, str], list[str]]:
             failures.append(f".architecture-allowlist:{number}: entry needs "
                             f"'path | reason' — a reason is required")
             continue
-        allowlist[path.strip()] = reason.strip()
+        normalized = path.strip().replace("\\", "/")
+        if normalized in allowlist:
+            failures.append(f".architecture-allowlist:{number}: duplicate "
+                            f"entry for {normalized}")
+            continue
+        allowlist[normalized] = reason.strip()
     return allowlist, failures
 
 

@@ -24,6 +24,9 @@ EXPECTED_VIOLATIONS = {
     "more than one file": "FIRMWARE_VERSION defined twice",
     ".ino may only include application/": "sketch.ino includes domain/ directly",
     "entry needs 'path | reason'": "allowlist entry missing reason",
+    "duplicate entry": "same allowlist path twice (one with backslashes)",
+    "GearPolicy.cpp:5:": "line number correct after a multi-line block comment",
+    "slippedThrough": "namespace with brace on the NEXT line still checked",
 }
 
 
@@ -42,8 +45,10 @@ def build_violating_repo(root: Path) -> None:
           "#define FIRMWARE_VERSION \"1\"\n")
     write(src / "domain" / "TrackUtils.h", "// banned name\n")
     write(src / "domain" / "GearPolicy.cpp",
+          "/* block\n   comment\n   lines */\n"
           "namespace gear {\nint currentGear = 0;\n"
           "constexpr float kMax = 1.0f;\n}\n"
+          "namespace gear_brace_next_line\n{\nint slippedThrough = 1;\n}\n"
           "#define FIRMWARE_VERSION \"2\"\n")
     write(src / "infrastructure" / "EscPwm.h",
           '#include "../domain/Speed.h"\n')
@@ -52,7 +57,10 @@ def build_violating_repo(root: Path) -> None:
     write(src / "application" / "ControlCycle.h", "// fine\n")
     write(src / "application" / "SystemSnapshot.h", "// fine\n")
     write(src / "domain" / "Oversize.h", "// line\n" * 251)
-    write(root / ".architecture-allowlist", "missing/reason.h\n")
+    write(root / ".architecture-allowlist",
+          "missing/reason.h\n"
+          "twice/listed.h | first reason\n"
+          "twice\\listed.h | second reason\n")
 
 
 def build_clean_repo(root: Path) -> None:

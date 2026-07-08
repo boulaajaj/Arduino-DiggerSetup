@@ -48,7 +48,10 @@ INCLUDE_PATTERN = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.M)
 
 
 def strip_comments(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    """Remove comments, preserving newlines so line numbers stay accurate."""
+    text = re.sub(r"/\*.*?\*/",
+                  lambda match: "\n" * match.group(0).count("\n"),
+                  text, flags=re.S)
     return re.sub(r"//[^\n]*", "", text)
 
 
@@ -145,9 +148,12 @@ def check_domain_globals(file: Path) -> list[str]:
     Tracks brace depth; namespace blocks are scope-transparent (their contents
     are still namespace scope). Contents of any other braced scope (function,
     class, initializer) are skipped. const/constexpr definitions pass.
+    Each '{' is classified by the text since the previous delimiter, so
+    'namespace foo' with the brace on the NEXT line still counts as namespace.
     """
     violations = []
     scopes: list[str] = []  # stack of "ns" | "other"
+    context = ""  # accumulated text since the last '{' / '}' / ';'
     for number, raw in enumerate(
             strip_comments(file.read_text(encoding="utf-8", errors="replace")).splitlines(), 1):
         line = raw.strip()
@@ -162,7 +168,16 @@ def check_domain_globals(file: Path) -> list[str]:
                 f"({line[:60]}) — modules own state behind functions")
         for char in raw:
             if char == "{":
-                scopes.append("ns" if re.match(r"^\s*namespace\b", raw) else "other")
-            elif char == "}" and scopes:
-                scopes.pop()
+                scopes.append(
+                    "ns" if context.strip().startswith("namespace") else "other")
+                context = ""
+            elif char == "}":
+                if scopes:
+                    scopes.pop()
+                context = ""
+            elif char == ";":
+                context = ""
+            else:
+                context += char
+        context += " "  # newline: keep 'namespace foo' linked to next-line '{'
     return violations
