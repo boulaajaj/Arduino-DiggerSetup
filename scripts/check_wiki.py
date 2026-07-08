@@ -27,7 +27,7 @@ LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 EXTERNAL_SCHEMES = ("http://", "https://", "mailto:")
 HUB_NOTES = {"README.md", "home.md"}  # allowed to have no inbound links
 TUNABLE_PATTERN = re.compile(
-    r"\b\d+(?:\.\d+)?\s?(?:V|A|Hz|kHz|MHz|s|ms|us|µs|°C|%)\b")
+    r"\b\d+(?:\.\d+)?\s?(?:V|A|Hz|kHz|MHz|s|ms|us|µs|°C|%)(?!\w)")
 
 
 def wiki_links(note: Path) -> list[str]:
@@ -37,7 +37,8 @@ def wiki_links(note: Path) -> list[str]:
             and not target.startswith("#")]
 
 
-def check_wiki(wiki_root: Path) -> tuple[list[str], dict[str, set[str]]]:
+def check_wiki(wiki_root: Path,
+               repo_root: Path) -> tuple[list[str], dict[str, set[str]]]:
     """Return (failures, wiki-internal link graph by note name)."""
     failures: list[str] = []
     graph: dict[str, set[str]] = {}
@@ -49,7 +50,12 @@ def check_wiki(wiki_root: Path) -> tuple[list[str], dict[str, set[str]]]:
         graph.setdefault(note.name, set())
         for target in wiki_links(note):
             resolved = (note.parent / target).resolve()
-            if not resolved.exists():
+            try:
+                resolved.relative_to(repo_root.resolve())
+                inside_repo = True
+            except ValueError:
+                inside_repo = False  # escapes the repo — never a valid target
+            if not inside_repo or not resolved.is_file():
                 failures.append(f"{note.name}: broken link -> {target}")
             elif resolved.parent == wiki_root.resolve():
                 graph[note.name].add(resolved.name)
@@ -76,7 +82,7 @@ def check_graph_shape(graph: dict[str, set[str]]) -> list[str]:
             failures.append(f"{name}: orphan — no other wiki note links to it")
 
     reachable: set[str] = set()
-    queue = deque(name for name in HUB_NOTES if name in graph)
+    queue = deque(["home.md"]) if "home.md" in graph else deque()
     reachable.update(queue)
     while queue:
         for target in graph.get(queue.popleft(), ()):
@@ -84,14 +90,14 @@ def check_graph_shape(graph: dict[str, set[str]]) -> list[str]:
                 reachable.add(target)
                 queue.append(target)
     for name in sorted(graph):
-        if name not in reachable:
+        if name not in reachable and name not in HUB_NOTES:
             failures.append(f"{name}: not reachable from home.md")
     return failures
 
 
 def run(repo_root: Path) -> list[str]:
     wiki_root = repo_root / "docs" / "wiki"
-    failures, graph = check_wiki(wiki_root)
+    failures, graph = check_wiki(wiki_root, repo_root)
     failures += check_graph_shape(graph)
     return failures
 
