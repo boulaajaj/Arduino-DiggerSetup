@@ -225,7 +225,8 @@ Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
   embedded in flash (`web_page.h`, served at `/`) and streams telemetry over
   Server-Sent Events (`/events`) at ~5 Hz (`SSE_INTERVAL_MS = 200`); `/data` one-shot JSON kept for debug.
 - **Monitoring only — no control input over Wi-Fi, ever** (safety; permanent
-  decision). The dashboard mirror lives in `dashboard/index.html`.
+  decision). The dashboard source is `dashboard/index.html`; `web_page.h` is
+  generated from it (`python scripts/generate_web_page.py`, CI-enforced, #120).
 
 ## Audible Alerts — Implemented (V7.11–V7.12, active piezo on D8)
 
@@ -293,10 +294,10 @@ PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (V7.34 — GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
-sketches/rc_test/web_page.h              — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
+sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
 sketches/sbus_d12_test/sbus_d12_test.ino — S.BUS-on-D12 bring-up test
-dashboard/index.html                     — Wi-Fi dashboard source (mirror of web_page.h)
+dashboard/index.html                     — Wi-Fi dashboard SOURCE (single source of truth; web_page.h generated from it, #120)
 docs/WIRING-GUIDE-V8.md                  — Canonical hardware wiring reference (UNO R4 WiFi)
 docs/INTERFACE-BOARD-PERFBOARD.md        — Soldered interface board build
 docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)

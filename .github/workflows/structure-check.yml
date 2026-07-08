@@ -88,3 +88,15 @@ jobs:
           else
             echo "OK: All structure checks passed"
           fi
+
+  dashboard-drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: web_page.h must match dashboard/index.html (#120)
+        run: python scripts/generate_web_page.py --check

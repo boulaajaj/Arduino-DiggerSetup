@@ -1,3 +1,5 @@
+// GENERATED FILE — do not edit. Source: dashboard/index.html
+// Regenerate: python scripts/generate_web_page.py   (CI enforces sync, #120)
 const char INDEX_HTML[] PROGMEM = R"DIGGER(
 <!DOCTYPE html>
 <html lang="en">
@@ -452,6 +454,10 @@ let dOutL=1500, dOutR=1500;
 const SMOOTH=0.18;                       // ease factor per frame (higher = snappier)
 function ez(c,t){ return c + (t - c) * SMOOTH; }
 
+// 3S LiPo state-of-charge from pack voltage. The discharge curve is NON-linear
+// (flat mid-range, steep at the ends), so a straight line over-reads the middle.
+// Lookup table + linear interpolation; 0% anchored at the 10.0 V motor cutoff,
+// 100% at 12.6 V. (Resting curve; under load the pack reads a touch low.)
 function bp(v){
   const C=[[10.0,0],[10.3,10],[10.6,22],[10.8,30],[11.1,40],[11.4,50],[11.7,65],[12.0,80],[12.3,90],[12.6,100]];
   if(v<=C[0][0])return 0;
@@ -461,6 +467,8 @@ function bp(v){
   }
   return 100;
 }
+// Battery colour bands aligned to the firmware staging: green >30% (full power),
+// orange 20-30% (Eco-lock zone), red <=20% (beep/cutoff zone).
 function bc(p){return p>30?'linear-gradient(90deg,#0c6,#4f8)':p>20?'linear-gradient(90deg,#fa0,#fc0)':'linear-gradient(90deg,#f44,#f66)'}
 function ndl(id,val,max){const e=document.getElementById(id);
   if(e) e.setAttribute('transform',`rotate(${-135+Math.max(0,Math.min(val/max,1))*270},50,50)`);}
@@ -496,6 +504,9 @@ function showBanner(msg, kind){
   b.style.display = 'block';
 }
 function hideBanner(){const b=document.getElementById('errBanner'); if(b) b.style.display='none';}
+
+// Persistent low-battery safety banner (eco lock / hard cutoff), separate from
+// the connection errBanner so the two never overwrite each other.
 let _tcutPrev=false,_restoreUntil=0;
 function setSafetyBanner(d){
   let b=document.getElementById('safetyBanner');
@@ -729,5 +740,4 @@ fitStage(); setTimeout(fitStage, 200); setTimeout(fitStage, 600);
 </script>
 </body>
 </html>
-
 )DIGGER";
