@@ -12,7 +12,10 @@ commit gate: [TESTING](../TESTING.md).
 - **Commit gate** — `.githooks/pre-commit` blocks red suites and firmware
   changes without test changes
 - **CI** — the same suites run in the `unit-tests` workflow alongside
-  compile, lint, static-analysis, and structure checks
+  compile, lint, static-analysis, and structure checks; the
+  `architecture-fitness` workflow additionally enforces the
+  [target architecture's](architecture-remediation.md) dependency, file-size,
+  and naming rules with a self-testing checker
 
 **Test expectations are behavior law**: changing an expected value is a
 behavior change requiring its own issue and operator sign-off — the core of
