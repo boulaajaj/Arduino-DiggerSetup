@@ -19,10 +19,11 @@ Updated by session hooks — only technical content, no personal info.
   stale reverse-cap percentages (pre-#113 50%/62.5%) removed; gear table
   de-numbered. PROJECT-PLAN stale "Status (V7.14)" header + file-map
   version replaced with pointers to the SSOT.
-- **New rule (CLAUDE.md Style):** user-facing docs (README, PROJECT-PLAN)
-  describe behavior, never tunable numbers — numbers live only in [CONFIG]
-  and OPERATOR-GUIDE (the tuning reference). OPERATOR-GUIDE table audited:
-  already correct (65/80/100, 55/55/65, 72.5/60/60).
+- **New rule (CLAUDE.md Style):** README describes behavior, never tunable
+  numbers — current values live in [CONFIG]. PROJECT-PLAN and OPERATOR-GUIDE
+  are technical references: numbers allowed there but must match [CONFIG]
+  (drift is a doc bug). OPERATOR-GUIDE table audited: already correct
+  (65/80/100, 55/55/65, 72.5/60/60).
 
 ## 2026-07-08 — web_page.h generated from dashboard/index.html (#120)
 
