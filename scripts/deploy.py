@@ -11,8 +11,8 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # Defaults — override via command line or edit here when switching boards
-DEFAULT_FQBN = 'arduino:renesas_uno:nanor4'
-DEFAULT_PORT = 'COM8'
+DEFAULT_FQBN = 'arduino:renesas_uno:unor4wifi'
+DEFAULT_PORT = 'COM7'
 DEFAULT_SKETCH = 'sketches/rc_test'
 
 parser = argparse.ArgumentParser(description='Deploy sketch to Arduino board')
