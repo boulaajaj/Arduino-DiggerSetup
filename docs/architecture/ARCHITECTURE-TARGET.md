@@ -258,9 +258,16 @@ path moves:
 ## 10. Enforcement
 
 Rules in this document are enforced by the CI architecture fitness functions
-(#129): forbidden includes, layer direction, file-size policy, banned names,
-no mutable domain globals, generated-file drift, version SSOT. Until #129
-lands they are review-enforced.
+(#129, shipped): forbidden includes, layer direction, file-size policy
+(allowlist: `.architecture-allowlist`, reason required per entry), banned
+names, no mutable domain globals, generated-file drift (activates with #120),
+version SSOT (activates with #124). Implementation:
+`scripts/check_architecture.py` + `scripts/architecture_rules.py`, run by the
+`architecture-fitness` workflow after a self-test
+(`scripts/check_architecture_selftest.py`) proves every failure mode fires.
+The check is **advisory** (not in branch protection) until the Phase D
+extraction lands, then flipped to required. Section 3's table is canonical —
+a rule change here must change the script in the same PR.
 
 ## 11. Testing strategy (summary — details in #47/#131)
 

@@ -5,6 +5,24 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-07 — Architecture fitness functions in CI (#129, Phase C)
+
+- **What:** `scripts/check_architecture.py` + `architecture_rules.py`
+  (stdlib-only, identical locally and in CI) enforcing ARCHITECTURE-TARGET §3
+  on every `sketches/<name>/src/` tree: forbidden includes + layer direction
+  (incl. the observer-ring SystemSnapshot exception), file-size 150/250 with
+  `.architecture-allowlist` (reason required), banned names, no mutable
+  namespace-scope state in `domain/` (heuristic, namespace-transparent brace
+  tracking), generated-file guard (dormant until #120), FIRMWARE_VERSION SSOT
+  (dormant until #124). New `architecture-fitness` workflow runs
+  `check_architecture_selftest.py` first — 10 deliberate violations must fire
+  before the real check counts.
+- **Dormant by design:** checks target `src/` trees only; bench sketches and
+  the pre-Phase-D `rc_test` are exempt, so CI is green today and the rules
+  activate file-by-file as Phase D extracts code.
+- **Advisory → required:** not in branch protection until the Phase D
+  extraction lands (per #129), then flipped.
+
 ## 2026-07-07 — AI-maintained knowledge graph at docs/wiki/ (#141, Karpathy LLM-wiki)
 
 - **What:** `docs/wiki/` — 19 link-dense Markdown notes (root hub, 7 domain

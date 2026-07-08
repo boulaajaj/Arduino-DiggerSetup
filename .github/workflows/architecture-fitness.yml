@@ -1,0 +1,28 @@
+name: Architecture Fitness
+
+# Fitness functions for the epic #116 target architecture (#129):
+# forbidden includes, layer direction, file-size policy, banned names,
+# no mutable domain globals, generated-file guard, version SSOT.
+# Advisory until the Phase D extraction lands (not in branch protection);
+# flip to required afterwards — see ARCHITECTURE-TARGET.md section 10.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  architecture-fitness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test (every failure mode must fire)
+        run: python scripts/check_architecture_selftest.py
+      - name: Check architecture
+        run: python scripts/check_architecture.py

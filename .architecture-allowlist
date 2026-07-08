@@ -1,0 +1,6 @@
+# File-size allowlist for the architecture fitness functions (#129).
+# Format: one entry per line — "path/relative/to/repo.h | reason".
+# A file listed here is exempt from the 150-soft / 250-hard line policy
+# (scripts/check_architecture.py); the reason is REQUIRED and should say why
+# the file cannot be split by responsibility. Keep this list short — it is a
+# ledger of debts, not a loophole.
