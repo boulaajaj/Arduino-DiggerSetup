@@ -7,10 +7,11 @@ paths:
 
 # Dashboard Rules
 
-- **`dashboard/index.html` is the source; `web_page.h` is the mirror.** Any
-  change to one must land in the other in the same PR. (Until the generator
-  from issue #120 exists, the mirror is maintained by hand — after #120,
-  `web_page.h` moves to `src/generated/` and is never hand-edited.)
+- **`dashboard/index.html` is the single source of truth; `web_page.h` is
+  GENERATED** (#120) — never hand-edit it. After editing the source, run
+  `python scripts/generate_web_page.py` and commit both files; CI
+  (`dashboard-drift` job in structure-check) fails on any mismatch. The
+  generated file moves to `src/generated/` when the Phase D tree exists.
 - **Test UI changes locally before any flash**: run the Playwright harness
   (`tools/ui-test*.mjs`) with mock data and check the screenshots. Never make
   the operator tether to the machine to verify a UI change.

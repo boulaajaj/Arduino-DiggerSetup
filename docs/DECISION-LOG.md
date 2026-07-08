@@ -5,6 +5,25 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-08 — web_page.h generated from dashboard/index.html (#120)
+
+- **What:** `scripts/generate_web_page.py` wraps `dashboard/index.html`
+  verbatim (LF-normalized) into the PROGMEM raw-string in
+  `sketches/rc_test/web_page.h`, with a GENERATED header, a 100 KB page
+  budget gate (epic #81), and a raw-delimiter collision guard. `--check`
+  mode byte-compares; new `dashboard-drift` CI job (structure-check
+  workflow) fails any PR where the two files diverge.
+- **Drift found and resolved:** the hand-maintained mirror lacked three
+  JS comment blocks that had been added to the source (SoC curve, battery
+  colour bands, safety banner) in the same commits — proven comment-only by
+  byte-comparing comment-stripped payloads (identical). Regenerated
+  web_page.h picks them up: served bytes +~620 (42.1 KB total, well under
+  budget), ETag auto-updates, rendered dashboard and machine behavior
+  unchanged. Compile clean (44% flash), host suite green.
+- **Rule change:** web_page.h is never hand-edited again
+  (`.claude/rules/dashboard.md`); the manual "keep in sync" discipline is
+  retired in favor of the generator + CI check.
+
 ## 2026-07-07 — Wiki lint in CI (#145) — the Karpathy "lint" operation
 
 - **What:** `scripts/check_wiki.py` + self-test, run by the `wiki-lint`
