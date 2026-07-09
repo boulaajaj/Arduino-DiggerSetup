@@ -297,6 +297,7 @@ PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in [CONFIG]; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
+sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
 sketches/sbus_d12_test/sbus_d12_test.ino — S.BUS-on-D12 bring-up test
@@ -404,6 +405,9 @@ per-parameter code-context analysis.
 
 ## Build & Upload
 
+- First checkout: `cp sketches/rc_test/arduino_secrets.h.example
+  sketches/rc_test/arduino_secrets.h` and fill in the real Wi-Fi credentials
+  (gitignored, #125). CI copies the template automatically.
 - Board: Arduino UNO R4 WiFi
 - FQBN: `arduino:renesas_uno:unor4wifi`
 - Board package: `arduino:renesas_uno`

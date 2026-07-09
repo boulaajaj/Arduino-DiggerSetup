@@ -31,5 +31,7 @@ jobs:
           arduino-cli core install arduino:renesas_uno
           arduino-cli lib install "Bolder Flight Systems SBUS"
           arduino-cli lib install Servo
+      - name: Create Wi-Fi secrets from template (#125 — placeholders, CI never sees real credentials)
+        run: cp sketches/rc_test/arduino_secrets.h.example sketches/rc_test/arduino_secrets.h
       - name: Compile ${{ matrix.sketch }}
         run: arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/${{ matrix.sketch }}

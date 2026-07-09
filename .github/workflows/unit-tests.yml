@@ -20,5 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false   # read-only job — no push, no token needed
+      - name: Create Wi-Fi secrets from template (#125 — the suite compiles the real rc_test.ino)
+        run: cp sketches/rc_test/arduino_secrets.h.example sketches/rc_test/arduino_secrets.h
       - name: Build and run host characterization suite
         run: make -C tests run

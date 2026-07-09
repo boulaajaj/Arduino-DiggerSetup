@@ -1128,8 +1128,11 @@ void thermalUpdate() {
 //      if the loop is ever stalled past the timeout regardless of cause —
 //      PWM stops and the ESCs go to neutral. Backstop, not the primary fix.
 
-const char WIFI_SSID[] = "Digger-Telemetry";
-const char WIFI_PASS[] = "digger12345";   // WPA2 needs >= 8 chars
+// Credentials come from arduino_secrets.h (gitignored, #125) — copy
+// arduino_secrets.h.example in this folder and fill in real values.
+#include "arduino_secrets.h"
+const char WIFI_SSID[] = SECRET_WIFI_SSID;
+const char WIFI_PASS[] = SECRET_WIFI_PASS;   // WPA2 needs >= 8 chars
 // Wi-Fi tuning constants (AP channel, SSE rate, modem timeout, frame cap) live
 // in [CONFIG] per the project's tunable-constants rule.
 WiFiServer wifiServer(80);

@@ -5,6 +5,19 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-09 — Wi-Fi credentials out of source: arduino_secrets.h pattern (#125)
+
+- `WIFI_SSID`/`WIFI_PASS` now initialize from `SECRET_WIFI_SSID`/
+  `SECRET_WIFI_PASS` in `sketches/rc_test/arduino_secrets.h` — gitignored
+  (`sketches/*/arduino_secrets.h`); committed template:
+  `arduino_secrets.h.example` (placeholders only). Both CI compile paths
+  (`arduino-ci` matrix, `unit-tests` host suite — it compiles the real
+  rc_test.ino) copy the template before building.
+- Behavior-preserving: the local gitignored file carries the current real
+  credentials, so locally-built firmware is unchanged. **Operator action
+  pending: rotate the AP password on the next flash — the old one remains
+  in git history.**
+
 ## 2026-07-08 — V7.35: FIRMWARE_VERSION single source of truth + docs-drift audit (#124)
 
 - **Code:** `const char FIRMWARE_VERSION[] = "V7.35"` at the top of

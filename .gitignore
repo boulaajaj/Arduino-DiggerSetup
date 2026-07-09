@@ -32,3 +32,6 @@ node_modules/
 
 # Obsidian vault settings (local-only; repo root is the vault, docs/wiki/ is the graph layer)
 .obsidian/
+
+# Wi-Fi credentials (#125) — copy arduino_secrets.h.example and fill in
+sketches/*/arduino_secrets.h
