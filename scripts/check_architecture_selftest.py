@@ -21,7 +21,7 @@ EXPECTED_VIOLATIONS = {
     "banned file name": "src/domain/TrackUtils.h",
     "exceeds hard limit": "251-line file, not allowlisted",
     "mutable namespace-scope state": "int currentGear = 0; in domain/",
-    "more than one file": "FIRMWARE_VERSION defined twice",
+    "more than one file": "FIRMWARE_VERSION defined twice (#define + const char forms)",
     ".ino may only include application/": "sketch.ino includes domain/ directly",
     "entry needs 'path | reason'": "allowlist entry missing reason",
     "duplicate entry": "same allowlist path twice (one with backslashes)",
@@ -49,7 +49,7 @@ def build_violating_repo(root: Path) -> None:
           "namespace gear {\nint currentGear = 0;\n"
           "constexpr float kMax = 1.0f;\n}\n"
           "namespace gear_brace_next_line\n{\nint slippedThrough = 1;\n}\n"
-          "#define FIRMWARE_VERSION \"2\"\n")
+          "const char FIRMWARE_VERSION[] = \"2\";\n")
     write(src / "infrastructure" / "EscPwm.h",
           '#include "../domain/Speed.h"\n')
     write(src / "telemetry" / "JsonEncoder.h",

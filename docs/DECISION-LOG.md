@@ -5,6 +5,26 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-08 — V7.35: FIRMWARE_VERSION single source of truth + docs-drift audit (#124)
+
+- **Code:** `const char FIRMWARE_VERSION[] = "V7.35"` at the top of
+  `[CONFIG]` — the only place the version is defined. `debugInit()` banner
+  reduced from a 300-char changelog string to version + short tag
+  (changelog belongs to git + FIRMWARE-UPLOAD-LOG). Authorized by #124.
+  Dashboard version display: deferred (nice-to-have; would touch the SSE
+  frame budget + dashboard UI test cycle — its own change when wanted).
+- **Docs drift fixed (audited against [CONFIG]):** README "Turbo"→Boost
+  (twice); "×1.05" joystick boost claim was wrong (JOY_THROTTLE_GAIN is a
+  different value — README now describes behavior without the number);
+  stale reverse-cap percentages (pre-#113 50%/62.5%) removed; gear table
+  de-numbered. PROJECT-PLAN stale "Status (V7.14)" header + file-map
+  version replaced with pointers to the SSOT.
+- **New rule (CLAUDE.md Style):** README describes behavior, never tunable
+  numbers — current values live in [CONFIG]. PROJECT-PLAN and OPERATOR-GUIDE
+  are technical references: numbers allowed there but must match [CONFIG]
+  (drift is a doc bug). OPERATOR-GUIDE table audited: already correct
+  (65/80/100, 55/55/65, 72.5/60/60).
+
 ## 2026-07-08 — web_page.h generated from dashboard/index.html (#120)
 
 - **What:** `scripts/generate_web_page.py` wraps `dashboard/index.html`

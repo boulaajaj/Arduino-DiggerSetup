@@ -151,7 +151,12 @@ python live_plot.py
 
 ---
 
-## Status (V7.14)
+## Status
+
+> Current firmware version: `FIRMWARE_VERSION` in
+> `sketches/rc_test/rc_test.ino` `[CONFIG]` (single source of truth, #124).
+> Live feature status: CLAUDE.md "Implementation Status". The list below is
+> a historical snapshot.
 
 ### Done
 
@@ -160,7 +165,7 @@ python live_plot.py
 - [x] curvatureDrive tank mixing + per-axis expo + pivot authority
 - [x] Removed Arduino-side inertia / PID (GL10 FOC owns smoothing)
 - [x] Gear caps (Eco 65% / Normal 80% / Boost 100%) capping average speed, outer-track turn headroom
-- [x] Eco reverse/pivot boost; ×1.05 joystick throttle gain
+- [x] Eco reverse/pivot boost; joystick throttle gain (retuned since — current value in `[CONFIG]`)
 - [x] Smooth pivot↔drive blend (wide 5–55% band) — no snap at low throttle (#72)
 - [x] Migrated Nano R4 → UNO R4 WiFi
 - [x] Soldered interface board (X.BUS merge + S.BUS inverter)
@@ -183,7 +188,7 @@ python live_plot.py
 
 ```text
 sketches/rc_test/
-  rc_test.ino       — Main controller sketch (V7.14 — GL10 FOC + telemetry + Wi-Fi + alarms)
+  rc_test.ino       — Main controller sketch (version: FIRMWARE_VERSION in [CONFIG])
   types.h           — Shared structs (JoystickState, EscTelem, ...)
   web_page.h        — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
 sketches/telem_check/ — Read-only X.BUS telemetry bench tool (0x50 framing)
