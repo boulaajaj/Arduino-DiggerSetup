@@ -557,7 +557,8 @@ not just the reset button), **ESC1 telemetry now responds** — both ESCs report
 Added a Wi-Fi AP + HTTP telemetry server to `rc_test` ([WIFI] module, WiFiS3)
 and rewired `dashboard/index.html` from simulation to live `/data` polling.
 
-- **AP mode** SSID `Digger-Telemetry`, pass `digger12345` (WPA2), IP
+- **AP mode** SSID `Digger-Telemetry`, pass `<redacted — #125, rotated;
+  see arduino_secrets.h>` (WPA2), IP
   **192.168.4.1**. `WiFi.beginAP` returns status 7 (WL_AP_LISTENING) on boot —
   AP confirmed broadcasting; telemetry both ESCs OK while AP up.
 - **Server:** `GET /data` → compact JSON (millis `t`, `seq`, gear, mode, fs,
