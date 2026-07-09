@@ -189,8 +189,9 @@ lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
 ## Architecture Summary
 
 Sketch: `sketches/rc_test/rc_test.ino` (GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The version
-string is defined ONCE — `FIRMWARE_VERSION` at the top of `[CONFIG]` (#124);
-no doc carries a copy.
+string is defined ONCE — `FIRMWARE_VERSION` at the top of `[CONFIG]` (#124).
+No doc carries a live copy; dated records (DECISION-LOG,
+FIRMWARE-UPLOAD-LOG) cite versions historically.
 
 Signal pipeline:
 

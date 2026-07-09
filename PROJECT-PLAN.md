@@ -153,9 +153,10 @@ python live_plot.py
 
 ## Status
 
-> Current firmware version: `FIRMWARE_VERSION` in `rc_test.ino` `[CONFIG]`
-> (single source of truth, #124). Live feature status: CLAUDE.md
-> "Implementation Status". The list below is a historical snapshot.
+> Current firmware version: `FIRMWARE_VERSION` in
+> `sketches/rc_test/rc_test.ino` `[CONFIG]` (single source of truth, #124).
+> Live feature status: CLAUDE.md "Implementation Status". The list below is
+> a historical snapshot.
 
 ### Done
 

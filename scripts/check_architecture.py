@@ -14,6 +14,7 @@ Exit code 1 on any failure; warnings never fail the build.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -21,7 +22,10 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, str(Path(__file__).parent))
 import architecture_rules as rules  # noqa: E402
 
-VERSION_DEFINITION = "#define FIRMWARE_VERSION"
+# Both definition forms count: the pre-#124 macro and the current const char.
+VERSION_DEFINITION_PATTERN = re.compile(
+    r"^\s*(?:#\s*define\s+FIRMWARE_VERSION\b|const\s+char\s+FIRMWARE_VERSION\s*\[)",
+    re.M)
 
 
 def load_allowlist(repo_root: Path) -> tuple[dict[str, str], list[str]]:
@@ -62,7 +66,7 @@ def check_repo(repo_root: Path) -> tuple[list[str], list[str], list[str]]:
         for source in sketch_dir.rglob("*"):
             if source.suffix in rules.SOURCE_SUFFIXES and source.is_file():
                 text = source.read_text(encoding="utf-8", errors="replace")
-                if VERSION_DEFINITION in text:
+                if VERSION_DEFINITION_PATTERN.search(text):
                     version_definitions.append(
                         source.relative_to(repo_root).as_posix())
 
