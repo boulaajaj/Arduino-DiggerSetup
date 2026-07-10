@@ -1026,7 +1026,7 @@ bool worstPackVoltage(float* worst) {
 
 void batteryEcoLockUpdate() {        // Stage 1 — force Eco
   if (ecoLockLatched) return;
-  float worst;
+  float worst = 0.0f;  // stays unwritten when implausible; the step ignores it then
   bool plausible = worstPackVoltage(&worst);
   BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
                             batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
@@ -1038,7 +1038,7 @@ void batteryEcoLockUpdate() {        // Stage 1 — force Eco
 
 void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   if (batteryCutoffLatched) return;
-  float worst;
+  float worst = 0.0f;  // stays unwritten when implausible; the step ignores it then
   bool plausible = worstPackVoltage(&worst);
   BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
                             batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
