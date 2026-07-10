@@ -5,6 +5,26 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-09 — Phase D step 1: VoltagePlausibility extracted to src/domain/battery/ (#151)
+
+- First #117 extraction: `worstPackVoltage`'s logic moved VERBATIM to
+  `src/domain/battery/VoltagePlausibility.h/.cpp` (+ `BatteryTypes.h` with
+  `BatteryReading{voltage, valid}`). Plausibility bounds are parameters —
+  the domain function has no config/global dependency. The sketch keeps
+  `worstPackVoltage()` as a one-line delegate, so both ladder call sites and
+  all existing test references are unchanged.
+- The [ALERT] inline plausibility check stays put: its `&&`-form REJECTS NaN
+  while the extracted `||`-form PASSES it (locked #131 FINDING) — the target
+  architecture's "ONE implementation" consolidation is a behavior change
+  requiring the NaN-gap issue first.
+- Harness: test binaries now also compile `sketches/rc_test/src/**/*.cpp`;
+  new pure-domain suite dir `tests/battery/` (no stubs, no firmware);
+  duplicate-basename guard generalized across all suite dirs.
+- Verified: full host suite green before/after with zero expectation changes;
+  compile clean — flash 116296 bytes (+48 vs 116248: extracted function is a
+  cross-TU call now), RAM unchanged 9812. No bench check applicable (pure
+  move). architecture-fitness runs its first real src/ tree: OK.
+
 ## 2026-07-09 — Composition-root .ino rule deferred to a step-11 marker (#150)
 
 - `check_ino` (`.ino` → `application/` only) fired the moment `src/` exists,

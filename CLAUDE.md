@@ -297,6 +297,7 @@ PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in [CONFIG]; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
+sketches/rc_test/src/domain/battery/     — First extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp (pure logic, host-testable)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
@@ -315,7 +316,7 @@ docs/TESTING.md                          — Host characterization + invariants 
 docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
 docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
 docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
-tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/)
+tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/ + per-domain, e.g. battery/)
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor

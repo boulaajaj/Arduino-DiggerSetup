@@ -61,6 +61,11 @@
 #include "types.h"
 #include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
+// Phase D extraction (#117): pure domain logic lives under src/domain/ and is
+// included here directly until the FirmwareApp composition root lands
+// (migration window, #150).
+#include "src/domain/battery/VoltagePlausibility.h"
+
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
 // S.BUS only needs RX; TX is unused. Named `sbusUart` (not Serial2)
@@ -1001,13 +1006,13 @@ uint32_t ecoLockStartMs = 0;
 
 // Worst-of-two pack voltage if BOTH packs read a plausible value; else false
 // (a not-yet-powered pack reads ~0 V and must not trip anything).
+// Logic extracted to src/domain/battery/VoltagePlausibility.* (#117 step 1);
+// this delegate keeps both ladder call sites and the test surface unchanged.
 bool worstPackVoltage(float* worst) {
-  float v0 = telem[0].voltage, v1 = telem[1].voltage;
-  if (!(telem[0].valid && telem[1].valid)) return false;
-  if (v0 < LOWV_PLAUS_MIN_V || v0 > LOWV_PLAUS_MAX_V ||
-      v1 < LOWV_PLAUS_MIN_V || v1 > LOWV_PLAUS_MAX_V) return false;
-  *worst = (v0 < v1) ? v0 : v1;
-  return true;
+  return worstPlausiblePackVoltage(
+      BatteryReading{telem[0].voltage, telem[0].valid},
+      BatteryReading{telem[1].voltage, telem[1].valid},
+      LOWV_PLAUS_MIN_V, LOWV_PLAUS_MAX_V, worst);
 }
 
 void batteryEcoLockUpdate() {        // Stage 1 — force Eco

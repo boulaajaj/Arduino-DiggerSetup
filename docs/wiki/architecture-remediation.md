@@ -12,7 +12,12 @@ drive exactly as before.
 - **Founding ADR** —
   [0001-domain-oriented-firmware-architecture](../architecture/adr/0001-domain-oriented-firmware-architecture.md)
 - **Phases** — A Define → B Protect ([testing](testing.md) suites, done) →
-  C Govern (CI fitness functions) → D Refactor (extract domains) → E Polish
+  C Govern (CI fitness functions, done) → D Refactor (extract domains,
+  **active**) → E Polish
+- **First extracted domain** — the [battery ladder](battery-ladder.md)'s
+  voltage-plausibility gate lives in `src/domain/battery/` (pure logic, no
+  Arduino includes, host-tested directly); the sketch keeps a thin delegate
+  until the composition root lands
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

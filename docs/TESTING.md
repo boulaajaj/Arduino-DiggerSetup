@@ -9,8 +9,12 @@ them green, proving behavior parity while no hardware is available.
 
 ## How it works — zero firmware changes
 
-The production sketch is not modified, extracted, or shimmed. Each test binary
-compiles `sketches/rc_test/rc_test.ino` directly:
+The production sketch is not modified for testing. Each test binary compiles
+`sketches/rc_test/rc_test.ino` directly, plus the extracted
+`sketches/rc_test/src/**/*.cpp` domain sources the sketch delegates to as the
+Phase D migration (#117) proceeds. Pure-domain suites (one dir per extracted
+domain, e.g. `battery/`) test the extracted code directly — no firmware, no
+stubs:
 
 ```text
 tests/
@@ -27,9 +31,11 @@ tests/
 ├── characterization/
 │   ├── FirmwareUnderTest.h     includes the REAL rc_test.ino + firmware state reset
 │   └── test_*.cpp              one focused suite per behavior area
-└── invariants/
-    ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
-    └── test_invariant_*.cpp    one property suite per safety invariant
+├── invariants/
+│   ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
+│   └── test_invariant_*.cpp    one property suite per safety invariant
+└── battery/                    pure-domain suite for src/domain/battery/ (#117 step 1)
+    └── test_voltage_plausibility.cpp
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
