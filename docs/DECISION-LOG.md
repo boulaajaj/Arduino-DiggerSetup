@@ -5,6 +5,17 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-09 — Composition-root .ino rule deferred to a step-11 marker (#150)
+
+- `check_ino` (`.ino` → `application/` only) fired the moment `src/` exists,
+  which would have turned architecture-fitness red for the entire Phase D
+  migration (steps 1–10: the `.ino` is the interim application shell and must
+  include extracted `domain/` headers plus its existing external headers).
+- Fix: the rule activates only when `src/application/FirmwareApp.h` exists —
+  the exact artifact of migration step 11 ("there IS a composition root").
+  Until then the checker emits a NOTE; extracted `src/` files are fully
+  checked from step 1 regardless. Selftest covers both directions.
+
 ## 2026-07-09 — Wi-Fi credentials out of source: arduino_secrets.h pattern (#125)
 
 - `WIFI_SSID`/`WIFI_PASS` now initialize from `SECRET_WIFI_SSID`/
