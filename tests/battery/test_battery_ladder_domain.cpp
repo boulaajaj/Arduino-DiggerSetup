@@ -102,6 +102,25 @@ TEST_CASE("cutoff latches after the debounce and just-latched fires exactly once
   CHECK(ladder.ecoLockStartMs == 0);
 }
 
+TEST_CASE("stage isolation: each step leaves the other stage's fields untouched") {
+  // Sibling fields carry non-default sentinels, so an accidental overwrite
+  // with defaults (which the in-case checks above cannot catch) fails here.
+  BatteryLadderState ladder{false, true, true, 0, 4242};
+  ecoStep(ladder, true, 10.5f, 1000);                    // Stage 1 runs to latch
+  ecoStep(ladder, true, 10.5f, 1000 + ECO_LOCK_DEBOUNCE_MS);
+  CHECK(ladder.ecoLockLatched == true);
+  CHECK(ladder.cutoffLatched == true);                   // sentinels survived
+  CHECK(ladder.okConfirmed == true);
+  CHECK(ladder.cutoffStartMs == 4242);
+
+  ladder = BatteryLadderState{true, false, false, 4242, 0};
+  CHECK(cutoffStep(ladder, true, 9.5f, 1000) == false);  // Stage 2 runs to latch
+  CHECK(cutoffStep(ladder, true, 9.5f, 1000 + CUTOFF_DEBOUNCE_MS) == true);
+  CHECK(ladder.cutoffLatched == true);
+  CHECK(ladder.ecoLockLatched == true);                  // sentinels survived
+  CHECK(ladder.ecoLockStartMs == 4242);
+}
+
 TEST_CASE("cutoff: recovery or an implausible reading resets the debounce") {
   BatteryLadderState ladder = freshLadder();
   cutoffStep(ladder, true, 9.5f, 1000);
