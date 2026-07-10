@@ -5,6 +5,19 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-09 — Wi-Fi credentials out of source: arduino_secrets.h pattern (#125)
+
+- `WIFI_SSID`/`WIFI_PASS` now initialize from `SECRET_WIFI_SSID`/
+  `SECRET_WIFI_PASS` in `sketches/rc_test/arduino_secrets.h` — gitignored
+  (`sketches/*/arduino_secrets.h`); committed template:
+  `arduino_secrets.h.example` (placeholders only). Both CI compile paths
+  (`arduino-ci` matrix, `unit-tests` host suite — it compiles the real
+  rc_test.ino) copy the template before building.
+- Behavior-preserving: the local gitignored file carries the current real
+  credentials, so locally-built firmware is unchanged. **Operator action
+  pending: rotate the AP password on the next flash — the old one remains
+  in git history.**
+
 ## 2026-07-08 — V7.35: FIRMWARE_VERSION single source of truth + docs-drift audit (#124)
 
 - **Code:** `const char FIRMWARE_VERSION[] = "V7.35"` at the top of
@@ -544,7 +557,8 @@ not just the reset button), **ESC1 telemetry now responds** — both ESCs report
 Added a Wi-Fi AP + HTTP telemetry server to `rc_test` ([WIFI] module, WiFiS3)
 and rewired `dashboard/index.html` from simulation to live `/data` polling.
 
-- **AP mode** SSID `Digger-Telemetry`, pass `digger12345` (WPA2), IP
+- **AP mode** SSID `Digger-Telemetry`, pass `<redacted — #125, rotated;
+  see arduino_secrets.h>` (WPA2), IP
   **192.168.4.1**. `WiFi.beginAP` returns status 7 (WL_AP_LISTENING) on boot —
   AP confirmed broadcasting; telemetry both ESCs OK while AP up.
 - **Server:** `GET /data` → compact JSON (millis `t`, `seq`, gear, mode, fs,

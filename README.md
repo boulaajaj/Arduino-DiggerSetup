@@ -148,6 +148,10 @@ dashboard source is mirrored in [`dashboard/index.html`](dashboard/index.html).
 Board: **Arduino UNO R4 WiFi** · FQBN: `arduino:renesas_uno:unor4wifi`
 
 ```bash
+# First checkout only: create your local Wi-Fi credentials (gitignored)
+cp sketches/rc_test/arduino_secrets.h.example sketches/rc_test/arduino_secrets.h
+# ...then edit it with the real SSID/password.
+
 # Compile
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
 
