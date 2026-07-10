@@ -93,7 +93,7 @@ TEST_CASE("cutoff latches after the debounce and just-latched fires exactly once
   CHECK(cutoffStep(ladder, true, 9.5f, 1000 + CUTOFF_DEBOUNCE_MS) == true);
   CHECK(ladder.cutoffLatched == true);
   CHECK(cutoffStep(ladder, true, 9.5f, 4000) == false);  // still latched, no re-fire
-  CHECK(cutoffStep(ladder, true, 12.6f, 5000) == false); // recovery never unlatches
+  CHECK(cutoffStep(ladder, true, 12.6f, 5000) == false);  // recovery never unlatches
   CHECK(ladder.cutoffLatched == true);
   // Once latched the step is inert: it no longer confirms the boot gate.
   CHECK(ladder.okConfirmed == false);
