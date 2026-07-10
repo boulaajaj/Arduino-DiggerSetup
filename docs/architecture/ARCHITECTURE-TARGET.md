@@ -269,6 +269,12 @@ The check is **advisory** (not in branch protection) until the Phase D
 extraction lands, then flipped to required. Section 3's table is canonical —
 a rule change here must change the script in the same PR.
 
+**Migration window (#150):** the composition-root rule (`.ino` →
+`application/` only) activates once `src/application/FirmwareApp.h` exists —
+the step-11 marker. During steps 1–10 the production `.ino` is the interim
+application shell and may include extracted layers directly (the checker
+emits a NOTE instead); extracted `src/` files are fully checked from step 1.
+
 ## 11. Testing strategy (summary — details in #47/#131)
 
 | Level | What | Where |

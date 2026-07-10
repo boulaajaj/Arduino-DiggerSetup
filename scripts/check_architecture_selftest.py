@@ -22,7 +22,8 @@ EXPECTED_VIOLATIONS = {
     "exceeds hard limit": "251-line file, not allowlisted",
     "mutable namespace-scope state": "int currentGear = 0; in domain/",
     "more than one file": "FIRMWARE_VERSION defined twice (#define + const char forms)",
-    ".ino may only include application/": "sketch.ino includes domain/ directly",
+    ".ino may only include application/": "sketch.ino includes domain/ "
+                                          "directly (FirmwareApp.h exists)",
     "entry needs 'path | reason'": "allowlist entry missing reason",
     "duplicate entry": "same allowlist path twice (one with backslashes)",
     "GearPolicy.cpp:5:": "line number correct after a multi-line block comment",
@@ -56,6 +57,8 @@ def build_violating_repo(root: Path) -> None:
           '#include "../application/ControlCycle.h"\n')
     write(src / "application" / "ControlCycle.h", "// fine\n")
     write(src / "application" / "SystemSnapshot.h", "// fine\n")
+    # Composition root exists -> the .ino include rule is active (#150).
+    write(src / "application" / "FirmwareApp.h", "// composition root\n")
     write(src / "domain" / "Oversize.h", "// line\n" * 251)
     write(root / ".architecture-allowlist",
           "missing/reason.h\n"
@@ -88,6 +91,20 @@ def build_clean_repo(root: Path) -> None:
           "sketches/fixture/src/domain/Allowlisted.h | self-test fixture\n")
 
 
+def build_migration_repo(root: Path) -> None:
+    """Phase D steps 1-10 (#150): src/ populated, no FirmwareApp.h yet. The
+    .ino is the interim application shell — its direct domain/ and external
+    includes must NOT fail; src/ files stay fully checked."""
+    src = root / "sketches" / "fixture" / "src"
+    write(root / "sketches" / "fixture" / "fixture.ino",
+          "#include <Servo.h>\n"
+          '#include "types.h"\n'
+          '#include "src/domain/CurvatureDrive.h"\n')
+    write(root / "sketches" / "fixture" / "types.h", "// sketch-local\n")
+    write(src / "domain" / "CurvatureDrive.h",
+          "constexpr float kPivotCap = 0.6f;\n")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
@@ -113,8 +130,23 @@ def main() -> int:
             print("\n".join(failures))
             return 1
 
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        build_migration_repo(root)
+        failures, _, notes = check_repo(root)
+        if failures:
+            print("FAIL: self-test: migration-window fixture (no "
+                  "FirmwareApp.h) should pass, got:")
+            print("\n".join(failures))
+            return 1
+        if not any("FirmwareApp.h" in note for note in notes):
+            print("FAIL: self-test: migration-window fixture should NOTE the "
+                  "deferred composition-root rule")
+            return 1
+
     print(f"architecture-fitness self-test: OK "
-          f"({len(EXPECTED_VIOLATIONS)} failure modes demonstrated)")
+          f"({len(EXPECTED_VIOLATIONS)} failure modes demonstrated, "
+          f"migration window exempt)")
     return 0
 
 

@@ -74,8 +74,18 @@ def check_repo(repo_root: Path) -> tuple[list[str], list[str], list[str]]:
         if not src_root.is_dir():
             continue  # bench sketch / pre-Phase-D production sketch: exempt
 
-        for ino in sketch_dir.glob("*.ino"):
-            failures += rules.check_ino(ino, src_root)
+        # The composition-root rule (.ino -> application/ only) is a property
+        # of the END state: it activates once FirmwareApp.h exists (#117 step
+        # 11). During migration steps 1-10 the .ino is the interim application
+        # shell and may include extracted layers directly (#150); the src/
+        # files themselves are fully checked from step 1 either way.
+        if (src_root / "application" / "FirmwareApp.h").is_file():
+            for ino in sketch_dir.glob("*.ino"):
+                failures += rules.check_ino(ino, src_root)
+        else:
+            notes.append(f"{sketch_dir.name}: no src/application/FirmwareApp.h"
+                         " yet — composition-root .ino rule activates at Phase"
+                         " D step 11 (#150)")
         for file in sorted(src_root.rglob("*")):
             if not (file.is_file() and file.suffix in rules.SOURCE_SUFFIXES):
                 continue
