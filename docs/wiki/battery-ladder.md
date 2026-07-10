@@ -15,10 +15,10 @@ chirping through the cut, so a cutoff is never silent.
 - Voltage arrives via [X.BUS telemetry](xbus-telemetry.md); implausible
   readings are rejected by plausibility gates, and telemetry dropout
   deliberately freezes the ladder ([SAFETY](../SAFETY.md) "Known gaps"
-  documents the edge cases). The worst-of-two plausibility gate is the first
-  extracted domain of the
+  documents the edge cases). The worst-of-two plausibility gate and the
+  two-stage ladder state machines are the first extracted domain of the
   [architecture remediation](architecture-remediation.md)
-  (`src/domain/battery/`)
+  (`src/domain/battery/`); the sketch keeps thin delegates
 - Operator-facing behavior and what the beeps mean:
   [OPERATOR-GUIDE](../../OPERATOR-GUIDE.md)
 

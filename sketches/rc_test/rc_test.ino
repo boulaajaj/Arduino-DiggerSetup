@@ -65,6 +65,7 @@
 // included here directly until the FirmwareApp composition root lands
 // (migration window, #150).
 #include "src/domain/battery/VoltagePlausibility.h"
+#include "src/domain/battery/BatteryLadder.h"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -1015,39 +1016,39 @@ bool worstPackVoltage(float* worst) {
       LOWV_PLAUS_MIN_V, LOWV_PLAUS_MAX_V, worst);
 }
 
+// Both stages extracted to src/domain/battery/BatteryLadder.* (#117 step 2,
+// #154); these delegate shims keep every call site and test reference
+// unchanged. The shims own the boundary work the domain must not do: read
+// the clock (time is a parameter), mirror the ladder globals in/out, and —
+// on the cutoff's just-latched signal — start [ALERT]'s alarm WITH the cut
+// (domain code never writes another module's state). The early returns
+// preserve the original property that a latched stage reads no telemetry.
+
 void batteryEcoLockUpdate() {        // Stage 1 — force Eco
   if (ecoLockLatched) return;
   float worst;
-  if (!worstPackVoltage(&worst)) {
-    ecoLockStartMs = 0;
-    return;
-  }
-  if (worst < ECO_LOCK_THRESH_V) {
-    uint32_t nowMs = millis();
-    if (ecoLockStartMs == 0) ecoLockStartMs = nowMs;
-    if (nowMs - ecoLockStartMs >= ECO_LOCK_DEBOUNCE_MS) ecoLockLatched = true;
-  } else {
-    ecoLockStartMs = 0;              // recovered before debounce elapsed
-  }
+  bool plausible = worstPackVoltage(&worst);
+  BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
+                            batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
+  batteryEcoLockStep(ladder, plausible, worst, millis(),
+                     ECO_LOCK_THRESH_V, ECO_LOCK_DEBOUNCE_MS);
+  ecoLockLatched = ladder.ecoLockLatched;
+  ecoLockStartMs = ladder.ecoLockStartMs;
 }
 
 void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   if (batteryCutoffLatched) return;
   float worst;
-  if (!worstPackVoltage(&worst)) {
-    cutoffStartMs = 0;
-    return;
-  }
-  if (worst >= CUTOFF_THRESH_V) batteryOkConfirmed = true;  // boot gate: pack confirmed above cutoff
-  if (worst < CUTOFF_THRESH_V) {
-    uint32_t nowMs = millis();
-    if (cutoffStartMs == 0) cutoffStartMs = nowMs;
-    if (nowMs - cutoffStartMs >= CUTOFF_DEBOUNCE_MS) {
-      batteryCutoffLatched = true;
-      lowVoltLatched = true;         // start the D8 alarm WITH the cut (no silent cutoff)
-    }
-  } else {
-    cutoffStartMs = 0;               // recovered before debounce elapsed
+  bool plausible = worstPackVoltage(&worst);
+  BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
+                            batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
+  bool cutoffJustLatched = batteryCutoffStep(ladder, plausible, worst, millis(),
+                                             CUTOFF_THRESH_V, CUTOFF_DEBOUNCE_MS);
+  batteryCutoffLatched = ladder.cutoffLatched;
+  batteryOkConfirmed   = ladder.okConfirmed;
+  cutoffStartMs        = ladder.cutoffStartMs;
+  if (cutoffJustLatched) {
+    lowVoltLatched = true;           // start the D8 alarm WITH the cut (no silent cutoff)
   }
 }
 

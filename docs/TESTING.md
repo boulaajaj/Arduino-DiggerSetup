@@ -34,8 +34,9 @@ tests/
 ├── invariants/
 │   ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
 │   └── test_invariant_*.cpp    one property suite per safety invariant
-└── battery/                    pure-domain suite for src/domain/battery/ (#117 step 1)
-    └── test_voltage_plausibility.cpp
+└── battery/                    pure-domain suites for src/domain/battery/ (#117)
+    ├── test_voltage_plausibility.cpp
+    └── test_battery_ladder_domain.cpp
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
