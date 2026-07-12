@@ -8,9 +8,12 @@ Updated by session hooks — only technical content, no personal info.
 ## 2026-07-12 — Phase D step 3: thermal ladder extracted to src/domain/thermal/ (#158)
 
 - `tempStageUpdate()` / `hottestMotorTemp()` / `thermalUpdate()` staging
-  logic moved VERBATIM to `src/domain/thermal/` as `thermalStageStep()`
+  logic moved to `src/domain/thermal/` as `thermalStageStep()`
   (ThermalHysteresis), `hottestPlausibleTemperature()` +
-  `thermalDeratingStep()` (ThermalDerating) over ThermalTypes structs.
+  `thermalDeratingStep()` (ThermalDerating) over ThermalTypes structs —
+  observable staging behavior preserved exactly; the shim-boundary deltas
+  and one provably output-identical initialization change are itemized
+  below for the audit trail.
   Thresholds/bounds stay in `[CONFIG]`, passed as parameters. The sketch
   keeps all three functions as delegate shims — all 28 test references
   unchanged. The firmware's three independent stage bools kept verbatim;
