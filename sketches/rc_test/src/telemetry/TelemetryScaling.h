@@ -23,7 +23,7 @@ inline int16_t motorSpeedRawToElectricalHz(uint16_t raw) {  // REG_MSPEED 0x02, 
   return (int16_t)raw;
 }
 
-inline float temperatureRawToCelsius(uint16_t raw) { // REG_TESC/TMOT: low byte, raw − 40
+inline float temperatureRawToCelsius(uint16_t raw) {  // REG_TESC/TMOT: low byte, raw − 40
   return (float)(raw & 0xFF) - 40.0f;
 }
 
