@@ -57,7 +57,7 @@ TEST_CASE("maxOppose truth table (#90)") {
   CHECK(maxOppose(0.6f, 0.3f) == doctest::Approx(0.6f));    // larger wins
   CHECK(maxOppose(1.0f, -0.3f) == doctest::Approx(0.7f));   // dominant minus opposing
   CHECK(maxOppose(0.4f, 0.0f) == doctest::Approx(0.4f));    // single passes through
-  CHECK(maxOppose(-0.4f, -0.7f) == doctest::Approx(-0.7f)); // reverse: larger magnitude wins
+  CHECK(maxOppose(-0.4f, -0.7f) == doctest::Approx(-0.7f));  // reverse: larger magnitude wins
   CHECK(maxOppose(0.0f, 0.0f) == doctest::Approx(0.0f));
 }
 
