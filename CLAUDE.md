@@ -300,6 +300,7 @@ sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMW
 sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
 sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
+sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (X.BUS register decode + ×10 wire encode, header-only)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
