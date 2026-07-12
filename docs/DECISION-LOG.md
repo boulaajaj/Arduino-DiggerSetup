@@ -5,6 +5,28 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Documentation-sync hook + autonomous merge protocol (#156)
+
+- **Documentation-sync hook** (operator directive): `PostToolUse` hook in
+  `.claude/settings.json` runs `scripts/documentation_sync_hook.py` after
+  every Edit/Write. When the file is production code (sketches/ source,
+  dashboard/index.html, scripts/*.py, workflows, tests/ — excluding
+  web_page.h, arduino_secrets.h, src/generated/, vendor/), it injects a
+  once-per-session prompt telling the agent to verify docs/wiki +
+  architecture docs + CLAUDE.md file map against the change in the same PR.
+  Selftest (10 checks) wired to new `hooks-selftest.yml` CI.
+- **Mechanism finding:** PostToolUse hooks that print plain stdout never
+  reach the model (transcript-only) — the three pre-existing prompt-style
+  PostToolUse hooks in `.claude/settings.json` are silently inert. The new
+  hook uses the working `hookSpecificOutput.additionalContext` JSON form.
+  Converting the old hooks is left to the operator (they would start firing
+  for the first time).
+- **Autonomous merge protocol** (operator, same day): after a PR's review
+  rounds are resolved, 3 consecutive clean Copilot request→no-comments
+  cycles (~5 min apart) + CI green + zero unresolved threads ⇒ the agent
+  merges (squash, admin bypass of the 1-approval rule — bots cannot approve)
+  and continues to the next issue. First use: PR #155 (c595722).
+
 ## 2026-07-10 — Phase D step 2: BatteryLadder extracted to src/domain/battery/ (#154)
 
 - `batteryEcoLockUpdate()` / `batteryCutoffUpdate()` logic moved VERBATIM to
