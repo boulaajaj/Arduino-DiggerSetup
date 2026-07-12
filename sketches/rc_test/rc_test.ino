@@ -61,13 +61,14 @@
 #include "types.h"
 #include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
-// Phase D extraction (#117): pure domain logic lives under src/domain/ and is
-// included here directly until the FirmwareApp composition root lands
-// (migration window, #150).
+// Phase D extraction (#117): pure extracted logic lives under src/ (domain/
+// and observer layers) and is included here directly until the FirmwareApp
+// composition root lands (migration window, #150).
 #include "src/domain/battery/VoltagePlausibility.h"
 #include "src/domain/battery/BatteryLadder.h"
 #include "src/domain/thermal/ThermalHysteresis.h"
 #include "src/domain/thermal/ThermalDerating.h"
+#include "src/telemetry/TelemetryScaling.h"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -758,32 +759,33 @@ void telemSendRequest(uint8_t esc) {
   telRxLen = 0;
 }
 
-// Fold one register value into the telem struct for ESC index e.
+// Fold one register value into the telem struct for ESC index e. Scaling and
+// EMA math extracted to src/telemetry/TelemetryScaling.h (#117 step 4, #160).
 void telemApplyReg(uint8_t e, uint8_t reg, uint16_t raw) {
   EscTelem *t = &telem[e];
   bool first = !t->valid;
   switch (reg) {
     case REG_VBAT: {
-      float v = raw * 0.1f;
-      t->voltage = first ? v : t->voltage + TELEM_A_VOLT * (v - t->voltage);
+      float v = vbatRawToVolts(raw);
+      t->voltage = emaFold(t->voltage, v, TELEM_A_VOLT, first);
       break;
     }
     case REG_IBUS: {
-      float a = (int16_t)raw * 0.1f;
-      t->busCurrentA = first ? a : t->busCurrentA + TELEM_A_CURR * (a - t->busCurrentA);
+      float a = busCurrentRawToAmps(raw);
+      t->busCurrentA = emaFold(t->busCurrentA, a, TELEM_A_CURR, first);
       break;
     }
     case REG_MSPEED:
-      t->rpmHz = (int16_t)raw;                 // instantaneous
+      t->rpmHz = motorSpeedRawToElectricalHz(raw);  // instantaneous
       break;
     case REG_TESC: {
-      float c = (float)(raw & 0xFF) - 40.0f;   // temp is the low byte, raw − 40
-      t->escTempC = first ? c : t->escTempC + TELEM_A_TEMP * (c - t->escTempC);
+      float c = temperatureRawToCelsius(raw);       // temp is the low byte, raw − 40
+      t->escTempC = emaFold(t->escTempC, c, TELEM_A_TEMP, first);
       break;
     }
     case REG_TMOT: {
-      float c = (float)(raw & 0xFF) - 40.0f;
-      t->motorTempC = first ? c : t->motorTempC + TELEM_A_TEMP * (c - t->motorTempC);
+      float c = temperatureRawToCelsius(raw);
+      t->motorTempC = emaFold(t->motorTempC, c, TELEM_A_TEMP, first);
       break;
     }
   }
@@ -1250,12 +1252,14 @@ int buildTelemJson(char *body, size_t cap) {
     ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
     tempWarnActive ? 1 : 0, tempEcoActive ? 1 : 0, tempCutActive ? 1 : 0,
     outL, outR,
-    telem[0].valid ? 1 : 0, (unsigned long)age0, (long)telem[0].rpmHz * 30,
-    (int)lroundf(telem[0].busCurrentA * 10.0f), (int)lroundf(telem[0].voltage * 10.0f),
-    (int)lroundf(telem[0].escTempC), (int)lroundf(telem[0].motorTempC),
-    telem[1].valid ? 1 : 0, (unsigned long)age1, (long)telem[1].rpmHz * 30,
-    (int)lroundf(telem[1].busCurrentA * 10.0f), (int)lroundf(telem[1].voltage * 10.0f),
-    (int)lroundf(telem[1].escTempC), (int)lroundf(telem[1].motorTempC));
+    telem[0].valid ? 1 : 0, (unsigned long)age0,
+    electricalHzToDashboardRpm(telem[0].rpmHz),
+    scaleToDeciInteger(telem[0].busCurrentA), scaleToDeciInteger(telem[0].voltage),
+    roundToWholeInteger(telem[0].escTempC), roundToWholeInteger(telem[0].motorTempC),
+    telem[1].valid ? 1 : 0, (unsigned long)age1,
+    electricalHzToDashboardRpm(telem[1].rpmHz),
+    scaleToDeciInteger(telem[1].busCurrentA), scaleToDeciInteger(telem[1].voltage),
+    roundToWholeInteger(telem[1].escTempC), roundToWholeInteger(telem[1].motorTempC));
   // snprintf returns the length it WOULD have written; clamp to the buffer so
   // callers never read past `body` (Content-Length and write length stay valid
   // even if a frame were ever to overflow `cap`).

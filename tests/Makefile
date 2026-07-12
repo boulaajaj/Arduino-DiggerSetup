@@ -32,7 +32,8 @@ HARNESS  := $(wildcard stubs/*.h) characterization/FirmwareUnderTest.h \
 TESTS := $(wildcard characterization/test_*.cpp) \
          $(wildcard invariants/test_*.cpp) \
          $(wildcard battery/test_*.cpp) \
-         $(wildcard thermal/test_*.cpp)
+         $(wildcard thermal/test_*.cpp) \
+         $(wildcard telemetry/test_*.cpp)
 BINS  := $(addprefix build/,$(notdir $(TESTS:.cpp=)))
 
 # A duplicate basename across suite directories would silently shadow one
@@ -61,6 +62,10 @@ build/%: battery/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 
 build/%: thermal/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+
+build/%: telemetry/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 

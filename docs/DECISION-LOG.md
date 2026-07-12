@@ -5,6 +5,23 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 4: TelemetryScaling extracted to src/telemetry/ (#160)
+
+- The X.BUS register decode math from `[TELEMETRY]` `telemApplyReg()`
+  (VBAT ×0.1 V; IBUS ×0.1 A signed; MSPEED signed electrical Hz; TESC/TMOT
+  low byte − 40 °C; the EMA fold) and the compact wire encode from `[WIFI]`
+  `buildTelemJson()` (volts/amps → deci-integers via `lroundf(v*10)`,
+  temperatures → whole °C, electrical Hz ×30 → dashboard RPM) moved to
+  header-only `src/telemetry/TelemetryScaling.h` — first file in the
+  observer `telemetry/` layer; the two `.ino` functions stay as callers
+  delegating each expression. Observable behavior and wire format preserved
+  exactly.
+- Verified: all 20 host binaries green (new `tests/telemetry/` pure suite:
+  register signedness, low-byte temperature mask, EMA seeding, half-away-
+  from-zero deci rounding), zero expectation changes; compile clean — flash
+  116688 BYTE-IDENTICAL to pre-change (inline header functions), RAM 9812
+  unchanged. No bench check applicable (pure move).
+
 ## 2026-07-12 — Phase D step 3: thermal ladder extracted to src/domain/thermal/ (#158)
 
 - `tempStageUpdate()` / `hottestMotorTemp()` / `thermalUpdate()` staging
