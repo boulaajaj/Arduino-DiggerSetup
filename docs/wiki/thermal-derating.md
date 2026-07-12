@@ -15,9 +15,9 @@ hysteresis band is correct behavior, not a stuck state.
 - Temperatures arrive via [X.BUS telemetry](xbus-telemetry.md); implausible
   spikes are rejected, and dropout freezes the active stage rather than
   releasing it. The hysteresis stage, hottest-sensor selection, and staging
-  logic are extracted domain code of the
-  [architecture remediation](architecture-remediation.md)
-  (`src/domain/thermal/`); the sketch keeps thin delegates
+  logic were extracted into domain code (`src/domain/thermal/`) as part of
+  the [architecture remediation](architecture-remediation.md); the sketch
+  keeps thin delegates
 
 Deliberate asymmetry with the [battery ladder](battery-ladder.md): thermal
 cut **auto-recovers** when temperature falls; battery cutoff latches until
