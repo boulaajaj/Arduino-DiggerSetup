@@ -23,7 +23,9 @@ the Karpathy method (#53) plus the behavior-preservation covenant
   [copilot-instructions](../../.github/copilot-instructions.md) mirror the
   same rules so bot reviews align with the program
 - **This wiki** is itself governed here: agents maintain it, PRs that change
-  docs update affected notes ([README](README.md))
+  docs update affected notes ([README](README.md)); a session hook
+  (`scripts/documentation_sync_hook.py`, #156) prompts the agent to re-check
+  wiki + architecture docs whenever production code changes
 
 The [testing](testing.md) suites are the enforcement arm: expectations are
 law, and the gate defines "done" for any agent task.
