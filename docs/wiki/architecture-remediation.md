@@ -14,11 +14,13 @@ drive exactly as before.
 - **Phases** — A Define → B Protect ([testing](testing.md) suites, done) →
   C Govern (CI fitness functions, done) → D Refactor (extract domains,
   **active**) → E Polish
-- **First extracted domain** — the [battery ladder](battery-ladder.md)'s
+- **Extracted domains so far** — the [battery ladder](battery-ladder.md)'s
   voltage-plausibility gate and its two staged state machines (Eco lock,
-  cutoff + boot gate) live in `src/domain/battery/` (pure logic, no Arduino
-  includes, time passed as a parameter, host-tested directly); the sketch
-  keeps thin delegates until the composition root lands
+  cutoff + boot gate) live in `src/domain/battery/`; the
+  [thermal derating](thermal-derating.md) hysteresis stage, hottest-sensor
+  selection, and warn/eco/cut staging live in `src/domain/thermal/`. All
+  pure logic — no Arduino includes, time passed as a parameter, host-tested
+  directly; the sketch keeps thin delegates until the composition root lands
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

@@ -66,6 +66,8 @@
 // (migration window, #150).
 #include "src/domain/battery/VoltagePlausibility.h"
 #include "src/domain/battery/BatteryLadder.h"
+#include "src/domain/thermal/ThermalHysteresis.h"
+#include "src/domain/thermal/ThermalDerating.h"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -1061,58 +1063,54 @@ uint32_t tempWarnSinceMs = 0;   // trip-debounce timers (0 = not currently above
 uint32_t tempEcoSinceMs  = 0;
 uint32_t tempCutSinceMs  = 0;
 
+// The thermal ladder is extracted to src/domain/thermal/ (#117 step 3, #158);
+// these delegate shims keep every call site and test reference unchanged.
+// The shims own the boundary work the domain must not do: read the clock
+// (time is a parameter), flatten telem[] into ThermalReadings, mirror the
+// stage globals in/out, and — on the domain's cut-released signal — queue
+// [BEEPER]'s one-shot "restored" flourish (4 quick beeps; the repeating cut
+// alarm has already stopped because tempCutActive just went false). Domain
+// code never calls another module.
+
 // Hottest plausible temp across both ESCs (ESC + motor sensor each). Returns
 // false if neither ESC has a fresh valid plausible reading → caller HOLDS state.
 bool hottestMotorTemp(float* hot) {
-  float h = -1000.0f;
-  bool any = false;
+  ThermalReading readings[NUM_ESCS * 2];
   for (uint8_t i = 0; i < NUM_ESCS; i++) {
-    if (!telem[i].valid) continue;
-    float te = telem[i].escTempC;
-    float tm = telem[i].motorTempC;
-    if (te >= TEMP_PLAUS_MIN_C && te <= TEMP_PLAUS_MAX_C) {
-      if (te > h) h = te;
-      any = true;
-    }
-    if (tm >= TEMP_PLAUS_MIN_C && tm <= TEMP_PLAUS_MAX_C) {
-      if (tm > h) h = tm;
-      any = true;
-    }
+    readings[i * 2]     = ThermalReading{telem[i].escTempC, telem[i].valid};
+    readings[i * 2 + 1] = ThermalReading{telem[i].motorTempC, telem[i].valid};
   }
-  if (any) *hot = h;
-  return any;
+  return hottestPlausibleTemperature(readings, NUM_ESCS * 2,
+                                     TEMP_PLAUS_MIN_C, TEMP_PLAUS_MAX_C, hot);
 }
 
-// One hysteresis stage with trip debounce: flips ON when temp stays >= onC for
-// TEMP_DEBOUNCE_MS; flips OFF immediately when temp < offC (the on/off gap makes
-// release chatter impossible, so release needs no debounce).
 void tempStageUpdate(bool* state, uint32_t* since, float temp,
                      float onC, float offC, uint32_t nowMs) {
-  if (*state) {
-    if (temp < offC) {
-      *state = false;
-      *since = 0;
-    }
-  } else if (temp >= onC) {
-    if (*since == 0) *since = nowMs;
-    if (nowMs - *since >= TEMP_DEBOUNCE_MS) *state = true;
-  } else {
-    *since = 0;                      // dropped back before debounce elapsed
-  }
+  ThermalStageState stage{*state, *since};
+  thermalStageStep(stage, temp, nowMs, onC, offC, TEMP_DEBOUNCE_MS);
+  *state = stage.active;
+  *since = stage.sinceMs;
 }
 
 void thermalUpdate() {
-  float hot;
-  if (!hottestMotorTemp(&hot)) return;   // no fresh reading → hold every stage
-  uint32_t nowMs = millis();
-  bool wasCut = tempCutActive;
-  tempStageUpdate(&tempWarnActive, &tempWarnSinceMs, hot, TEMP_WARN_ON_C, TEMP_WARN_OFF_C, nowMs);
-  tempStageUpdate(&tempEcoActive,  &tempEcoSinceMs,  hot, TEMP_ECO_ON_C,  TEMP_ECO_OFF_C,  nowMs);
-  tempStageUpdate(&tempCutActive,  &tempCutSinceMs,  hot, TEMP_CUT_ON_C,  TEMP_CUT_OFF_C,  nowMs);
-  // Cooled back below the cut-release threshold → queue the one-shot "restored"
-  // flourish (4 quick beeps). The repeating cut alarm has already stopped because
-  // tempCutActive just went false.
-  if (wasCut && !tempCutActive) beepStart(BEEP_THERM_RESTORED, BEEP_THERM_RESTORED_LEN);
+  float hot = 0.0f;  // defensive init: the out-param is left unchanged on reject
+  bool haveReading = hottestMotorTemp(&hot);
+  ThermalDeratingState derating{{tempWarnActive, tempWarnSinceMs},
+                                {tempEcoActive,  tempEcoSinceMs},
+                                {tempCutActive,  tempCutSinceMs}};
+  bool cutReleased = thermalDeratingStep(
+      derating, haveReading, hot, millis(),
+      ThermalDeratingThresholds{TEMP_WARN_ON_C, TEMP_WARN_OFF_C,
+                                TEMP_ECO_ON_C,  TEMP_ECO_OFF_C,
+                                TEMP_CUT_ON_C,  TEMP_CUT_OFF_C,
+                                TEMP_DEBOUNCE_MS});
+  tempWarnActive = derating.warn.active;
+  tempWarnSinceMs = derating.warn.sinceMs;
+  tempEcoActive = derating.eco.active;
+  tempEcoSinceMs = derating.eco.sinceMs;
+  tempCutActive = derating.cut.active;
+  tempCutSinceMs = derating.cut.sinceMs;
+  if (cutReleased) beepStart(BEEP_THERM_RESTORED, BEEP_THERM_RESTORED_LEN);
 }
 
 
