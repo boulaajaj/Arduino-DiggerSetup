@@ -9,9 +9,10 @@ Updated by session hooks — only technical content, no personal info.
 
 - **Documentation-sync hook** (operator directive): `PostToolUse` hook in
   `.claude/settings.json` runs `scripts/documentation_sync_hook.py` after
-  every Edit/Write. When the file is production code (sketches/ source,
-  dashboard/index.html, scripts/*.py, workflows, tests/ — excluding
-  web_page.h, arduino_secrets.h, src/generated/, vendor/), it injects a
+  every Edit/Write. When the file matches the watched paths
+  (sketches/**/*.ino|.h|.cpp, dashboard/index.html, scripts/*.py,
+  .github/workflows/*.yml, tests/** — excluding web_page.h,
+  arduino_secrets.h, src/generated/, tests/build/, vendor/), it injects a
   once-per-session prompt telling the agent to verify docs/wiki +
   architecture docs + CLAUDE.md file map against the change in the same PR.
   Selftest (10 checks) wired to new `hooks-selftest.yml` CI.

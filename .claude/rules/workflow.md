@@ -19,10 +19,10 @@
   date, what, why). Physical checks we cannot run (no hardware) go to
   `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.
 - **Docs travel with code, same PR.** When production code changes, verify
-  docs/wiki notes, architecture docs, the CLAUDE.md file map, TESTING.md and
-  SAFETY.md still match — the documentation-sync hook
-  (`scripts/documentation_sync_hook.py`, #156) prompts this once per session;
-  the prompt is a floor, not the ceiling.
+  docs/wiki notes, architecture docs, the CLAUDE.md file map,
+  docs/TESTING.md, docs/SAFETY.md and OPERATOR-GUIDE.md still match — the
+  documentation-sync hook (`scripts/documentation_sync_hook.py`, #156)
+  prompts this once per session; the prompt is a floor, not the ceiling.
 - **Every firmware flash** (when hardware returns) gets a row in
   `docs/FIRMWARE-UPLOAD-LOG.md` immediately — an unlogged flash is treated as
   not done.

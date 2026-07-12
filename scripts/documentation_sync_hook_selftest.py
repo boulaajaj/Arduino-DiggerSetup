@@ -61,7 +61,9 @@ def main():
         "sketches/rc_test/web_page.h",            # generated
         "sketches/rc_test/arduino_secrets.h",     # secret
         "sketches/rc_test/src/generated/page.h",  # generated tree
+        "src/generated/page.h",                   # generated tree, relative root
         "tests/vendor/doctest/doctest.h",         # third-party
+        "tests/build/test_alerts",                # build artifact, relative root
         "docs/wiki/battery-ladder.md",            # docs are the TARGET, not a trigger
         "",                                        # missing path
     )

@@ -28,9 +28,9 @@ WATCHED = (
 EXCLUDED = (
     re.compile(r"web_page\.h$"),          # generated from dashboard/index.html
     re.compile(r"arduino_secrets\.h$"),   # gitignored secret, never documented
-    re.compile(r"[\\/]src[\\/]generated[\\/]"),
-    re.compile(r"[\\/]tests[\\/]build[\\/]"),
-    re.compile(r"[\\/]vendor[\\/]"),
+    re.compile(r"(^|[\\/])src[\\/]generated[\\/]"),
+    re.compile(r"(^|[\\/])tests[\\/]build[\\/]"),
+    re.compile(r"(^|[\\/])vendor[\\/]"),
 )
 
 PROMPT = (
