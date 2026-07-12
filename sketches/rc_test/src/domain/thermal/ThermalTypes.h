@@ -13,7 +13,9 @@ struct ThermalReading {
 };
 
 // One hysteresis stage: flips ON after the trip debounce, OFF immediately
-// below the release threshold. sinceMs of 0 = not currently above ON.
+// below the release threshold. sinceMs is the trip-debounce start timestamp,
+// meaningful only while inactive (0 = debounce not running); it is not
+// consulted while the stage is active.
 struct ThermalStageState {
   bool active;
   uint32_t sinceMs;

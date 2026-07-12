@@ -1093,7 +1093,7 @@ void tempStageUpdate(bool* state, uint32_t* since, float temp,
 }
 
 void thermalUpdate() {
-  float hot = 0.0f;  // stays unwritten when no fresh reading; the step holds then
+  float hot = 0.0f;  // defensive init: the out-param is left unchanged on reject
   bool haveReading = hottestMotorTemp(&hot);
   ThermalDeratingState derating{{tempWarnActive, tempWarnSinceMs},
                                 {tempEcoActive,  tempEcoSinceMs},
