@@ -5,6 +5,33 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 6: CurvatureDrive extracted to src/domain/drive/ (#164)
+
+- The propulsion-path core `curvatureDrive()` (`[DRIVE]`) moved to
+  `src/domain/drive/CurvatureDrive.h/.cpp` as
+  `curvatureDriveStep(xSpeed, zRotation, gearScale, CurvatureParameters)`
+  over `DriveTypes.h` (`TrackCommand` — layout-identical to WheelSpeeds;
+  `CurvatureParameters` carrying pivotCap/taper/blend band/turnTrackCap).
+  The algorithm commentary (#72/#86/#96/#114 laws) moved with the code.
+- Exactly two mechanical substitutions, both float-semantics-identical:
+  Arduino's `constrain()` macro expanded as `clampFloat()` (same ternary),
+  and tunables read from the parameters struct.
+- **State-ownership sin fixed structurally**: `curvatureDrive()` was the
+  documented example of a hidden global read (`currentGear` behind the
+  parameter list). The `.ino` delegate now owns the gear read visibly —
+  `pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW :
+  PIVOT_SPEED_CAP` — and passes it in. Same value, same pass. The delegate
+  keeps the exact `curvatureDrive(x, z, gearScale) -> WheelSpeeds`
+  signature, so all 17 test references and both call sites are unchanged.
+- Verified: all 22 host binaries green with ZERO expectation changes — the
+  characterization suite's exact float32 expectations for pivot caps, the
+  smoothstep blend, the faded-ceiling desaturation, and reverse-steering
+  consistency pass unchanged against the extracted implementation. New
+  `tests/drive/` pure suite (7 cases) locks the laws at the unit level.
+  Compile clean — flash 116784 (+48 vs 116736, cross-TU call), RAM
+  unchanged 9812. No bench check applicable (pure move; bench
+  re-verification of the whole series remains queued for hardware return).
+
 ## 2026-07-12 — Phase D step 5: ExpoCurve + DeadbandPolicy extracted to src/domain/operator_input/ (#162)
 
 - `expoCurve()` moved from `[JOYSTICK]` to

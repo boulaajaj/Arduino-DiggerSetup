@@ -70,6 +70,7 @@
 #include "src/domain/thermal/ThermalDerating.h"
 #include "src/domain/operator_input/ExpoCurve.h"
 #include "src/domain/operator_input/DeadbandPolicy.h"
+#include "src/domain/drive/CurvatureDrive.h"
 #include "src/telemetry/TelemetryScaling.h"
 
 
@@ -381,79 +382,20 @@ const size_t   WIFI_PAGE_CHUNK       = 1024;  // dashboard HTML bytes sent per l
 // [DRIVE] — curvatureDrive: proven FRC algorithm (WPILib)
 // ═══════════════════════════════════════════════════════════════
 
-// Gear-aware tank mix. `gearScale` (Eco/Normal/Boost) caps the AVERAGE forward
-// speed — NOT each wheel — so in a turn the outer track may use the headroom up
-// to the ESC limit (±1.0) and the turn keeps its speed instead of slowing (#72).
-// At Boost (gearScale = 1.0) there is no headroom, so the outer simply
-// desaturates at the rail (unchanged behavior). Pivot is gear-scaled so low
-// gears spin gently.
+// The curvature mix is extracted to src/domain/drive/CurvatureDrive.* (#117
+// step 6, #164) — the algorithm and its commentary (#72/#86/#96/#114) moved
+// with it. This delegate keeps the call sites and every test reference
+// unchanged, and owns the one dependency the domain must not read: the
+// gear-selected pivot cap (state-ownership rule — currentGear is read HERE,
+// visibly, instead of hidden behind the parameter list).
 WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
-  xSpeed    = constrain(xSpeed, -1.0f, 1.0f);
-  zRotation = constrain(zRotation, -1.0f, 1.0f);
-
-  // Pivot output: counter-rotate the tracks (capped), then gear-scale so low
-  // gears pivot gently. Eco uses a looser cap to keep usable pivot authority.
-  float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW : PIVOT_SPEED_CAP;
-  float cappedRotation = constrain(zRotation, -pivotCap, pivotCap);
-  // Throttle is tapered by steering in THIS branch only (#114): while turning,
-  // low throttle no longer shoves both tracks the same way — the
-  // counter-rotation persists and decays smoothly instead of surging.
-  float pivotThr = xSpeed * (1.0f - PIVOT_THROTTLE_TAPER * fabsf(zRotation));
-  float pivotL = (pivotThr - cappedRotation) * gearScale;
-  float pivotR = (pivotThr + cappedRotation) * gearScale;
-
-  // Curvature output: the gear caps the AVERAGE (avg); an ADDITIVE steering term
-  // (delta) forms the inner/outer differential. delta's sign is set by the
-  // STEERING STICK alone — never by the throttle direction — so steering stays
-  // consistent in reverse: stick-left = nose-left going forward AND backward
-  // (#86 Part 1). The old multiply, avg*(1±|z|), scaled the differential by avg,
-  // so when avg went negative (reverse) the inner/outer swapped — that was the
-  // mid-range "steering reverses when backing up" bug. Forward is UNCHANGED:
-  // for avg ≥ 0, avg ∓ delta == avg*(1∓|z|). Peak magnitude is still
-  // |avg|+delta = |avg|·(1+|z|), so the #96 ceiling and #72 headroom are intact.
-  float avg   = xSpeed * gearScale;
-  float delta = fabsf(avg) * fabsf(zRotation);   // symmetric steering term, >= 0
-  float curvL, curvR;
-  // delta is subtracted from the track on the side we steer toward and added to
-  // the other, regardless of travel direction. Forward that means the steer-side
-  // track goes slower (the "inner" track); in reverse the same maths makes it go
-  // harder-reverse — which is what keeps the nose turning the SAME way backward.
-  // (So avoid the forward-only "inner/outer" framing when reasoning about reverse.)
-  if (zRotation > 0) {        // turn LEFT  (nose-left forward AND reverse)
-    curvL = avg - delta;     // left  track: less forward / harder reverse
-    curvR = avg + delta;     // right track: more forward / less reverse
-  } else {                    // turn RIGHT
-    curvL = avg + delta;
-    curvR = avg - delta;
-  }
-  // Outer-track ceiling fades from the ESC rail (gentle turn — both tracks moving)
-  // down to TURN_TRACK_CAP (full steer — inner track stopped). |zRotation| is the
-  // turn-sharpness signal (inner = avg*(1-|z|) → 0 at full steer), so the borrowed
-  // headroom shrinks smoothly as the inner stops — no knee, no RPM feedback (#96).
-  // Straight (|z| = 0) keeps the full rail, so straight-line throttle is unchanged.
-  // Forward AND reverse are treated symmetrically: reverseCap() bounds the reverse
-  // *average* speed upstream, and the outer track then borrows the same turn
-  // headroom forward does — so a reverse turn swings precisely instead of slowing
-  // (operator decision, 2026-06-28). No reverse-specific ceiling special-case.
-  float ceiling = 1.0f - (1.0f - TURN_TRACK_CAP) * fabsf(zRotation);
-  float peak = fmaxf(fabsf(curvL), fabsf(curvR));
-  if (peak > ceiling) {    // desaturate against the faded ceiling, preserving the turn ratio
-    float k = ceiling / peak;
-    curvL *= k;
-    curvR *= k;
-  }
-
-  // Smoothstep blend pivot → curvature as |xSpeed| grows, across a WIDE band so
-  // the pivot↔drive hand-off is gradual (no snap near low throttle, #72). Zero
-  // slope at both endpoints means the operator never feels a mode boundary.
-  float t = (fabsf(xSpeed) - PIVOT_BLEND_START) / (PIVOT_BLEND_END - PIVOT_BLEND_START);
-  t = constrain(t, 0.0f, 1.0f);
-  t = t * t * (3.0f - 2.0f * t);
-
-  return {
-    pivotL * (1.0f - t) + curvL * t,
-    pivotR * (1.0f - t) + curvR * t
-  };
+  float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW
+                                             : PIVOT_SPEED_CAP;
+  TrackCommand command = curvatureDriveStep(
+      xSpeed, zRotation, gearScale,
+      CurvatureParameters{pivotCap, PIVOT_THROTTLE_TAPER, PIVOT_BLEND_START,
+                          PIVOT_BLEND_END, TURN_TRACK_CAP});
+  return {command.left, command.right};
 }
 
 ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
