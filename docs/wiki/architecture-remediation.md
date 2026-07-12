@@ -15,9 +15,10 @@ drive exactly as before.
   C Govern (CI fitness functions, done) → D Refactor (extract domains,
   **active**) → E Polish
 - **First extracted domain** — the [battery ladder](battery-ladder.md)'s
-  voltage-plausibility gate lives in `src/domain/battery/` (pure logic, no
-  Arduino includes, host-tested directly); the sketch keeps a thin delegate
-  until the composition root lands
+  voltage-plausibility gate and its two staged state machines (Eco lock,
+  cutoff + boot gate) live in `src/domain/battery/` (pure logic, no Arduino
+  includes, time passed as a parameter, host-tested directly); the sketch
+  keeps thin delegates until the composition root lands
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

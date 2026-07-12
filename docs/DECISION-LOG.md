@@ -5,6 +5,35 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-10 — Phase D step 2: BatteryLadder extracted to src/domain/battery/ (#154)
+
+- `batteryEcoLockUpdate()` / `batteryCutoffUpdate()` logic moved VERBATIM to
+  `src/domain/battery/BatteryLadder.h/.cpp` as `batteryEcoLockStep()` /
+  `batteryCutoffStep()` operating on a `BatteryLadderState` struct.
+  Thresholds/debounces stay in `[CONFIG]`, passed as parameters. The sketch
+  keeps both functions as delegate shims mirroring the existing globals
+  (all five already in `resetFirmwareState()`), so every call site and test
+  reference is unchanged.
+- **Time is a parameter** introduced (state-ownership rule): domain code
+  takes `nowMs`; the shim reads `millis()`. Delta accepted as non-observable:
+  the shim reads `millis()` once per un-latched pass where the original read
+  it only while below threshold (a register read, no behavior effect).
+- **State-ownership sin fixed structurally, not behaviorally**: the domain
+  cutoff step RETURNS "just latched" instead of writing [ALERT]'s
+  `lowVoltLatched`; the shim asserts the alarm latch in the same pass at the
+  same transition — alarm still starts WITH the cut.
+- Shim early-returns preserve the original property that a latched stage
+  reads no telemetry/clock.
+- New pure-domain suite `tests/battery/test_battery_ladder_domain.cpp`
+  (basename kept distinct from `characterization/test_battery_ladder.cpp` —
+  flat-build duplicate guard) locks debounce boundaries (latch at exactly
+  start+debounce), latch permanence, recovery/implausible timer resets,
+  strict `<` thresholds, boot-gate confirmation at exactly 10.0 V, and the
+  just-latched signal firing exactly once.
+- Verified: full host suite green before/after with zero expectation changes;
+  compile clean — flash 116472 bytes (+176 vs 116296: cross-TU calls + state
+  mirror), RAM unchanged 9812. No bench check applicable (pure move).
+
 ## 2026-07-09 — Phase D step 1: VoltagePlausibility extracted to src/domain/battery/ (#151)
 
 - First #117 extraction: `worstPackVoltage`'s logic moved VERBATIM to
