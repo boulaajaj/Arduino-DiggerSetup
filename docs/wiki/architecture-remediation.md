@@ -21,10 +21,11 @@ drive exactly as before.
   selection, and warn/eco/cut staging live in `src/domain/thermal/`; the
   [X.BUS telemetry](xbus-telemetry.md) register-decode and ×10 wire-encode
   scaling lives in `src/telemetry/` (observer layer); the operator-input
-  expo curve and center-snap deadband live in `src/domain/operator_input/`.
-  All pure logic — no Arduino includes, time passed as a parameter,
-  host-tested directly; the sketch keeps thin delegates until the
-  composition root lands
+  expo curve and center-snap deadband live in `src/domain/operator_input/`;
+  the curvature tank mix — the propulsion-path core — lives in
+  `src/domain/drive/`. All pure logic — no Arduino includes, time passed as
+  a parameter, host-tested directly; the sketch keeps thin delegates until
+  the composition root lands
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior
