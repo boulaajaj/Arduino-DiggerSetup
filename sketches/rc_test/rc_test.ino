@@ -68,6 +68,8 @@
 #include "src/domain/battery/BatteryLadder.h"
 #include "src/domain/thermal/ThermalHysteresis.h"
 #include "src/domain/thermal/ThermalDerating.h"
+#include "src/domain/operator_input/ExpoCurve.h"
+#include "src/domain/operator_input/DeadbandPolicy.h"
 #include "src/telemetry/TelemetryScaling.h"
 
 
@@ -478,8 +480,10 @@ int sbusToServo(int raw) {
   return map(constrain(raw, SBUS_MIN, SBUS_MAX), SBUS_MIN, SBUS_MAX, SVMIN, SVMAX);
 }
 
+// Deadband math extracted to src/domain/operator_input/DeadbandPolicy.*
+// (#117 step 5, #162); this delegate keeps every call site unchanged.
 int rcDeadband(int pw) {
-  return (abs(pw - SVC) <= RC_DEADBAND) ? SVC : pw;
+  return centerSnapDeadband(pw, SVC, RC_DEADBAND);
 }
 
 int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_THR]))   : SVC; }
@@ -542,13 +546,12 @@ void updateGear() {
 // [JOYSTICK] — ADC, deadband, expo curve
 // ═══════════════════════════════════════════════════════════════
 
-float expoCurve(float x, float linearW, float cubicW) {
-  float a = fabsf(x);
-  return linearW * a + cubicW * a * a * a;
-}
+// expoCurve() now lives in src/domain/operator_input/ExpoCurve.* (#117
+// step 5, #162) — same name and signature, so every call site (and the
+// characterization tests) resolves to the domain implementation directly.
 
 int joyDeadband(int adc) {
-  return (abs(adc - ADC_CENTER) <= JOY_DEADBAND) ? ADC_CENTER : adc;
+  return centerSnapDeadband(adc, ADC_CENTER, JOY_DEADBAND);
 }
 
 JoystickState cachedJoy = {ADC_CENTER, ADC_CENTER, 0.0f, 0.0f};

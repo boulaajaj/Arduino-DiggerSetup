@@ -39,8 +39,10 @@ tests/
 │   └── test_battery_ladder_domain.cpp
 ├── thermal/                    pure-domain suite for src/domain/thermal/ (#117)
 │   └── test_thermal_domain.cpp
-└── telemetry/                  pure suite for src/telemetry/ (#117)
-    └── test_telemetry_scaling.cpp
+├── telemetry/                  pure suite for src/telemetry/ (#117)
+│   └── test_telemetry_scaling.cpp
+└── operator_input/             pure-domain suite for src/domain/operator_input/ (#117)
+    └── test_operator_input_domain.cpp
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
