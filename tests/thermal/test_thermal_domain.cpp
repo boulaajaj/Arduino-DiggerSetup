@@ -97,6 +97,16 @@ TEST_CASE("hottest selection: band edges inclusive; none usable leaves out-param
   CHECK(hottest == -1.0f);                   // rejected calls never write it
 }
 
+TEST_CASE("hottest selection stays correct for bounds below the old sentinel") {
+  // The bounds are parameters: with a band reaching below -1000 the result
+  // must still be the actual hottest reading, not a sentinel artifact.
+  const ThermalReading deepCold[1] = {{-1500.0f, true}};
+  float hottest = 0.0f;
+  CHECK(hottestPlausibleTemperature(deepCold, 1, -2000.0f, 200.0f,
+                                    &hottest) == true);
+  CHECK(hottest == doctest::Approx(-1500.0f));
+}
+
 TEST_CASE("telemetry dropout HOLDS every stage — never cuts, never releases") {
   ThermalDeratingState derating{{true, 0}, {true, 0}, {true, 0}};
   CHECK(thermalDeratingStep(derating, false, 0.0f, 7000, THRESHOLDS) == false);

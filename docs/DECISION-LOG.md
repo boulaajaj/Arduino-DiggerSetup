@@ -34,6 +34,12 @@ Updated by session hooks — only technical content, no personal info.
 - Verified: full host suite green before/after, zero expectation changes;
   compile clean — flash 116688 (+200 vs 116488), RAM unchanged 9812. No
   bench check applicable (pure move).
+- Review fix (Copilot): the hottest-selection running max now starts at
+  `plausibleMinC` instead of the original `-1000.0f` sentinel — provably
+  output-identical for every input (accepted readings are all >= minC), but
+  correct for any parameter range now that the bounds are parameters (the
+  sentinel was only safe with the fixed -20 °C constant). Unit-locked with a
+  below-sentinel-band test case.
 
 ## 2026-07-12 — Documentation-sync hook + autonomous merge protocol (#156)
 

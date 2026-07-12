@@ -11,7 +11,11 @@ bool hottestPlausibleTemperature(const ThermalReading* readings,
                                  uint8_t count,
                                  float plausibleMinC, float plausibleMaxC,
                                  float* hottestOut) {
-  float h = -1000.0f;
+  // Running max starts at the lower plausibility bound: every accepted
+  // reading is >= plausibleMinC, so the result is identical to the
+  // firmware's original fixed -1000.0f sentinel — but stays correct for
+  // any parameter range now that the bounds are parameters.
+  float h = plausibleMinC;
   bool any = false;
   for (uint8_t i = 0; i < count; i++) {
     if (!readings[i].valid) continue;
