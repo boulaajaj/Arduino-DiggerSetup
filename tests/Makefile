@@ -33,7 +33,8 @@ TESTS := $(wildcard characterization/test_*.cpp) \
          $(wildcard invariants/test_*.cpp) \
          $(wildcard battery/test_*.cpp) \
          $(wildcard thermal/test_*.cpp) \
-         $(wildcard telemetry/test_*.cpp)
+         $(wildcard telemetry/test_*.cpp) \
+         $(wildcard operator_input/test_*.cpp)
 BINS  := $(addprefix build/,$(notdir $(TESTS:.cpp=)))
 
 # A duplicate basename across suite directories would silently shadow one
@@ -66,6 +67,10 @@ build/%: thermal/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 
 build/%: telemetry/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+
+build/%: operator_input/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 

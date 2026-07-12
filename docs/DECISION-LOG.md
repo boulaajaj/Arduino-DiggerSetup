@@ -5,6 +5,28 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 5: ExpoCurve + DeadbandPolicy extracted to src/domain/operator_input/ (#162)
+
+- `expoCurve()` moved from `[JOYSTICK]` to
+  `src/domain/operator_input/ExpoCurve.h/.cpp` with the SAME name and
+  signature — the `.ino` definition was removed and every call site
+  (including the characterization tests) resolves to the domain
+  implementation directly; weights stay `[CONFIG]` parameters.
+- `rcDeadband()` / `joyDeadband()` now delegate to one parameterized
+  `centerSnapDeadband(value, center, width)` in `DeadbandPolicy.h/.cpp` —
+  the two originals were the identical comparison with different constants.
+  Arduino's `abs()` macro is expanded manually in the domain (equivalent
+  for every reachable servo-µs/ADC value).
+- Deliberately deferred: `InputNormalization` (entangled with
+  `currentGear`/`reverseCap()` → extracts with GearPolicy/CommandMixer) and
+  `sbusToServo()` (S.BUS protocol mapping on Arduino `map()` — reimplementing
+  `map()` risks integer-rounding drift; infrastructure adapter territory).
+- Verified: all 21 host binaries green (new `tests/operator_input/` suite:
+  exact [CONFIG] weight-pair math at 0/0.5/1, magnitude-only symmetry,
+  inclusive band edges for both RC and joystick parameterizations), zero
+  expectation changes; compile clean — flash 116736 (+48 vs 116688,
+  cross-TU calls), RAM unchanged 9812. No bench check applicable.
+
 ## 2026-07-12 — Phase D step 4: TelemetryScaling extracted to src/telemetry/ (#160)
 
 - The X.BUS register decode math from `[TELEMETRY]` `telemApplyReg()`
