@@ -5,6 +5,36 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 3: thermal ladder extracted to src/domain/thermal/ (#158)
+
+- `tempStageUpdate()` / `hottestMotorTemp()` / `thermalUpdate()` staging
+  logic moved VERBATIM to `src/domain/thermal/` as `thermalStageStep()`
+  (ThermalHysteresis), `hottestPlausibleTemperature()` +
+  `thermalDeratingStep()` (ThermalDerating) over ThermalTypes structs.
+  Thresholds/bounds stay in `[CONFIG]`, passed as parameters. The sketch
+  keeps all three functions as delegate shims — all 28 test references
+  unchanged. The firmware's three independent stage bools kept verbatim;
+  the target glossary's ThermalStage enum is a later consolidation.
+- Boundary work stays in the shims: clock read (time is a parameter),
+  telem[]→ThermalReading flattening (per-ESC validity mirrored to both its
+  sensors — comparison-identical to the original per-ESC loop), stage-global
+  mirroring, and BEEP_THERM_RESTORED queued on the domain's cut-released
+  return ([BEEPER] stays application-side, as with lowVoltLatched in #154).
+- Same accepted non-observable delta as #154 (logged precedent): the shim
+  reads `millis()` and builds the reading array unconditionally where the
+  original early-returned on telemetry dropout. `hot` initialized to 0.0f
+  (the #155-round lesson: never pass a possibly-unwritten out-param).
+- New pure-domain suite `tests/thermal/test_thermal_domain.cpp` (8 cases)
+  locks: trip at exactly since+debounce, timer reset on drop-back, the
+  hysteresis HOLD inside the on/off gap incl. exactly-OFF (behavior law),
+  immediate release below OFF, plausible-hottest selection with inclusive
+  band edges and unwritten out-param on reject, dropout-holds-every-stage
+  (timers too), cut-released edge fires exactly once, stage independence at
+  86 C. Makefile: thermal/ glob + no-stubs rule mirroring battery/.
+- Verified: full host suite green before/after, zero expectation changes;
+  compile clean — flash 116688 (+200 vs 116488), RAM unchanged 9812. No
+  bench check applicable (pure move).
+
 ## 2026-07-12 — Documentation-sync hook + autonomous merge protocol (#156)
 
 - **Documentation-sync hook** (operator directive): `PostToolUse` hook in
