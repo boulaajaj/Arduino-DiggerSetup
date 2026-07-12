@@ -5,6 +5,33 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 7: GearPolicy + CommandMixer extracted to src/domain/drive/ (#166)
+
+- `updateGear()`'s decision tree moved to `GearPolicy.h/.cpp` as
+  `gearPolicySelect(gearPulse, rcValid, forceEco, parameters) →
+  GearSelection` — RC-invalid failsafe, strict CH4 thresholds, forceEco
+  (battery Eco lock OR thermal Eco) overriding last, verbatim. The
+  `reverseCap()`/`outCapToX()` helpers became parameter-visible
+  `reverseCapForGear()`/`trackCapToAxisDomain()`. The `.ino` shims own the
+  boundary reads (sbus CH4, Eco forces) and mirror `gearScale`/`currentGear`.
+- `maxOppose()` (#90) moved keeping its name/signature (definition deleted
+  from the `.ino`, like `expoCurve` in #162); `mixCommands()` delegates to
+  `mixAxisCommands()` with the `OVR_LO`/`OVR_HI` thresholds as parameters —
+  Mode 2's exact-zero rcActive compare preserved verbatim (locked law).
+- Domain `GearLevel` enum (GEAR_ECO/NORMAL/BOOST = 0/1/2) mirrors types.h's
+  `Gear` values; the correspondence is `static_assert`ed in the `.ino`, so
+  the shim casts are compile-time-proven and the SSE gear encoding is
+  untouched. New `AxisCommand` (layout-identical to `DriveCommand`) joins
+  `DriveTypes.h`.
+- Verified: all 23 host binaries green with zero expectation changes (new
+  `tests/drive/test_gear_mixer_domain.cpp`: threshold edges, failsafe and
+  forceEco dominance, per-gear reverse caps, cap-domain conversion,
+  maxOppose truth table, all three mixer modes incl. the exact-zero law).
+  Compile clean — flash 116920 (+136 vs 116784, cross-TU calls), RAM
+  unchanged 9812. Step-6 domain test scale constants renamed
+  (GEAR_ECO→GEAR_ECO_SCALE) to clear the new enum's names — test-file
+  naming only, no expectation changes.
+
 ## 2026-07-12 — Phase D step 6: CurvatureDrive extracted to src/domain/drive/ (#164)
 
 - The propulsion-path core `curvatureDrive()` (`[DRIVE]`) moved to

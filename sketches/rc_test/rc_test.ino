@@ -71,6 +71,8 @@
 #include "src/domain/operator_input/ExpoCurve.h"
 #include "src/domain/operator_input/DeadbandPolicy.h"
 #include "src/domain/drive/CurvatureDrive.h"
+#include "src/domain/drive/GearPolicy.h"
+#include "src/domain/drive/CommandMixer.h"
 #include "src/telemetry/TelemetryScaling.h"
 
 
@@ -301,15 +303,28 @@ bool tempWarnActive = false;  // hottest sensor >= TEMP_WARN_ON_C → warning tr
 bool tempEcoActive  = false;  // hottest sensor >= TEMP_ECO_ON_C  → force Eco gear
 bool tempCutActive  = false;  // hottest sensor >= TEMP_CUT_ON_C  → cut motors (auto-recovers)
 
+// The cap helpers and gear decision tree are extracted to
+// src/domain/drive/GearPolicy.* (#117 step 7, #166); these delegates keep
+// every call site unchanged and own the global reads (gearScale,
+// currentGear) visibly. The domain GearLevel enum mirrors types.h's Gear
+// values — proven at compile time:
+static_assert((int)GEAR_LOW == (int)GEAR_ECO &&
+              (int)GEAR_MID == (int)GEAR_NORMAL &&
+              (int)GEAR_HIGH == (int)GEAR_BOOST,
+              "types.h Gear and domain GearLevel values must correspond");
+
 // Convert a MAX TRACK-OUTPUT cap (0..1) to the xSpeed domain for the current
 // gear (output = xSpeed * gearScale). Single point of truth for every cap.
-inline float outCapToX(float outCap) { return outCap / gearScale; }
+inline float outCapToX(float outCap) {
+  return trackCapToAxisDomain(outCap, gearScale);
+}
 
 // Per-gear reverse cap (#113): Eco/Normal hold 55%, Boost allows 65%. Single
 // source of truth — both rcCommand() and the joystick clamp read this, so the
 // reverse limit lives in exactly one place.
 inline float reverseCap() {
-  return (currentGear == GEAR_HIGH) ? REVERSE_CAP_BOOST : REVERSE_CAP_STD;
+  return reverseCapForGear((GearLevel)currentGear, REVERSE_CAP_STD,
+                           REVERSE_CAP_BOOST);
 }
 
 // Curvature drive — pivot/curvature blend band.
@@ -456,31 +471,19 @@ DriveCommand rcCommand() {
 // are declared up in [CONFIG] so the drive functions and curvatureDrive
 // can read them for the Eco-only conditional caps.
 
+// The decision tree is extracted to src/domain/drive/GearPolicy.* (#117
+// step 7, #166); this delegate owns the boundary reads — sbus CH4 and the
+// Eco forces (battery Eco lock #65 latched OR thermal Eco #111
+// non-latching, which clears once the motor cools below TEMP_ECO_OFF_C) —
+// and mirrors the gearScale/currentGear globals every caller reads.
 void updateGear() {
-  if (!sbusValid) {
-    gearScale = GEAR_LOW_SCALE;
-    currentGear = GEAR_LOW;
-    return;
-  }
-  int rc4 = sbusToServo(sbusData.ch[SBUS_CH_GEAR]);
-  if (rc4 < OVR_LO) {
-    gearScale = GEAR_LOW_SCALE;
-    currentGear = GEAR_LOW;
-  } else if (rc4 > OVR_HI) {
-    gearScale = GEAR_HIGH_SCALE;
-    currentGear = GEAR_HIGH;
-  } else {
-    gearScale = GEAR_MID_SCALE;
-    currentGear = GEAR_MID;
-  }
-  // Low-battery Eco lockout (#65, latched) OR motor over-temp Eco lock (#111,
-  // non-latching): force Eco regardless of the RC gear switch to ease load on a
-  // draining pack or a hot motor. The thermal lock clears on its own once the
-  // motor cools below TEMP_ECO_OFF_C.
-  if (ecoLockLatched || tempEcoActive) {
-    gearScale = GEAR_LOW_SCALE;
-    currentGear = GEAR_LOW;
-  }
+  GearSelection selection = gearPolicySelect(
+      sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR]) : 0, sbusValid,
+      ecoLockLatched || tempEcoActive,
+      GearPolicyParameters{GEAR_LOW_SCALE, GEAR_MID_SCALE, GEAR_HIGH_SCALE,
+                           OVR_LO, OVR_HI});
+  gearScale = selection.scale;
+  currentGear = (Gear)selection.level;
 }
 
 
@@ -534,28 +537,18 @@ void updateJoystick(uint32_t now) {
 // [MIXER] — Override switch selects authority
 // ═══════════════════════════════════════════════════════════════
 
-// Max/oppose combine for one axis (#90): the stronger same-direction input wins
-// (NOT summed), opposing inputs subtract. result = max(a,b,0) + min(a,b,0).
-//   same dir  60% & 30% → 60%   (larger wins, no halving)
-//   opposite +100% & −30% → 70% (dominant minus opposing)
-//   single    x & 0 → x         (full range — fixes the old 50/50 halving)
-float maxOppose(float a, float b) {
-  return fmaxf(fmaxf(a, b), 0.0f) + fminf(fminf(a, b), 0.0f);
-}
-
-// Combine RC + joystick at the AXIS level (xSpeed/zRotation), per override mode.
-// curvatureDrive runs ONCE on the result (in loop), so a single operator always
-// gets full range — the old code averaged the final wheel PWMs and halved it.
+// maxOppose() (#90) and the mode selection are extracted to
+// src/domain/drive/CommandMixer.* (#117 step 7, #166) — maxOppose keeps its
+// name and signature, so call sites and tests resolve to the domain
+// directly. This delegate converts DriveCommand ↔ AxisCommand
+// (layout-identical) and passes the [CONFIG] thresholds. curvatureDrive
+// runs ONCE on the result (in loop), so a single operator always gets full
+// range — the old code averaged the final wheel PWMs and halved it.
 DriveCommand mixCommands(DriveCommand rc, int ovr, DriveCommand joy) {
-  if (ovr < OVR_LO) {            // Mode 1 — RC only
-    return rc;
-  } else if (ovr > OVR_HI) {     // Mode 3 — dual: max/oppose per axis
-    return { maxOppose(rc.xSpeed, joy.xSpeed),
-             maxOppose(rc.zRotation, joy.zRotation) };
-  } else {                        // Mode 2 — RC overrides joystick when RC active
-    bool rcActive = (rc.xSpeed != 0.0f) || (rc.zRotation != 0.0f);
-    return rcActive ? rc : joy;
-  }
+  AxisCommand mixed = mixAxisCommands(AxisCommand{rc.xSpeed, rc.zRotation},
+                                      AxisCommand{joy.xSpeed, joy.zRotation},
+                                      ovr, OVR_LO, OVR_HI);
+  return {mixed.xSpeed, mixed.zRotation};
 }
 
 
