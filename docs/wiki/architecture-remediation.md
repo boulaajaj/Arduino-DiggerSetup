@@ -41,6 +41,12 @@ drive exactly as before.
   boundary, the telemetry port owns the `EscTelem` type it delivers while
   the sketch keeps owning the array, and the network layer only ever
   handles encoded bytes (the reverse `TelemetryFrameSource` seam)
+- **Alerts are a layer** — the beep vocabulary lives in `src/alerts/`:
+  `AlertPolicy` (the priority ladder, the low-voltage latch with its own
+  plausibility form, inactivity tracking) + `PatternPlayer` (one-shot and
+  repeating sequencing), all time-as-a-parameter; the piezo stays behind
+  the alert output port and the final horn/pattern/alarm OR stays with the
+  sketch shim ([safety system](safety-system.md))
 - **Observers read a snapshot** — `src/application/SystemSnapshot.h` is the
   immutable per-cycle observation; the dashboard JSON and debug CSV
   encoders (`src/telemetry/`) consume it `const&` and can no longer reach

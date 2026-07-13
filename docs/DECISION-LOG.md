@@ -5,6 +5,36 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Step-11 pre-slice: alerts/ layer extraction (#183)
+
+- `[BEEPER]`/`[ALERT]` policy and sequencing moved VERBATIM to
+  `src/alerts/`: AlertTypes (pattern/state/threshold structs), AlertPolicy
+  (inactivity tracking, the low-voltage debounce/latch INCLUDING its own
+  plausibility comparison form — deliberately NOT consolidated with
+  domain/battery/VoltagePlausibility, the two diverge on NaN per the
+  documented SAFETY.md gap — and the four-level priority ladder
+  thermal-cut > low-V > thermal-warn > inactivity), PatternPlayer
+  (one-shot + repeating, even index = ON). Time is a parameter throughout.
+- The `.ino` shims keep every global and signature (mirror-globals
+  precedent) — beepStart/beeperUpdate/alertInit/alertUpdate fold state
+  through the structs per call; the `alertOutputSet(horn || pattern ||
+  alarm)` OR stays in the shim; patterns + tunables stay `[CONFIG]`-owned
+  until the config/ pre-slice. ZERO expectation changes (test_alerts.cpp
+  characterization is law); new pure suite tests/alerts/ (6 cases:
+  priority ladder, latch debounce/sticky/grace/implausible, inactivity,
+  both players).
+- Accepted micro-delta (same class as the #158 entry): the one-shot
+  transition previously read millis() twice (compare, then phase
+  re-anchor); the pure step takes one nowMs. Host-identical (stub time
+  constant within a call); ≤1 ms phase re-anchor difference per transition
+  on hardware.
+- DEFERRED with reasoning (own issues when prioritized): lowVoltLatched
+  ownership (#119 target: SafetyDecision.alarmRequested — [SAFETY] still
+  borrows the global) and snapshot-consuming alert presentation (#132
+  deferral — alertUpdate keeps reading telem[] directly).
+- Verified: 27 host binaries green; compile clean — flash 117980 (+320,
+  shim fold/unfold), RAM 9848 unchanged.
+
 ## 2026-07-13 — Phase D step 10 final slice: infrastructure/network/ (#181)
 
 - The `[WIFI]` serving machine moved to `src/infrastructure/network/`
