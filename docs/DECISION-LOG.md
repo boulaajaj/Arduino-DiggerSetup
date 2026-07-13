@@ -5,6 +5,28 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-12 — Phase D step 8: SafetySupervisor extracted to src/domain/safety/ (#168)
+
+- The inline drive gate in `loop()` — `driveAllowed = sbusValid &&
+  (batteryOkConfirmed || bootGraceElapsed) && !batteryCutoffLatched &&
+  !tempCutActive` — moved to `src/domain/safety/SafetySupervisor.h/.cpp` as
+  `safetySupervisorDecide(SafetyInputs) → SafetyDecision {driveAllowed,
+  FailsafeReason}`. The early-return shape is provably identical to the &&
+  chain (unit-locked by an exhaustive 32-input equivalence case); the
+  reason priority mirrors the chain order (RC_STALE > BOOT_GATE >
+  BATTERY_CUTOFF > THERMAL_CUT).
+- The fail-open boot gate (#65 law — a dead X.BUS never permanently
+  disables driving) moved verbatim as `batteryConfirmed ||
+  bootGraceElapsed`; the call site computes the millis()-based grace check
+  and passes a bool (time is a parameter).
+- The `FailsafeReason` is new surface consumed by the OutputGate (step 9)
+  and SystemSnapshot (#132) steps; today's call site uses only
+  `driveAllowed` (documented at the call site). `outputUpdate()`'s
+  ease-to-neutral state machine is step 9 — untouched here.
+- Verified: all 24 host binaries green, zero expectation changes; compile
+  clean — flash 117000 (+112 vs 116888, cross-TU call + struct), RAM
+  unchanged 9812. No bench check applicable (pure move).
+
 ## 2026-07-12 — Phase D step 7: GearPolicy + CommandMixer extracted to src/domain/drive/ (#166)
 
 - `updateGear()`'s decision tree moved to `GearPolicy.h/.cpp` as
