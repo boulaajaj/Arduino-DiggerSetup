@@ -727,12 +727,13 @@ void alertUpdate(bool rcOn) {
 
   bool inactiveAlarm = inactivityAlarmStep(rcOffSinceMs, rcOn, nowMs, INACT_RC_OFF_MS);
 
+  static const LowVoltageThresholds LOWV_THRESHOLDS{
+      LOWV_THRESH_V, LOWV_PLAUS_MIN_V, LOWV_PLAUS_MAX_V,
+      LOWV_DEBOUNCE_MS, ALERT_STARTUP_MS};
   LowVoltageLatchState lowVoltage{lowVStartMs, lowVoltLatched};
   lowVoltageLatchStep(lowVoltage, telem[0].voltage, telem[1].voltage,
                       telem[0].valid, telem[1].valid, nowMs, alertBootMs,
-                      LowVoltageThresholds{LOWV_THRESH_V, LOWV_PLAUS_MIN_V,
-                                           LOWV_PLAUS_MAX_V, LOWV_DEBOUNCE_MS,
-                                           ALERT_STARTUP_MS});
+                      LOWV_THRESHOLDS);
   lowVStartMs = lowVoltage.belowSinceMs;
   lowVoltLatched = lowVoltage.latched;
 
@@ -741,12 +742,14 @@ void alertUpdate(bool rcOn) {
   // hard stops sit above the warnings; among them the motor cut is the loudest,
   // longest pattern. tempCutActive supersedes tempWarnActive (a cut is also hot),
   // so the warning trill never plays while the cut alarm is sounding.
+  static const AlertPatternTable ALERT_PATTERNS{
+      {ALERT_THERM_CUT, ALERT_THERM_CUT_LEN},
+      {ALERT_LOWV, ALERT_LOWV_LEN},
+      {ALERT_THERM_WARN, ALERT_THERM_WARN_LEN},
+      {ALERT_INACT, ALERT_INACT_LEN}};
   AlertPattern selected = alertPatternSelect(
       tempCutActive, lowVoltLatched, tempWarnActive, inactiveAlarm,
-      AlertPatternTable{{ALERT_THERM_CUT, ALERT_THERM_CUT_LEN},
-                        {ALERT_LOWV, ALERT_LOWV_LEN},
-                        {ALERT_THERM_WARN, ALERT_THERM_WARN_LEN},
-                        {ALERT_INACT, ALERT_INACT_LEN}});
+      ALERT_PATTERNS);
 
   if (selected.sequence == nullptr) {
     alarmSeq = nullptr;

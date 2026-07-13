@@ -33,6 +33,7 @@ void repeatingPatternSelect(RepeatingPatternState& state, const uint16_t* sequen
 }
 
 bool repeatingPatternStep(RepeatingPatternState& state, uint32_t nowMs) {
+  if (state.sequence == nullptr || state.length <= 0) return false;  // silent
   if (nowMs - state.phaseMs >= state.sequence[state.index]) {
     state.index = (state.index + 1) % state.length;
     state.phaseMs = nowMs;
