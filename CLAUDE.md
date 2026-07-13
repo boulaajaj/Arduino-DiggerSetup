@@ -176,7 +176,7 @@ bfs::SbusRx sbusRx(&sbusUart);
 ### Telemetry (live)
 
 `src/ports/TelemetrySource.h` defines `EscTelem { voltage, busCurrentA, rpmHz,
-escTempC, motorTempC, lastGoodMs, valid }` (re-exported via `types.h`, #178).
+motorTempC, escTempC, lastGoodMs, valid }` (re-exported via `types.h`, #178).
 The X.BUS poller lives in `src/infrastructure/xc/XbusTelemetryAdapter.cpp`
 behind that port; the sketch's `[TELEMETRY]` shim owns the `telem[]` array and
 polls via `telemetrySourceUpdate()` on Serial1 (D0/D1):
