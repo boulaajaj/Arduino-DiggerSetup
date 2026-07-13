@@ -15,7 +15,7 @@ in one session, then log the flash in `docs/FIRMWARE-UPLOAD-LOG.md` as usual.
 - [ ] Stick→track response identical to V7.34 baseline in all 3 gears, forward/reverse/pivot (feel + serial CSV compare)
 - [ ] RC-loss failsafe: ease to neutral, then no pulses; ESCs beep; recovery on signal return
 - [ ] Battery ladder on bench supply: Eco-lock ~10.8 V (15 s), alarm 10.5 V, cutoff 10.0 V latched
-- [ ] Thermal stages (heat gun / simulated): trill ≥80 °C, Eco ≥90 °C, cut ≥95 °C, auto-recovery + restored flourish
+- [ ] Thermal stages (heat gun / simulated): trill ≥80 °C, Eco ≥90 °C, cut ≥95 °C, auto-recovery + restored flourish; confirm 95 °C sits just BELOW the GL10's own (unpublished) internal thermal limit so our warned cut fires first (src/config/ThermalConfig.h note)
 - [ ] Wi-Fi dashboard: connects, SSE at ~5 Hz, page load doesn't perturb control (watchdog silent)
 - [ ] Horn, Wi-Fi-ready beep, inactivity alarm patterns unchanged
 - [ ] Loop rate still ~20 kHz idle (serial banner / measurement)
