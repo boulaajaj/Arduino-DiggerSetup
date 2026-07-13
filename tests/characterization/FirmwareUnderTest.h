@@ -19,6 +19,12 @@
 // globals, and (internal-linkage) constants — is visible to the tests.
 #include "../../sketches/rc_test/rc_test.ino"  // NOLINT(build/include)
 
+// The Servo objects live in infrastructure/arduino/PwmEscAdapter.cpp
+// (#172), linked into every characterization binary; resetFirmwareState()
+// reaches them through these declarations.
+extern Servo escL;
+extern Servo escR;
+
 // Restore every MUTABLE firmware global to its boot value. Must be kept in
 // sync with rc_test.ino: when a PR adds a mutable global there, it adds the
 // reset here (the firmware-without-tests commit guard forces the pairing).
@@ -43,6 +49,8 @@ inline void resetFirmwareState() {
   lastAdcTime = 0;
   // [OUTPUT] — fresh Servo objects too: a stale pin binding from a previous
   // test case would otherwise let outputWrite() log into the cleared capture.
+  // The objects live in infrastructure/arduino/PwmEscAdapter.cpp (#172);
+  // the extern declarations sit above resetFirmwareState().
   escL = Servo{};
   escR = Servo{};
   outL = SVC;

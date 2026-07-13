@@ -19,8 +19,12 @@ DOMAIN_INCLUDES := -Ivendor/doctest
 
 # Phase D (#117): extracted sketch sources are linked into every test binary —
 # the firmware delegates to them, and domain suites test them directly.
+# Infrastructure sources include hardware headers, so only the stub-backed
+# firmware suites compile them; the pure suites take the hardware-free set
+# (an accidental hardware include in domain code still fails loudly, #172).
 SKETCH_SRC_CPPS    := $(shell find ../sketches/rc_test/src -name '*.cpp' 2>/dev/null)
 SKETCH_SRC_HEADERS := $(shell find ../sketches/rc_test/src -name '*.h' 2>/dev/null)
+SKETCH_PURE_CPPS   := $(filter-out ../sketches/rc_test/src/infrastructure/%,$(SKETCH_SRC_CPPS))
 
 FIRMWARE := ../sketches/rc_test/rc_test.ino \
             ../sketches/rc_test/types.h \
@@ -60,29 +64,29 @@ build/%: invariants/%.cpp $(HARNESS) $(FIRMWARE)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 
-build/%: battery/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: battery/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: thermal/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: thermal/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: telemetry/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: telemetry/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: operator_input/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: operator_input/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: drive/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: drive/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: safety/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: safety/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
 run: all
 	@status=0; \

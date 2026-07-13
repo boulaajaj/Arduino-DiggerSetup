@@ -54,7 +54,6 @@
 //   5V ──[10K]──┬──► NPN collector ──► D12 (sbusUart RX)
 
 #include <Arduino.h>
-#include <Servo.h>
 #include <WiFiS3.h>
 #include <WDT.h>        // RA4M1 hardware watchdog — control-loop runaway backstop (#69)
 #include "sbus.h"
@@ -76,6 +75,7 @@
 #include "src/domain/safety/SafetySupervisor.h"
 #include "src/domain/safety/OutputGate.h"
 #include "src/telemetry/TelemetryScaling.h"
+#include "src/ports/EscOutputPort.h"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -560,21 +560,21 @@ DriveCommand mixCommands(DriveCommand rc, int ovr, DriveCommand joy) {
 // [OUTPUT] — ESC servo PWM (non-blocking)
 // ═══════════════════════════════════════════════════════════════
 
-Servo escL, escR;
+// The Servo objects moved to infrastructure/arduino/PwmEscAdapter.cpp
+// behind ports/EscOutputPort.h (#117 step 10 slice 1, #172). The clamp and
+// the outL/outR globals stay HERE — application-visible output state (read
+// by buildTelemJson and the OutputGate shim, reset by the test harness).
 int outL = SVC, outR = SVC;
 
 void outputInit() {
-  escL.attach(PIN_ESC_L);
-  escR.attach(PIN_ESC_R);
-  escL.writeMicroseconds(SVC);
-  escR.writeMicroseconds(SVC);
+  escOutputInitialize(PIN_ESC_L, PIN_ESC_R);
+  escOutputWritePulses(SVC, SVC);
 }
 
 void outputWrite(int left, int right) {
   outL = constrain(left,  SVMIN, SVMAX);
   outR = constrain(right, SVMIN, SVMAX);
-  escL.writeMicroseconds(outL);
-  escR.writeMicroseconds(outR);
+  escOutputWritePulses(outL, outR);
 }
 
 // Fail-safe output gate (#88 / #65). The Arduino drives PWM ONLY when it has a
@@ -614,15 +614,9 @@ void outputUpdate(bool driveAllowed, int mixL, int mixR) {
   outHoldMs = gate.holdStartMs;
   rampFromL = gate.rampFromLeft;
   rampFromR = gate.rampFromRight;
-  if (action.attach) {
-    escL.attach(PIN_ESC_L);
-    escR.attach(PIN_ESC_R);
-  }
+  if (action.attach) escOutputAttach();
   if (action.write) outputWrite(action.leftPulse, action.rightPulse);
-  if (action.detach) {
-    escL.detach();                    // at neutral → stop pulsing → ESCs beep
-    escR.detach();
-  }
+  if (action.detach) escOutputDetach();  // at neutral → stop pulsing → ESCs beep
 }
 
 

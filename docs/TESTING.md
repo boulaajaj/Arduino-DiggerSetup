@@ -14,7 +14,8 @@ The production sketch is not modified for testing. Each test binary compiles
 `sketches/rc_test/src/**/*.cpp` domain sources the sketch delegates to as the
 Phase D migration (#117) proceeds. Pure-domain suites (one dir per extracted
 domain, e.g. `battery/`) test the extracted code directly — no firmware, no
-stubs:
+stubs, and no `src/infrastructure/` sources (those include hardware headers
+and are compiled only into the stub-backed firmware suites, #172):
 
 ```text
 tests/

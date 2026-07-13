@@ -5,6 +5,31 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 10 slice 1: EscOutputPort + PwmEscAdapter (#172)
+
+- First infrastructure slice: `ports/EscOutputPort.h` (link-time seam per
+  #130 — free functions, no virtuals) + `infrastructure/arduino/
+  PwmEscAdapter.cpp`, which now owns the `Servo escL, escR` objects (moved
+  from the `.ino`) and remembers the pins passed at
+  `escOutputInitialize(PIN_ESC_L, PIN_ESC_R)`.
+- Behavior boundaries: the `constrain(SVMIN, SVMAX)` clamp and the
+  `outL`/`outR` globals stay in the `.ino` (application-visible state read
+  by buildTelemJson and the OutputGate shim); only the writeMicroseconds /
+  attach / detach calls go through the port — same call sites, same order.
+- Harness: pure suites now compile `SKETCH_PURE_CPPS` (infrastructure
+  filtered out — hardware includes need the stubs the pure suites
+  deliberately exclude); firmware suites compile everything (stub Servo.h
+  captures unchanged). `FirmwareUnderTest.h` reaches the moved Servo
+  objects via extern declarations. The adapter includes `<Arduino.h>`
+  before `<Servo.h>` (the stub Servo.h uses millis()).
+- Verified: all 25 host binaries green, zero expectation changes; compile
+  clean — flash 117236 (+76), RAM 9824 (+12: the adapter's two remembered
+  pin ints — first RAM delta of the series; memory layout, not behavior).
+  architecture-fitness exercises ports/ + infrastructure/ layer rules for
+  the first time: OK. Remaining adapters (joystick ADC, S.BUS, X.BUS,
+  Wi-Fi, piezo, watchdog, clock) follow in later slices or with the
+  FirmwareApp composition root (step 11).
+
 ## 2026-07-13 — Phase D step 9: OutputGate extracted to src/domain/safety/ (#170)
 
 - `outputUpdate()`'s fail-safe state machine (#88/#65) moved VERBATIM to
