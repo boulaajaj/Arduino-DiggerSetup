@@ -634,7 +634,7 @@ EscTelem telem[NUM_ESCS] = {};
 extern uint32_t telemetryDebugReceiveTotal;
 extern uint32_t telemetryDebugEchoCount;
 extern uint32_t telemetryDebugSlaveCount;
-extern uint8_t  telemetryDebugSnapshot[16];
+extern uint8_t  telemetryDebugSnapshot[];  // unsized: bound owned by the adapter
 extern int      telemetryDebugSnapshotLength;
 
 // Poll the bus; the adapter owns cadence, timeout and staleness internally.
