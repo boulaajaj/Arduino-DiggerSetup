@@ -477,11 +477,13 @@ DriveCommand rcCommand() {
 // non-latching, which clears once the motor cools below TEMP_ECO_OFF_C) —
 // and mirrors the gearScale/currentGear globals every caller reads.
 void updateGear() {
+  // Built once — the values are [CONFIG] constants (loop() calls this every
+  // pass, so no per-pass aggregate temporary).
+  static const GearPolicyParameters GEAR_POLICY_PARAMETERS{
+      GEAR_LOW_SCALE, GEAR_MID_SCALE, GEAR_HIGH_SCALE, OVR_LO, OVR_HI};
   GearSelection selection = gearPolicySelect(
       sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR]) : 0, sbusValid,
-      ecoLockLatched || tempEcoActive,
-      GearPolicyParameters{GEAR_LOW_SCALE, GEAR_MID_SCALE, GEAR_HIGH_SCALE,
-                           OVR_LO, OVR_HI});
+      ecoLockLatched || tempEcoActive, GEAR_POLICY_PARAMETERS);
   gearScale = selection.scale;
   currentGear = (Gear)selection.level;
 }
