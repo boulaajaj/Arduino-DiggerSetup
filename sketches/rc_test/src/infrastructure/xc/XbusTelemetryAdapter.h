@@ -28,7 +28,8 @@ const uint8_t REGISTER_MOTOR_TEMPERATURE = 0x22;  // raw − 40 = °C
 const uint8_t TELEMETRY_REGISTERS[] = {
     REGISTER_BATTERY_VOLTAGE, REGISTER_BUS_CURRENT, REGISTER_MOTOR_SPEED,
     REGISTER_ESC_TEMPERATURE, REGISTER_MOTOR_TEMPERATURE};
-const uint8_t TELEMETRY_REGISTER_COUNT = sizeof(TELEMETRY_REGISTERS);
+const uint8_t TELEMETRY_REGISTER_COUNT =
+    sizeof(TELEMETRY_REGISTERS) / sizeof(TELEMETRY_REGISTERS[0]);
 
 // ── poll cadence / freshness ─────────────────────────────────────────────
 const uint32_t TELEMETRY_POLL_MS    = 10;     // short gap; alternating → ~30-40 Hz/ESC

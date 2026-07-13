@@ -98,6 +98,7 @@ static bool tryParseResponse(EscTelem *telemetry, uint8_t esc, uint32_t nowMs) {
 // Call every loop iteration. Sends one request at a time, alternating ESCs,
 // and never blocks: it drains RX across iterations and times out on silence.
 void telemetrySourceUpdate(EscTelem *telemetry, uint8_t escCount) {
+  if (escCount == 0) return;  // the alternation modulo would divide by zero
   uint32_t nowMs = millis();
 
   // Drain available bytes every iteration (cheap).
