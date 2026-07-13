@@ -115,7 +115,7 @@ void telemetrySourceUpdate(EscTelem *telemetry, uint8_t escCount) {
     telemetryDebugReceiveTotal++;                        // any byte on D0
     if (b == XBUS_HEADER_MASTER) telemetryDebugEchoCount++;   // 0x0F = our own TX echo
     if (b == XBUS_HEADER_SLAVE)  telemetryDebugSlaveCount++;  // 0xF0 = ESC reply
-    if (telemetryDebugSnapshotLength < 16) {
+    if (telemetryDebugSnapshotLength < (int)sizeof(telemetryDebugSnapshot)) {
       telemetryDebugSnapshot[telemetryDebugSnapshotLength++] = b;
     }
   }
