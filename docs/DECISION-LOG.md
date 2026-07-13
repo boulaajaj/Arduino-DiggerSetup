@@ -5,6 +5,30 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — SystemSnapshot: observers read one immutable per-cycle struct (#132)
+
+- `src/application/SystemSnapshot.h` (first `application/` file — the #150
+  check_ino marker stays dormant until FirmwareApp.h): nowMs, RC servo-µs
+  input view + failsafe/lost, raw joystick pair, outL/outR, gear + override
+  mode, the five safety flags, and per-ESC `EscTelem` copies. Deliberately
+  does NOT include types.h (which pulls Arduino.h) so the pure suites stay
+  stub-free — gear is carried as a plain int.
+- `telemetry/JsonEncoder` + `telemetry/CsvEncoder`: buildTelemJson()'s and
+  debugPrint()'s exact format strings moved VERBATIM; both take
+  `const SystemSnapshot&` and use the TelemetryScaling encode helpers —
+  killing debugPrint's inline lroundf duplication (same math, the #121
+  second half). wifiSeq stays [WIFI]-owned and is passed in.
+- The .ino shims keep names/signatures and build the snapshot AT THE
+  ORIGINAL OBSERVATION POINTS (buildTelemJson reads millis() exactly where
+  it used to) for exact timing parity; the once-per-cycle build moves into
+  FirmwareApp at step 11. Alert presentation deferred to the alerts/
+  extraction with reasoning ([ALERT] owns lowVoltLatched — policy, not a
+  read-only observer; documented on issue #132).
+- NEW pure suite tests/telemetry/test_observer_encoders.cpp locks the EXACT
+  JSON/CSV bytes (previously untested); 26 host binaries green. Compile
+  clean — flash 117580 (+224: the snapshot copy at the observation points;
+  emitted bytes identical), RAM 9836 unchanged.
+
 ## 2026-07-13 — Phase D step 10 slice 4: TelemetrySource + XbusTelemetryAdapter (#178)
 
 - `ports/TelemetrySource.h` now owns the `EscTelem` struct (moved verbatim

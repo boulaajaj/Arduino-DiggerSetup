@@ -73,7 +73,9 @@
 #include "src/domain/drive/CommandMixer.h"
 #include "src/domain/safety/SafetySupervisor.h"
 #include "src/domain/safety/OutputGate.h"
-#include "src/telemetry/TelemetryScaling.h"
+#include "src/application/SystemSnapshot.h"
+#include "src/telemetry/JsonEncoder.h"
+#include "src/telemetry/CsvEncoder.h"
 #include "src/ports/EscOutputPort.h"
 #include "src/ports/JoystickPort.h"
 #include "src/ports/AlertOutputPort.h"
@@ -1026,38 +1028,41 @@ void wifiDebug(uint32_t nowUs) {
   telemetryDebugSnapshotLength = 0;   // reset for next window's snapshot
 }
 
+// Observe the whole system into one immutable SystemSnapshot (#132). Called
+// by the observer shims at their original observation points for exact
+// timing parity; the once-per-cycle build moves into FirmwareApp (step 11).
+SystemSnapshot buildSystemSnapshot(uint32_t nowMs) {
+  SystemSnapshot snapshot = {};
+  snapshot.nowMs = nowMs;
+  snapshot.rcThrottleUs = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_THR])   : SVC;
+  snapshot.rcSteeringUs = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_STEER]) : SVC;
+  snapshot.rcGearUs     = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_GEAR])  : SVC;
+  snapshot.rcOverrideUs = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_OVR])   : SVMIN;
+  snapshot.rcFailsafe = rcFrame.failsafe;
+  snapshot.rcLostFrame = rcFrame.lostFrame;
+  snapshot.joystickRawY = cachedJoy.rawY;
+  snapshot.joystickRawX = cachedJoy.rawX;
+  snapshot.outLeftUs = outL;
+  snapshot.outRightUs = outR;
+  snapshot.gear = (int)currentGear;
+  snapshot.overrideMode = wifiMode();
+  snapshot.batteryCutoffLatched = batteryCutoffLatched;
+  snapshot.ecoLockLatched = ecoLockLatched;
+  snapshot.temperatureWarnActive = tempWarnActive;
+  snapshot.temperatureEcoActive = tempEcoActive;
+  snapshot.temperatureCutActive = tempCutActive;
+  snapshot.esc[0] = telem[0];
+  snapshot.esc[1] = telem[1];
+  return snapshot;
+}
+
 // Build the telemetry JSON into body; returns its length. Shared by the
-// one-shot /data endpoint and the SSE stream.
+// one-shot /data endpoint and the SSE stream. Formatting lives in
+// telemetry/JsonEncoder (#132); this shim owns the frame counter and the
+// observation point.
 int buildTelemJson(char *body, size_t cap) {
   wifiSeq++;
-  uint32_t nowMs = millis();
-  // Per-ESC age (ms since last good frame). 0 if never received.
-  uint32_t age0 = telem[0].lastGoodMs ? (nowMs - telem[0].lastGoodMs) : 999999UL;
-  uint32_t age1 = telem[1].lastGoodMs ? (nowMs - telem[1].lastGoodMs) : 999999UL;
-  int n = snprintf(body, cap,
-    "{\"t\":%lu,\"seq\":%lu,\"gear\":%d,\"mode\":%d,\"fs\":%d,\"lost\":%d,"
-    "\"eco\":%d,\"cut\":%d,\"hot\":%d,\"teco\":%d,\"tcut\":%d,\"outL\":%d,\"outR\":%d,"
-    "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
-    "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
-    (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
-    rcFrame.failsafe ? 1 : 0, rcFrame.lostFrame ? 1 : 0,
-    ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
-    tempWarnActive ? 1 : 0, tempEcoActive ? 1 : 0, tempCutActive ? 1 : 0,
-    outL, outR,
-    telem[0].valid ? 1 : 0, (unsigned long)age0,
-    electricalHzToDashboardRpm(telem[0].rpmHz),
-    scaleToDeciInteger(telem[0].busCurrentA), scaleToDeciInteger(telem[0].voltage),
-    roundToWholeInteger(telem[0].escTempC), roundToWholeInteger(telem[0].motorTempC),
-    telem[1].valid ? 1 : 0, (unsigned long)age1,
-    electricalHzToDashboardRpm(telem[1].rpmHz),
-    scaleToDeciInteger(telem[1].busCurrentA), scaleToDeciInteger(telem[1].voltage),
-    roundToWholeInteger(telem[1].escTempC), roundToWholeInteger(telem[1].motorTempC));
-  // snprintf returns the length it WOULD have written; clamp to the buffer so
-  // callers never read past `body` (Content-Length and write length stay valid
-  // even if a frame were ever to overflow `cap`).
-  if (n < 0) return 0;
-  if ((size_t)n >= cap) n = (int)cap - 1;
-  return n;
+  return encodeTelemetryJson(body, cap, buildSystemSnapshot(millis()), wifiSeq);
 }
 
 // One-shot /data JSON. Header + body coalesced into a single write() so the
@@ -1279,30 +1284,12 @@ void debugPrint(uint32_t now) {
   if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
 
-  int rcT = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_THR])   : SVC;
-  int rcS = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_STEER]) : SVC;
-  int rc4 = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_GEAR])  : SVC;
-  int rc5 = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_OVR])   : SVMIN;
-
-  // Telemetry, integer-scaled so we avoid float printf on this core.
-  int v0 = (int)lroundf(telem[0].voltage    * 10.0f);
-  int i0 = (int)lroundf(telem[0].busCurrentA * 10.0f);
-  int e0 = (int)lroundf(telem[0].escTempC);
-  int m0 = (int)lroundf(telem[0].motorTempC);
-  int v1 = (int)lroundf(telem[1].voltage    * 10.0f);
-  int i1 = (int)lroundf(telem[1].busCurrentA * 10.0f);
-  int e1 = (int)lroundf(telem[1].escTempC);
-  int m1 = (int)lroundf(telem[1].motorTempC);
-
+  // Formatting (integer-scaled — no float printf on this core) lives in
+  // telemetry/CsvEncoder (#132); this shim owns the cadence and the print.
+  // NOTE: `now` is µs (loop clock); the snapshot contract is ms, so read
+  // millis() here — the CSV does not use nowMs, so output is unchanged.
   char buf[200];
-  snprintf(buf, sizeof(buf),
-           "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-           rcT, rcS, rc4, rc5,
-           cachedJoy.rawY, cachedJoy.rawX,
-           outL, outR, (int)currentGear,
-           rcFrame.failsafe, rcFrame.lostFrame,
-           v0, i0, telem[0].rpmHz, e0, m0, telem[0].valid ? 1 : 0,
-           v1, i1, telem[1].rpmHz, e1, m1, telem[1].valid ? 1 : 0);
+  encodeDebugCsv(buf, sizeof(buf), buildSystemSnapshot(millis()));
   Serial.println(buf);
 }
 
