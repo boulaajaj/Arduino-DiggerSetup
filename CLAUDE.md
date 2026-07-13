@@ -150,13 +150,14 @@ GND -> All components (common ground)
 ### UART Architecture (UNO R4 WiFi)
 
 The UNO R4 WiFi exposes Serial1 (SCI2 on D0/D1) plus a second UART that can be
-instantiated on D11 (TX) / D12 (RX) via the RA4M1's SCI0 channel. The sketch
+instantiated on D11 (TX) / D12 (RX) via the RA4M1's SCI0 channel. The S.BUS
+adapter (`src/infrastructure/radiolink/SbusReceiverAdapter.cpp`, #176)
 declares it under a unique name (NOT `Serial2`, which collides with the core's
 pre-declared `_UART2_`, and is also reserved for the ESP32-S3 Wi-Fi bridge):
 
 ```cpp
-const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
-const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
+static const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
+static const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
 UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
 bfs::SbusRx sbusRx(&sbusUart);
 ```
@@ -304,8 +305,8 @@ sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCur
 sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
 sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (X.BUS register decode + ×10 wire encode, header-only)
-sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h
-sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp
+sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame)
+sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
