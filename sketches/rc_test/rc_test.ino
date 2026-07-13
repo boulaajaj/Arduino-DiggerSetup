@@ -73,6 +73,7 @@
 #include "src/domain/drive/CurvatureDrive.h"
 #include "src/domain/drive/GearPolicy.h"
 #include "src/domain/drive/CommandMixer.h"
+#include "src/domain/safety/SafetySupervisor.h"
 #include "src/telemetry/TelemetryScaling.h"
 
 
@@ -1536,12 +1537,18 @@ void loop() {
   // the cutoff — so a low pack can't drive in the brief window after a watchdog
   // reset wipes the RAM latch. Fail OPEN if telemetry never reports
   // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
-  bool batteryReady = batteryOkConfirmed || (millis() - alertBootMs > BATTERY_CONFIRM_MS);
-  // Also cut on motor over-temp (#111). Unlike the battery cutoff this is NOT
-  // latched — when the motor cools below TEMP_CUT_OFF_C the gate re-opens and
-  // outputUpdate() re-attaches the ESCs automatically.
-  bool driveAllowed = sbusValid && batteryReady && !batteryCutoffLatched && !tempCutActive;
-  outputUpdate(driveAllowed, mix.left, mix.right);
+  // The decision is extracted to src/domain/safety/SafetySupervisor.* (#117
+  // step 8, #168); this call site owns the boundary reads (RC freshness,
+  // battery flags, the millis()-based boot grace) and today consumes only
+  // driveAllowed — the FailsafeReason feeds the OutputGate and
+  // SystemSnapshot steps. The thermal cut (#111) is NOT latched: when the
+  // motor cools below TEMP_CUT_OFF_C the gate re-opens and outputUpdate()
+  // re-attaches the ESCs automatically.
+  SafetyDecision safety = safetySupervisorDecide(SafetyInputs{
+      sbusValid, batteryOkConfirmed,
+      millis() - alertBootMs > BATTERY_CONFIRM_MS, batteryCutoffLatched,
+      tempCutActive});
+  outputUpdate(safety.driveAllowed, mix.left, mix.right);
 
   // Control path serviced this pass (inputs read + output gate run) — and ONLY
   // now do we kick the watchdog. This is the sole refresh point: if anything

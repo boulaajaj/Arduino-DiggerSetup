@@ -23,9 +23,11 @@ drive exactly as before.
   scaling lives in `src/telemetry/` (observer layer); the operator-input
   expo curve and center-snap deadband live in `src/domain/operator_input/`;
   the curvature tank mix — the propulsion-path core — plus the gear policy
-  and the RC/joystick command mixer live in `src/domain/drive/`. All pure
-  logic — no Arduino includes, time passed as a parameter, host-tested
-  directly; the sketch keeps thin delegates until the composition root lands
+  and the RC/joystick command mixer live in `src/domain/drive/`; the drive
+  allow/deny supervisor (SafetyDecision + FailsafeReason) lives in
+  `src/domain/safety/`. All pure logic — no Arduino includes, time passed
+  as a parameter, host-tested directly; the sketch keeps thin delegates
+  until the composition root lands
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior
