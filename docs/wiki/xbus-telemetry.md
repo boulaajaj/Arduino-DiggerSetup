@@ -13,7 +13,7 @@ throttle-over-bus function would fight our PWM and is never used.
   [CLAUDE.md](../../CLAUDE.md) "Telemetry"
 - Code home: the poller (framing, checksum, parse, EMA, poll state machine)
   is `src/infrastructure/xc/XbusTelemetryAdapter` behind
-  `ports/TelemetrySource.h`; the sketch owns the telemetry array
+  `src/ports/TelemetrySource.h`; the sketch owns the telemetry array
   ([architecture remediation](architecture-remediation.md), slice 4)
 - Consumers: the [battery ladder](battery-ladder.md),
   [thermal derating](thermal-derating.md), and the

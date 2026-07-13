@@ -33,8 +33,8 @@ const uint8_t TELEMETRY_REGISTER_COUNT =
 
 // ── poll cadence / freshness ─────────────────────────────────────────────
 const uint32_t TELEMETRY_POLL_MS    = 10;     // short gap; alternating → ~30-40 Hz/ESC
-const uint32_t TELEMETRY_TIMEOUT_US = 6000;   // GL10 replies in ~2-3ms; 6ms = margin +
-                                              // fast give-up on a silent ESC
+const uint32_t TELEMETRY_TIMEOUT_US = 6000;   // GL10 replies in ~2-3 ms; 6 ms gives
+                                              // margin yet gives up fast on a silent ESC
 const uint32_t TELEMETRY_STALE_MS   = 5000;   // mark invalid after this long unheard
 
 // EMA new-sample weights. Slow signals smoothed; RPM is instantaneous.
