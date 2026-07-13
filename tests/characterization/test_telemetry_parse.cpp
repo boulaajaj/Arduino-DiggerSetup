@@ -9,8 +9,8 @@
 // Build a well-formed 0x10 response for `esc` carrying all five registers.
 static std::vector<uint8_t> responseFrame(uint8_t esc, uint16_t vbatRaw, uint16_t ibusRaw,
                                           uint16_t speedRaw, uint16_t tescRaw, uint16_t tmotRaw) {
-  std::vector<uint8_t> f = {XBUS_HDR_SLAVE, esc, 0x00, XBUS_FUNC_READ, 15};
-  const uint8_t regs[5] = {REG_VBAT, REG_IBUS, REG_MSPEED, REG_TESC, REG_TMOT};
+  std::vector<uint8_t> f = {XBUS_HEADER_SLAVE, esc, 0x00, XBUS_FUNCTION_READ, 15};
+  const uint8_t regs[5] = {REGISTER_BATTERY_VOLTAGE, REGISTER_BUS_CURRENT, REGISTER_MOTOR_SPEED, REGISTER_ESC_TEMPERATURE, REGISTER_MOTOR_TEMPERATURE};
   const uint16_t vals[5] = {vbatRaw, ibusRaw, speedRaw, tescRaw, tmotRaw};
   for (int i = 0; i < 5; i++) {
     f.push_back(regs[i]);
@@ -23,32 +23,32 @@ static std::vector<uint8_t> responseFrame(uint8_t esc, uint16_t vbatRaw, uint16_
 
 // Drive telemUpdate through one full request→response cycle for ESC `esc`.
 static void completePoll(uint8_t esc, const std::vector<uint8_t>& response) {
-  stub::advanceMillis(TELEM_POLL_MS);
+  stub::advanceMillis(TELEMETRY_POLL_MS);
   telemUpdate();                                 // sends the request
-  REQUIRE(telemWaiting);
-  REQUIRE(telemEsc == esc);
+  REQUIRE(telemetryAwaitingResponse);
+  REQUIRE(telemetryPolledEscIndex == esc);
   Serial1.scriptRxBytes(response.data(), response.size());
   telemUpdate();                                 // drains + parses
-  REQUIRE_FALSE(telemWaiting);
+  REQUIRE_FALSE(telemetryAwaitingResponse);
 }
 
 // Let the poll of ESC `esc` time out (silent ESC).
 static void timeoutPoll(uint8_t esc) {
-  stub::advanceMillis(TELEM_POLL_MS);
+  stub::advanceMillis(TELEMETRY_POLL_MS);
   telemUpdate();
-  REQUIRE(telemWaiting);
-  REQUIRE(telemEsc == esc);
-  stub::advanceMicros(TELEM_TIMEOUT_US + 1);
+  REQUIRE(telemetryAwaitingResponse);
+  REQUIRE(telemetryPolledEscIndex == esc);
+  stub::advanceMicros(TELEMETRY_TIMEOUT_US + 1);
   telemUpdate();
-  REQUIRE_FALSE(telemWaiting);
+  REQUIRE_FALSE(telemetryAwaitingResponse);
 }
 
-TEST_CASE("telemSendRequest frames a 0x10 read of all five registers") {
+TEST_CASE("telemetrySendReadRequest frames a 0x10 read of all five registers") {
   resetHarness();
   uint8_t stale[3] = {0xAA, 0xBB, 0xCC};
   Serial1.scriptRxBytes(stale, 3);               // stale echo on the bus
 
-  telemSendRequest(0);
+  telemetrySendReadRequest(0);
   CHECK(Serial1.rxQueue.empty());                // stale RX dropped first
   std::vector<uint8_t> expected = {0x0F, 0x00, 0x00, 0x10, 0x05,
                                    0x0C, 0x0D, 0x02, 0x20, 0x22, 0x72};
@@ -65,7 +65,7 @@ TEST_CASE("first samples land unfiltered; later samples are EMA-smoothed") {
   CHECK(telem[0].rpmHz == -10);
   CHECK(telem[0].escTempC == doctest::Approx(25.0f));
   CHECK(telem[0].motorTempC == doctest::Approx(65.0f));
-  CHECK(telemEsc == 1);                          // alternates to the other ESC
+  CHECK(telemetryPolledEscIndex == 1);                          // alternates to the other ESC
 
   timeoutPoll(1);                                // ESC1 silent this round
 
@@ -79,9 +79,9 @@ TEST_CASE("first samples land unfiltered; later samples are EMA-smoothed") {
 
 TEST_CASE("parser skips the half-duplex TX echo and other ESC's frames") {
   resetHarness();
-  stub::advanceMillis(TELEM_POLL_MS);
+  stub::advanceMillis(TELEMETRY_POLL_MS);
   telemUpdate();                                 // request to ESC0 in flight
-  REQUIRE(telemEsc == 0);
+  REQUIRE(telemetryPolledEscIndex == 0);
 
   // The bus carries our own echo, then a frame addressed to ESC1, then ESC0's.
   std::vector<uint8_t> bus = {0x0F, 0x00, 0x00, 0x10, 0x05, 0x0C, 0x0D, 0x02, 0x20, 0x22, 0x72};
@@ -101,7 +101,7 @@ TEST_CASE("silent ESC times out fast and polling moves on") {
   resetHarness();
   timeoutPoll(0);
   CHECK_FALSE(telem[0].valid);
-  CHECK(telemEsc == 1);                          // a flaky ESC barely stalls the good one
+  CHECK(telemetryPolledEscIndex == 1);                          // a flaky ESC barely stalls the good one
 }
 
 TEST_CASE("per-ESC staleness watchdog invalidates after 5 s without a good read") {
@@ -109,7 +109,7 @@ TEST_CASE("per-ESC staleness watchdog invalidates after 5 s without a good read"
   completePoll(0, responseFrame(0, 116, 25, 0, 65, 65));
   REQUIRE(telem[0].valid);
 
-  stub::advanceMillis(TELEM_STALE_MS + 1);
+  stub::advanceMillis(TELEMETRY_STALE_MS + 1);
   telemUpdate();                                 // no new responses
   CHECK_FALSE(telem[0].valid);
 }

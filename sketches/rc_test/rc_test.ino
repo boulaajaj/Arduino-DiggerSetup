@@ -78,6 +78,7 @@
 #include "src/ports/JoystickPort.h"
 #include "src/ports/AlertOutputPort.h"
 #include "src/ports/RcInputPort.h"
+#include "src/ports/TelemetrySource.h"
 
 
 // The second hardware UART (SCI0, D11/D12), the S.BUS parser and their pin
@@ -169,7 +170,7 @@ const uint32_t ECO_LOCK_DEBOUNCE_MS = 15000UL;  // sustained below thresh before
 // must resume automatically, so each stage releases on its own (lower) threshold
 // rather than latching to power-cycle like the battery ladder. Source = HOTTEST
 // of all 4 sensors (ESC + motor temp on BOTH ESCs), already EMA-smoothed
-// (TELEM_A_TEMP) + a short trip debounce so a single spike / dropped frame can't
+// (TELEMETRY_EMA_ALPHA_TEMPERATURE) + a short trip debounce so a single spike / dropped frame can't
 // flip a stage. A telemetry dropout (no fresh valid reading) HOLDS the last state
 // — it never triggers a cut.
 //   Warning beep  >= 80 C  (release < 78 C) : trill, motors keep running
@@ -616,171 +617,28 @@ void outputUpdate(bool driveAllowed, int mixL, int mixR) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// [TELEMETRY] — X.BUS Read Register (0x10) on Serial1 (D0/D1)
+// [TELEMETRY] — X.BUS telemetry via ports/TelemetrySource.h
 // ═══════════════════════════════════════════════════════════════
-// Non-blocking, READ-ONLY. Uses func 0x10 (point-to-point service read),
-// NOT 0x50 — so the ESC never enters BUS_MODE and PWM control is fully
-// preserved. One request per ESC returns all registers; we alternate
-// ESC0/ESC1, EMA-smooth the slow signals, keep RPM instantaneous, and run
-// an independent per-ESC freshness watchdog. Both ESCs share the one
-// half-duplex bus on D0/D1 (idle HIGH, standard UART polarity — no inverter).
+// The 0x10 poller (framing, checksum, parse, EMA fold, poll state machine)
+// lives in src/infrastructure/xc/XbusTelemetryAdapter.cpp (#117 step 10
+// slice 4, #178) behind ports/TelemetrySource.h. READ-ONLY bus — PWM
+// control authority is never affected. The sketch owns the telemetry
+// array: [ALERT], [SAFETY], the dashboard JSON and debug all read telem[].
 
-const uint8_t  XBUS_HDR_MASTER = 0x0F;
-const uint8_t  XBUS_HDR_SLAVE  = 0xF0;
-const uint8_t  XBUS_FUNC_READ  = 0x10;
-const uint8_t  NUM_ESCS        = 2;
-
-// Registers read every poll (one request returns all of them).
-const uint8_t  REG_VBAT   = 0x0C;  // ×0.1 V
-const uint8_t  REG_IBUS   = 0x0D;  // ×0.1 A (signed)
-const uint8_t  REG_MSPEED = 0x02;  // electrical Hz (signed)
-const uint8_t  REG_TESC   = 0x20;  // raw − 40 = °C
-const uint8_t  REG_TMOT   = 0x22;  // raw − 40 = °C
-const uint8_t  TELEM_REGS[] = {REG_VBAT, REG_IBUS, REG_MSPEED, REG_TESC, REG_TMOT};
-const uint8_t  TELEM_NREG    = sizeof(TELEM_REGS);
-
-const uint32_t TELEM_POLL_MS    = 10;     // short gap; alternating → ~30-40 Hz/ESC
-const uint32_t TELEM_TIMEOUT_US = 6000;   // GL10 replies in ~2-3ms; 6ms = margin + fast give-up
-                                          // on a silent ESC (so a flaky one barely stalls the good one)
-const uint32_t TELEM_STALE_MS   = 5000;   // mark invalid after this long with no good read
-
-// EMA new-sample weights. Slow signals smoothed; RPM is instantaneous.
-const float TELEM_A_VOLT = 0.30f;
-const float TELEM_A_CURR = 0.50f;
-const float TELEM_A_TEMP = 0.10f;
+const uint8_t NUM_ESCS = 2;
 
 EscTelem telem[NUM_ESCS] = {};
 
-uint8_t  telemEsc        = 0;       // ESC currently being polled
-bool     telemWaiting    = false;   // true = request sent, awaiting response
-uint32_t telemLastPollMs = 0;
-uint32_t telemReqStartUs = 0;
-uint8_t  telRx[64];
-int      telRxLen = 0;
+// X.BUS RX byte-level diagnostics owned by the adapter; printed (and the
+// snapshot reset) by the [WIFI] wifiDebug() block below.
+extern uint32_t telemetryDebugReceiveTotal;
+extern uint32_t telemetryDebugEchoCount;
+extern uint32_t telemetryDebugSlaveCount;
+extern uint8_t  telemetryDebugSnapshot[16];
+extern int      telemetryDebugSnapshotLength;
 
-// ---- X.BUS RX byte-level diagnostics (temporary, post-solder bring-up) ----
-uint32_t telDbgRxTotal    = 0;  // total bytes ever seen on D0 (Serial1 RX)
-uint32_t telDbgEchoCount  = 0;  // count of 0x0F bytes (our own TX seen on bus)
-uint32_t telDbgSlaveCount = 0;  // count of 0xF0 bytes (ESC response header)
-uint8_t  telDbgSnap[16]   = {0};
-int      telDbgSnapLen    = 0;
-uint32_t telDbgPrintPrevMs = 0;
-
-// Checksum = low 8 bits of the sum of bytes [1 .. len-2] (header & checksum
-// excluded). Matches the framing confirmed on the bench during X.BUS bring-up.
-uint8_t xbusChecksum(const uint8_t *f, int len) {
-  uint8_t s = 0;
-  for (int i = 1; i < len - 1; i++) s += f[i];
-  return s;
-}
-
-void telemSendRequest(uint8_t esc) {
-  uint8_t tx[6 + TELEM_NREG];
-  int n = 0;
-  tx[n++] = XBUS_HDR_MASTER;
-  tx[n++] = esc;             // point-to-point slave address
-  tx[n++] = 0x00;            // extra byte — ignored in service control
-  tx[n++] = XBUS_FUNC_READ;
-  tx[n++] = TELEM_NREG;      // data length = number of register addresses
-  for (uint8_t i = 0; i < TELEM_NREG; i++) tx[n++] = TELEM_REGS[i];
-  tx[n] = xbusChecksum(tx, n + 1);
-  n++;
-  while (Serial1.available()) Serial1.read();  // drop stale RX / prior echo
-  Serial1.write(tx, n);                        // non-blocking (no flush())
-  telRxLen = 0;
-}
-
-// Fold one register value into the telem struct for ESC index e. Scaling and
-// EMA math extracted to src/telemetry/TelemetryScaling.h (#117 step 4, #160).
-void telemApplyReg(uint8_t e, uint8_t reg, uint16_t raw) {
-  EscTelem *t = &telem[e];
-  bool first = !t->valid;
-  switch (reg) {
-    case REG_VBAT: {
-      float v = vbatRawToVolts(raw);
-      t->voltage = emaFold(t->voltage, v, TELEM_A_VOLT, first);
-      break;
-    }
-    case REG_IBUS: {
-      float a = busCurrentRawToAmps(raw);
-      t->busCurrentA = emaFold(t->busCurrentA, a, TELEM_A_CURR, first);
-      break;
-    }
-    case REG_MSPEED:
-      t->rpmHz = motorSpeedRawToElectricalHz(raw);  // instantaneous
-      break;
-    case REG_TESC: {
-      float c = temperatureRawToCelsius(raw);       // temp is the low byte, raw − 40
-      t->escTempC = emaFold(t->escTempC, c, TELEM_A_TEMP, first);
-      break;
-    }
-    case REG_TMOT: {
-      float c = temperatureRawToCelsius(raw);
-      t->motorTempC = emaFold(t->motorTempC, c, TELEM_A_TEMP, first);
-      break;
-    }
-  }
-}
-
-// Scan the RX buffer for a valid 0x10 response from `esc`; parse if complete.
-// Skips our own half-duplex TX echo (which starts with 0x0F, not 0xF0).
-bool telemTryParse(uint8_t esc, uint32_t nowMs) {
-  for (int i = 0; i + 6 <= telRxLen; i++) {
-    if (telRx[i]     != XBUS_HDR_SLAVE) continue;
-    if (telRx[i + 1] != esc)            continue;
-    if (telRx[i + 3] != XBUS_FUNC_READ) continue;
-    uint8_t dlen = telRx[i + 4];
-    if (dlen == 0 || dlen % 3 != 0) continue;       // each reg = addr + 2 bytes
-    if (i + 5 + dlen > telRxLen)    continue;        // full data not in yet
-    const uint8_t *d = &telRx[i + 5];
-    for (uint8_t g = 0; g + 3 <= dlen; g += 3) {
-      uint16_t val = d[g + 1] | (d[g + 2] << 8);
-      telemApplyReg(esc, d[g], val);
-    }
-    telem[esc].lastGoodMs = nowMs;
-    telem[esc].valid = true;
-    return true;
-  }
-  return false;
-}
-
-// Call every loop iteration. Sends one request at a time, alternating ESCs,
-// and never blocks: it drains RX across iterations and times out on silence.
-void telemUpdate() {
-  uint32_t nowMs = millis();
-
-  // Drain available bytes every iteration (cheap).
-  while (Serial1.available() && telRxLen < (int)sizeof(telRx)) {
-    uint8_t b = Serial1.read();
-    telRx[telRxLen++] = b;
-    telDbgRxTotal++;                                   // any byte on D0
-    if (b == XBUS_HDR_MASTER) telDbgEchoCount++;       // 0x0F = our own TX echo
-    if (b == XBUS_HDR_SLAVE)  telDbgSlaveCount++;      // 0xF0 = ESC reply
-    if (telDbgSnapLen < 16) telDbgSnap[telDbgSnapLen++] = b;
-  }
-
-  if (telemWaiting) {
-    if (telemTryParse(telemEsc, nowMs)) {
-      telemWaiting = false;
-      telemEsc = (telemEsc + 1) % NUM_ESCS;
-    } else if ((micros() - telemReqStartUs) > TELEM_TIMEOUT_US) {
-      telemWaiting = false;                          // no/late response — move on
-      telemEsc = (telemEsc + 1) % NUM_ESCS;
-    }
-  } else if ((nowMs - telemLastPollMs) >= TELEM_POLL_MS) {
-    telemLastPollMs = nowMs;
-    telemSendRequest(telemEsc);
-    telemReqStartUs = micros();
-    telemWaiting = true;
-  }
-
-  // Per-ESC freshness watchdog.
-  for (uint8_t i = 0; i < NUM_ESCS; i++) {
-    if (telem[i].valid && (nowMs - telem[i].lastGoodMs) > TELEM_STALE_MS) {
-      telem[i].valid = false;
-    }
-  }
-}
+// Poll the bus; the adapter owns cadence, timeout and staleness internally.
+void telemUpdate() { telemetrySourceUpdate(telem, NUM_ESCS); }
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -1157,15 +1015,15 @@ void wifiDebug(uint32_t nowUs) {
   Serial.print(" clients_seq="); Serial.println(wifiSeq);
 
   // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
-  Serial.print("# XBUS rx_total="); Serial.print(telDbgRxTotal);
-  Serial.print(" echo(0x0F)=");     Serial.print(telDbgEchoCount);
-  Serial.print(" slave(0xF0)=");    Serial.print(telDbgSlaveCount);
+  Serial.print("# XBUS rx_total="); Serial.print(telemetryDebugReceiveTotal);
+  Serial.print(" echo(0x0F)=");     Serial.print(telemetryDebugEchoCount);
+  Serial.print(" slave(0xF0)=");    Serial.print(telemetryDebugSlaveCount);
   Serial.print(" snap=[");
-  for (int i = 0; i < telDbgSnapLen; i++) {
-    char hex[4]; snprintf(hex, sizeof(hex), "%02X ", telDbgSnap[i]); Serial.print(hex);
+  for (int i = 0; i < telemetryDebugSnapshotLength; i++) {
+    char hex[4]; snprintf(hex, sizeof(hex), "%02X ", telemetryDebugSnapshot[i]); Serial.print(hex);
   }
   Serial.println("]");
-  telDbgSnapLen = 0;   // reset for next window's snapshot
+  telemetryDebugSnapshotLength = 0;   // reset for next window's snapshot
 }
 
 // Build the telemetry JSON into body; returns its length. Shared by the
@@ -1460,7 +1318,7 @@ void setup() {
   beeperInit();
   alertInit();
   debugInit();
-  Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
+  telemetrySourceInitialize();  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
   wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
 
   // Arm the hardware watchdog LAST — after the slow Wi-Fi AP bring-up — so init

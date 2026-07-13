@@ -175,8 +175,11 @@ bfs::SbusRx sbusRx(&sbusUart);
 
 ### Telemetry (live)
 
-`types.h` defines `EscTelem { voltage, busCurrentA, rpmHz, escTempC, motorTempC,
-lastGoodMs, valid }`. The `[TELEMETRY]` module polls it on Serial1 (D0/D1):
+`src/ports/TelemetrySource.h` defines `EscTelem { voltage, busCurrentA, rpmHz,
+escTempC, motorTempC, lastGoodMs, valid }` (re-exported via `types.h`, #178).
+The X.BUS poller lives in `src/infrastructure/xc/XbusTelemetryAdapter.cpp`
+behind that port; the sketch's `[TELEMETRY]` shim owns the `telem[]` array and
+polls via `telemetrySourceUpdate()` on Serial1 (D0/D1):
 
 - **X.BUS Read Register (func 0x10), NOT Throttle (0x50).** 0x10 is
   point-to-point service control — it never puts the ESC into BUS_MODE, so PWM
@@ -298,15 +301,15 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in [CONFIG]; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
-sketches/rc_test/types.h                 — Shared structs (JoystickState, EscTelem, ...)
+sketches/rc_test/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
 sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
 sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
-sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (X.BUS register decode + ×10 wire encode, header-only)
-sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame)
-sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser)
+sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178)
+sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem)
+sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)

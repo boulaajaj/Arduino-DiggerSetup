@@ -5,6 +5,39 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 10 slice 4: TelemetrySource + XbusTelemetryAdapter (#178)
+
+- `ports/TelemetrySource.h` now owns the `EscTelem` struct (moved verbatim
+  from `types.h`; types.h re-includes the port so every consumer still
+  resolves it) + `telemetrySourceInitialize()` /
+  `telemetrySourceUpdate(EscTelem*, escCount)`. The CALLER keeps owning the
+  `telem[]` array — [ALERT], [SAFETY], the dashboard JSON and debug all read
+  it sketch-side; the adapter owns only the bus + poll state.
+- `infrastructure/xc/XbusTelemetryAdapter.h/.cpp` (first `xc/` folder): the
+  whole 0x10 poller moved VERBATIM — protocol constants, checksum, request
+  framing, echo-skipping parse, EMA fold, alternating poll state machine,
+  per-ESC staleness watchdog, `Serial1.begin`. The header is host-pure
+  (constants + inline scaling + extern state for the harness).
+- Register DECODE + `emaFold` moved from `telemetry/TelemetryScaling.h`
+  into the adapter header — forced by the dependency table (infrastructure/
+  may not include telemetry/) and semantically right (decode = X.BUS
+  register semantics). The ×10 wire ENCODE stays in TelemetryScaling.h.
+  Each function still has exactly ONE implementation.
+- Naming fixed on move (naming.md applies to MOVED code): `telemEsc` →
+  `telemetryPolledEscIndex`, `telemWaiting` → `telemetryAwaitingResponse`,
+  `telRx/telRxLen` → `telemetryReceiveBuffer/Length`, `telDbg*` →
+  `telemetryDebug*`, `telemSendRequest` → `telemetrySendReadRequest`,
+  `TELEM_*` → `TELEMETRY_*`, `XBUS_HDR_*` → `XBUS_HEADER_*`, `REG_*` →
+  `REGISTER_*` full words. EscTelem FIELD names unchanged (dozens of
+  untouched consumers — mass-rename prohibited). Tests updated mechanically;
+  `telemUpdate()` stays as the .ino shim (loop call site + suite entry
+  unchanged). `telDbgPrintPrevMs` found to be write-never-read (bring-up
+  leftover) — moved as-is, no behavior question.
+- Verified: all 25 host binaries green, ZERO expectation changes; compile
+  clean — flash 117324 (−32 vs 117356), RAM 9836 (+4; layout). Remaining
+  step-10 adapter: Wi-Fi/network; watchdog + clock land with FirmwareApp
+  (step 11).
+
 ## 2026-07-13 — Phase D step 10 slice 3: RcInputPort + SbusReceiverAdapter (#176)
 
 - `ports/RcInputPort.h` defines the RC input contract in domain types:

@@ -19,6 +19,10 @@
 // globals, and (internal-linkage) constants — is visible to the tests.
 #include "../../sketches/rc_test/rc_test.ino"  // NOLINT(build/include)
 
+// X.BUS poller constants + extern state (#178): the poll machine lives in
+// infrastructure/xc/, linked into every characterization binary.
+#include "../../sketches/rc_test/src/infrastructure/xc/XbusTelemetryAdapter.h"
+
 // The Servo objects live in infrastructure/arduino/PwmEscAdapter.cpp
 // (#172), linked into every characterization binary; resetFirmwareState()
 // reaches them through these declarations. Same pattern for the S.BUS
@@ -65,19 +69,19 @@ inline void resetFirmwareState() {
   outHoldMs = 0;
   rampFromL = SVC;
   rampFromR = SVC;
-  // [TELEMETRY]
+  // [TELEMETRY] — poll-machine state lives in the X.BUS adapter (#178)
   telem[0] = EscTelem{};
   telem[1] = EscTelem{};
-  telemEsc = 0;
-  telemWaiting = false;
-  telemLastPollMs = 0;
-  telemReqStartUs = 0;
-  telRxLen = 0;
-  telDbgRxTotal = 0;
-  telDbgEchoCount = 0;
-  telDbgSlaveCount = 0;
-  telDbgSnapLen = 0;
-  telDbgPrintPrevMs = 0;
+  telemetryPolledEscIndex = 0;
+  telemetryAwaitingResponse = false;
+  telemetryLastPollMs = 0;
+  telemetryRequestStartUs = 0;
+  telemetryReceiveLength = 0;
+  telemetryDebugReceiveTotal = 0;
+  telemetryDebugEchoCount = 0;
+  telemetryDebugSlaveCount = 0;
+  telemetryDebugSnapshotLength = 0;
+  telemetryDebugPrintPreviousMs = 0;
   // [BEEPER]
   hornActive = false;
   alarmOutputOn = false;

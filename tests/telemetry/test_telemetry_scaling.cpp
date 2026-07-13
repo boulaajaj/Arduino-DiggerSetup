@@ -1,6 +1,8 @@
-// Pure suite (#117 step 4, #160): src/telemetry/TelemetryScaling.h tested
-// directly on the host — no firmware, no stubs. End-to-end behavior through
-// telemApplyReg()/buildTelemJson() stays covered by
+// Pure suite (#117 step 4, #160): telemetry scaling tested directly on the
+// host — no firmware, no stubs. The X.BUS register DECODE + EMA fold live
+// in infrastructure/xc/XbusTelemetryAdapter.h (host-pure header, #178); the
+// ×10 wire ENCODE stays in src/telemetry/TelemetryScaling.h. End-to-end
+// behavior through the poller/buildTelemJson() stays covered by
 // tests/characterization/test_telemetry_parse.cpp; this suite locks the
 // scaling contracts at the unit level: register signedness, the low-byte
 // temperature mask and −40 offset, EMA seeding, and the exact integer
@@ -8,6 +10,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "../../sketches/rc_test/src/infrastructure/xc/XbusTelemetryAdapter.h"
 #include "../../sketches/rc_test/src/telemetry/TelemetryScaling.h"
 
 TEST_CASE("VBAT decode: unsigned tenths of a volt") {

@@ -2,6 +2,11 @@
 #pragma once
 #include <Arduino.h>
 
+// EscTelem moved to the TelemetrySource port (#178) — the port speaks the
+// type it delivers; included here so every existing consumer keeps
+// resolving it through types.h.
+#include "src/ports/TelemetrySource.h"
+
 // Joystick ADC reading after deadband + expo curve, normalized to -1..+1
 struct JoystickState {
   int   rawY, rawX;     // Raw 14-bit ADC values
@@ -25,17 +30,6 @@ struct WheelSpeeds {
 struct ServoOutput {
   int left;             // microseconds
   int right;
-};
-
-// Telemetry sample from one ESC (via X.BUS Read Register 0x10)
-struct EscTelem {
-  float    voltage;     // V (battery / bus voltage, EMA smoothed)
-  float    busCurrentA;  // A (bus current, EMA smoothed)
-  int16_t  rpmHz;       // electrical Hz (instantaneous; ~×30 = mech RPM)
-  float    motorTempC;  // degC (EMA smoothed)
-  float    escTempC;    // degC (EMA smoothed)
-  uint32_t lastGoodMs;  // millis() of last successful read
-  bool     valid;       // fresh reading within the staleness window
 };
 
 // CH4 gear position. Caps the post-curvatureDrive wheel speeds; the
