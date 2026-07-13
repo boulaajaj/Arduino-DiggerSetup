@@ -14,7 +14,8 @@
 bool dashboardServiceInitialize(const char* ssid, const char* password,
                                 uint8_t apChannel, const char* pageHtml);
 
-// Serve at most ONE modem operation per call — one page chunk OR one
-// request OR one SSE frame (the #69 non-starvation contract). Call every
-// loop pass; a no-op until initialize succeeded.
+// Serve at most ONE modem WRITE per call — one page chunk OR one
+// request/response OR one SSE frame (the #69 non-starvation contract; the
+// bounded request read may perform multiple socket reads first). Call
+// every loop pass; a no-op until initialize succeeded.
 void dashboardServiceUpdate();
