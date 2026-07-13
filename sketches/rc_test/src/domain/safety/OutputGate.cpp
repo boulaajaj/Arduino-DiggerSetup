@@ -21,7 +21,8 @@ OutputGateAction outputGateStep(OutputGateState& gate, bool driveAllowed,
     action.rightPulse = commandedRight;
     return action;
   }
-  // Disallowed: ease out to neutral from the live command, then cut the PWM.
+  // Disallowed: ease out to neutral from the live last-written outputs,
+  // then cut the PWM.
   if (gate.mode == OUTPUT_GATE_ACTIVE) {
     gate.mode = OUTPUT_GATE_HOLD;
     gate.holdStartMs = nowMs;
