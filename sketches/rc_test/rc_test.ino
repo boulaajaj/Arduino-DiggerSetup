@@ -73,6 +73,8 @@
 #include "src/domain/drive/CommandMixer.h"
 #include "src/domain/safety/SafetySupervisor.h"
 #include "src/domain/safety/OutputGate.h"
+#include "src/alerts/PatternPlayer.h"
+#include "src/alerts/AlertPolicy.h"
 #include "src/application/SystemSnapshot.h"
 #include "src/telemetry/JsonEncoder.h"
 #include "src/telemetry/CsvEncoder.h"
@@ -662,20 +664,21 @@ uint32_t beepPhaseMs = 0;
 void beeperInit() { alertOutputInitialize(PIN_BEEPER); }
 
 // Queue a non-blocking on/off pattern (durations in ms, starting with ON).
+// Sequencing lives in alerts/PatternPlayer (#183); the shim mirrors the
+// globals so every call site and test reference stays put.
 void beepStart(const uint16_t *seq, int len) {
-  beepSeq = seq; beepLen = len; beepIdx = 0; beepPhaseMs = millis();
+  OneShotPatternState pattern{};
+  oneShotPatternStart(pattern, seq, len, millis());
+  beepSeq = pattern.sequence; beepLen = pattern.length;
+  beepIdx = pattern.index;    beepPhaseMs = pattern.phaseMs;
 }
 
 // Call every loop. Drives D8 from the horn (held) OR the active pattern.
 void beeperUpdate() {
-  bool patternOn = false;
-  if (beepIdx >= 0 && beepIdx < beepLen) {
-    if (millis() - beepPhaseMs >= beepSeq[beepIdx]) {
-      beepIdx++;
-      beepPhaseMs = millis();
-    }
-    patternOn = (beepIdx >= 0 && beepIdx < beepLen) && (beepIdx % 2 == 0);
-  }
+  OneShotPatternState pattern{beepSeq, beepLen, beepIdx, beepPhaseMs};
+  bool patternOn = oneShotPatternStep(pattern, millis());
+  beepSeq = pattern.sequence; beepLen = pattern.length;
+  beepIdx = pattern.index;    beepPhaseMs = pattern.phaseMs;
   // Horn (manual) ORs over one-shot patterns ORs over [ALERT] alarms.
   alertOutputSet(hornActive || patternOn || alarmOutputOn);
 }
@@ -716,75 +719,49 @@ void alertInit() { alertBootMs = millis(); }
 // chirp when it cuts.
 
 // Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
+// The decision logic and playback live in alerts/AlertPolicy +
+// alerts/PatternPlayer (#183); this shim mirrors the globals so every call
+// site and test reference stays put.
 void alertUpdate(bool rcOn) {
   uint32_t nowMs = millis();
 
-  // --- inactivity: how long has the RC been off? ---
-  if (rcOn)                    rcOffSinceMs = 0;
-  else if (rcOffSinceMs == 0)  rcOffSinceMs = nowMs;
-  bool inactiveAlarm = (rcOffSinceMs != 0) && (nowMs - rcOffSinceMs >= INACT_RC_OFF_MS);
+  bool inactiveAlarm = inactivityAlarmStep(rcOffSinceMs, rcOn, nowMs, INACT_RC_OFF_MS);
 
-  // --- low voltage: worst-of-two, validity-gated, debounced, latching ---
-  if (!lowVoltLatched && (nowMs - alertBootMs >= ALERT_STARTUP_MS)) {
-    float v0 = telem[0].voltage, v1 = telem[1].voltage;
-    bool bothValid = telem[0].valid && telem[1].valid;
-    bool plausible = (v0 >= LOWV_PLAUS_MIN_V && v0 <= LOWV_PLAUS_MAX_V &&
-                      v1 >= LOWV_PLAUS_MIN_V && v1 <= LOWV_PLAUS_MAX_V);
-    if (bothValid && plausible) {
-      float worst = (v0 < v1) ? v0 : v1;
-      if (worst < LOWV_THRESH_V) {
-        if (lowVStartMs == 0) lowVStartMs = nowMs;
-        if (nowMs - lowVStartMs >= LOWV_DEBOUNCE_MS) lowVoltLatched = true;
-      } else {
-        lowVStartMs = 0;   // recovered before debounce elapsed
-      }
-    } else {
-      lowVStartMs = 0;     // can't measure both packs → reset debounce, stay silent
-    }
-  }
+  static const LowVoltageThresholds LOWV_THRESHOLDS{
+      LOWV_THRESH_V, LOWV_PLAUS_MIN_V, LOWV_PLAUS_MAX_V,
+      LOWV_DEBOUNCE_MS, ALERT_STARTUP_MS};
+  LowVoltageLatchState lowVoltage{lowVStartMs, lowVoltLatched};
+  lowVoltageLatchStep(lowVoltage, telem[0].voltage, telem[1].voltage,
+                      telem[0].valid, telem[1].valid, nowMs, alertBootMs,
+                      LOWV_THRESHOLDS);
+  lowVStartMs = lowVoltage.belowSinceMs;
+  lowVoltLatched = lowVoltage.latched;
 
-  // --- pick highest-priority alarm ---
   // Priority (highest first): motor-overheat CUT (3 long) > battery low/cut
   // (3 short) > motor-overheat WARNING (trill) > inactivity (1 long). The two
   // hard stops sit above the warnings; among them the motor cut is the loudest,
   // longest pattern. tempCutActive supersedes tempWarnActive (a cut is also hot),
   // so the warning trill never plays while the cut alarm is sounding.
-  const uint16_t* seq = nullptr;
-  int len = 0;
-  if (tempCutActive) {
-    seq = ALERT_THERM_CUT;
-    len = ALERT_THERM_CUT_LEN;
-  } else if (lowVoltLatched) {
-    seq = ALERT_LOWV;
-    len = ALERT_LOWV_LEN;
-  } else if (tempWarnActive) {
-    seq = ALERT_THERM_WARN;
-    len = ALERT_THERM_WARN_LEN;
-  } else if (inactiveAlarm) {
-    seq = ALERT_INACT;
-    len = ALERT_INACT_LEN;
-  }
+  static const AlertPatternTable ALERT_PATTERNS{
+      {ALERT_THERM_CUT, ALERT_THERM_CUT_LEN},
+      {ALERT_LOWV, ALERT_LOWV_LEN},
+      {ALERT_THERM_WARN, ALERT_THERM_WARN_LEN},
+      {ALERT_INACT, ALERT_INACT_LEN}};
+  AlertPattern selected = alertPatternSelect(
+      tempCutActive, lowVoltLatched, tempWarnActive, inactiveAlarm,
+      ALERT_PATTERNS);
 
-  if (seq == nullptr) {
+  if (selected.sequence == nullptr) {
     alarmSeq = nullptr;
     alarmOutputOn = false;
     return;
   }
 
-  // (re)start playback when the active alarm changes
-  if (seq != alarmSeq) {
-    alarmSeq = seq;
-    alarmLen = len;
-    alarmIdx = 0;
-    alarmPhaseMs = nowMs;
-  }
-
-  // advance the repeating pattern (loops, unlike the one-shot beepStart)
-  if (nowMs - alarmPhaseMs >= alarmSeq[alarmIdx]) {
-    alarmIdx = (alarmIdx + 1) % alarmLen;
-    alarmPhaseMs = nowMs;
-  }
-  alarmOutputOn = (alarmIdx % 2 == 0);   // even index = ON phase
+  RepeatingPatternState alarm{alarmSeq, alarmLen, alarmIdx, alarmPhaseMs};
+  repeatingPatternSelect(alarm, selected.sequence, selected.length, nowMs);
+  alarmOutputOn = repeatingPatternStep(alarm, nowMs);
+  alarmSeq = alarm.sequence; alarmLen = alarm.length;
+  alarmIdx = alarm.index;    alarmPhaseMs = alarm.phaseMs;
 }
 
 

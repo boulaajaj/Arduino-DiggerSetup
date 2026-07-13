@@ -40,7 +40,8 @@ TESTS := $(wildcard characterization/test_*.cpp) \
          $(wildcard telemetry/test_*.cpp) \
          $(wildcard operator_input/test_*.cpp) \
          $(wildcard drive/test_*.cpp) \
-         $(wildcard safety/test_*.cpp)
+         $(wildcard safety/test_*.cpp) \
+         $(wildcard alerts/test_*.cpp)
 BINS  := $(addprefix build/,$(notdir $(TESTS:.cpp=)))
 
 # A duplicate basename across suite directories would silently shadow one
@@ -85,6 +86,10 @@ build/%: drive/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
 build/%: safety/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
+
+build/%: alerts/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
