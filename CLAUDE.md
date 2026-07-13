@@ -304,6 +304,8 @@ sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCur
 sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
 sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (X.BUS register decode + ×10 wire encode, header-only)
+sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h
+sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servo objects)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
 sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
