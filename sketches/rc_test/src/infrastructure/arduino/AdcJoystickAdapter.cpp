@@ -12,8 +12,10 @@
 #include <Arduino.h>
 
 void joystickReadAxes(int yPin, int xPin, int* rawY, int* rawX) {
-  analogRead(yPin); delayMicroseconds(100);
+  analogRead(yPin);
+  delayMicroseconds(100);
   *rawY = analogRead(yPin);
-  analogRead(xPin); delayMicroseconds(100);
+  analogRead(xPin);
+  delayMicroseconds(100);
   *rawX = analogRead(xPin);
 }
