@@ -301,7 +301,7 @@ sketches/rc_test/types.h                 — Shared structs (JoystickState, EscT
 sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
-sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp (the curvature tank mix — propulsion-path core)
+sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (X.BUS register decode + ×10 wire encode, header-only)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
 sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit

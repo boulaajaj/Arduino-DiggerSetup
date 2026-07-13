@@ -43,8 +43,9 @@ tests/
 │   └── test_telemetry_scaling.cpp
 ├── operator_input/             pure-domain suite for src/domain/operator_input/ (#117)
 │   └── test_operator_input_domain.cpp
-└── drive/                      pure-domain suite for src/domain/drive/ (#117)
-    └── test_curvature_drive_domain.cpp
+└── drive/                      pure-domain suites for src/domain/drive/ (#117)
+    ├── test_curvature_drive_domain.cpp
+    └── test_gear_mixer_domain.cpp
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
