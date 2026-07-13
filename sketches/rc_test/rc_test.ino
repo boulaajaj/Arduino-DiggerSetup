@@ -81,6 +81,8 @@
 #include "src/ports/AlertOutputPort.h"
 #include "src/ports/RcInputPort.h"
 #include "src/ports/TelemetrySource.h"
+#include "src/ports/DashboardServicePort.h"
+#include "src/ports/TelemetryFrameSource.h"
 
 
 // The second hardware UART (SCI0, D11/D12), the S.BUS parser and their pin
@@ -376,13 +378,12 @@ const float RC_STEERING_GAIN = 1.00f;
 // Debug
 const uint32_t PRINT_INTERVAL = 100000UL;  // 10 Hz CSV output
 
-// Wi-Fi telemetry-dashboard tuning (monitoring only — never affects control).
-// Centralized here per the [CONFIG] "all tunable constants" rule; the Wi-Fi
-// identity (SSID/pass) and runtime objects stay in [WIFI].
+// Wi-Fi telemetry-dashboard identity (monitoring only — never affects
+// control). The serving tunables (SSE cadence/frame cap, page chunk, modem
+// timeout) moved to src/infrastructure/network/WifiService.h with the
+// serving machine (#181, values unchanged); credentials stay in
+// arduino_secrets.h under [WIFI].
 const uint8_t  WIFI_AP_CHANNEL       = 11;   // 2.4 GHz AP channel — off the crowded 1/6 (issue #54)
-const uint32_t SSE_INTERVAL_MS       = 200;  // dashboard push period = 5 Hz (X.BUS poll rate is independent)
-const uint32_t WIFI_MODEM_TIMEOUT_MS = 50;   // per-call Wi-Fi/modem timeout so one stalled write can't freeze loop()
-const size_t   SSE_FRAME_CAP         = 448;  // SSE frame buffer: ": hb\ndata: " + JSON + "\n\n"
 
 // Safety watchdog (#69). The MCU resets if loop() fails to service the control
 // path (read inputs + write outputs) within WDT_TIMEOUT_MS — a reset stops PWM,
@@ -391,7 +392,6 @@ const size_t   SSE_FRAME_CAP         = 448;  // SSE frame buffer: ": hb\ndata: "
 // Starting value; tune on the bench. Must stay above the worst-case single loop
 // pass (with incremental page serving, a pass is far under this).
 const uint32_t WDT_TIMEOUT_MS        = 250;
-const size_t   WIFI_PAGE_CHUNK       = 1024;  // dashboard HTML bytes sent per loop pass (incremental)
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -935,28 +935,13 @@ const char WIFI_SSID[] = SECRET_WIFI_SSID;
 const char WIFI_PASS[] = SECRET_WIFI_PASS;   // WPA2 needs >= 8 chars
 // Wi-Fi tuning constants (AP channel, SSE rate, modem timeout, frame cap) live
 // in [CONFIG] per the project's tunable-constants rule.
-WiFiServer wifiServer(80);
-bool     wifiUp  = false;
 uint32_t wifiSeq = 0;
-// ETag for the static dashboard. Filled in wifiInit() from the page length +
-// firmware tag, so browsers can cache the HTML and a refresh returns 304 instead
-// of re-downloading ~33 KB through the blocking Wi-Fi modem (issue #54).
-char pageEtag[24] = "\"d0\"";
 
-// Server-Sent Events: one persistent connection streams telemetry, instead of
-// the browser opening a fresh (slow) connection every poll. This is the big
-// update-rate win on WiFiS3, and EventSource auto-reconnects after a dropout.
-WiFiClient     sseClient;
-uint32_t       sseLastMs = 0;
-bool           sseActive = false;   // we are holding a live SSE socket (#77 reaping)
-
-// Incremental dashboard transfer (#69): the ~33 KB page is sent ONE
-// WIFI_PAGE_CHUNK per loop pass, not in a single blocking burst, so the control
-// path + failsafe + watchdog refresh run between chunks and the loop is never
-// starved. pageRemaining > 0 means a transfer is in flight.
-WiFiClient     pageClient;
-const char    *pagePtr = nullptr;
-size_t         pageRemaining = 0;
+// The serving machine (AP bring-up + FNV-1a ETag, HTTP routing, incremental
+// page transfer, SSE stream) lives in src/infrastructure/network/ (#181)
+// behind ports/DashboardServicePort.h; the JSON body flows the other way
+// through ports/TelemetryFrameSource.h. Serving state is adapter-owned.
+extern bool wifiUp;  // read by wifiDebug() below
 
 // Override switch → dashboard mode (0=RC, 1=joy/auto-middle, 2=blend).
 int wifiMode() {
@@ -968,42 +953,10 @@ int wifiMode() {
 }
 
 void wifiInit() {
-  if (WiFi.status() == WL_NO_MODULE) {
-    if (Serial) Serial.println("# WiFi: NO MODULE — ESP32-S3 radio not responding");
-    return;
-  }
-  if (Serial) {
-    Serial.print("# WiFi fw version: ");
-    Serial.println(WiFi.firmwareVersion());
-  }
-  uint8_t st = WiFi.beginAP(WIFI_SSID, WIFI_PASS, WIFI_AP_CHANNEL);
-  if (Serial) {
-    Serial.print("# beginAP returned status=");
-    Serial.println(st);
-  }
-  if (st == WL_AP_LISTENING) {
-    wifiUp = true;
-    wifiServer.begin();
-    // Build the dashboard ETag once — a CONTENT HASH (FNV-1a) of the embedded
-    // page, so ANY edit invalidates stale browser caches, even one that doesn't
-    // change the page length (the old "length + frozen v711 tag" ETag missed
-    // same-length edits → 304 served a stale page). #109.
-    uint32_t etagHash = 2166136261u;
-    for (const char *p = INDEX_HTML; *p; ++p) {
-      etagHash ^= (uint8_t)*p;
-      etagHash *= 16777619u;
-    }
-    snprintf(pageEtag, sizeof(pageEtag), "\"d%08lx\"", (unsigned long)etagHash);
+  // AP bring-up (incl. banners + ETag hash) lives in the adapter; the
+  // ready-beep stays application-side (alert policy, not networking).
+  if (dashboardServiceInitialize(WIFI_SSID, WIFI_PASS, WIFI_AP_CHANNEL, INDEX_HTML)) {
     beepStart(BEEP_WIFI_READY, BEEP_WIFI_READY_LEN);   // "beep beep" — Wi-Fi AP is up/ready
-    if (Serial) {
-      Serial.print("# WiFi AP '");
-      Serial.print(WIFI_SSID);
-      Serial.print("' UP — http://");
-      Serial.println(WiFi.localIP());
-    }
-  } else if (Serial) {
-    Serial.print("# WiFi AP '"); Serial.print(WIFI_SSID);
-    Serial.println("' FAILED to start");
   }
 }
 
@@ -1065,196 +1018,16 @@ int buildTelemJson(char *body, size_t cap) {
   return encodeTelemetryJson(body, cap, buildSystemSnapshot(millis()), wifiSeq);
 }
 
-// One-shot /data JSON. Header + body coalesced into a single write() so the
-// whole response is one modem round-trip (one bounded op this loop pass).
-void wifiSendData(WiFiClient &client) {
-  char body[400];
-  int n = buildTelemJson(body, sizeof(body));
-  char buf[560];
-  int h = snprintf(buf, sizeof(buf),
-    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-    "Access-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: %d\r\n\r\n", n);
-  if (h > 0 && (size_t)(h + n) < sizeof(buf)) {
-    memcpy(buf + h, body, n);
-    client.write(reinterpret_cast<const uint8_t *>(buf), h + n);
-  }
+// The network layer pulls frames through ports/TelemetryFrameSource.h —
+// the application encodes, infrastructure ships bytes (#181).
+int telemetryFrameBuild(char *body, size_t capacity) {
+  return buildTelemJson(body, capacity);
 }
 
-// Serve the embedded dashboard. The page is static, so it carries an ETag and
-// Cache-Control: no-cache (store-but-revalidate): the first visit downloads it
-// once, then every refresh sends If-None-Match and gets a tiny 304 here instead
-// of re-streaming ~33 KB through the blocking Wi-Fi modem (issue #54). Live
-// values arrive separately over SSE, so the HTML itself never reloads in normal
-// use.
-//
-// The 200 body is NOT sent here in one burst — that single blocking burst was
-// the #69 runaway root cause (it froze loop() for ~1-2 s while the ESC held the
-// last throttle). Instead wifiBeginPage() sends only the headers (one coalesced
-// write) and hands the body to the incremental sender in wifiUpdate(), which
-// ships ONE WIFI_PAGE_CHUNK per loop pass so control + failsafe run between
-// chunks.
-void wifiBeginPage(WiFiClient &client) {
-  size_t len = strlen(INDEX_HTML);
-  char hdr[160];
-  int h = snprintf(hdr, sizeof(hdr),
-    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-    "Cache-Control: no-cache\r\nETag: %s\r\nConnection: close\r\nContent-Length: %u\r\n\r\n",
-    pageEtag, (unsigned)len);
-  // snprintf returns <0 on error or >= size if truncated; only proceed with a
-  // valid, fully-formed header. Otherwise abort (don't start a body transfer
-  // behind a partial/garbage header).
-  if (h <= 0 || h >= (int)sizeof(hdr)) {
-    client.stop();
-    return;
-  }
-  client.write(reinterpret_cast<const uint8_t *>(hdr), h);
-  pageClient = client;          // refcounted handle survives the local going out of scope
-  pagePtr = INDEX_HTML;
-  pageRemaining = len;          // body streams over the next passes (branch A of wifiUpdate)
-}
-
-// 304 Not Modified for a cached dashboard — tiny, single coalesced write.
-void wifiSend304(WiFiClient &client) {
-  char hdr[120];
-  int h = snprintf(hdr, sizeof(hdr),
-    "HTTP/1.1 304 Not Modified\r\nETag: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
-    pageEtag);
-  // Guard the snprintf return (could be <0 or truncated) before using it as a length.
-  if (h > 0 && h < (int)sizeof(hdr)) {
-    client.write(reinterpret_cast<const uint8_t *>(hdr), h);
-  }
-}
-
-// Non-blocking, and bounded to AT MOST ONE modem write per loop pass (#69):
-// either one page chunk, OR one request/response, OR one SSE frame. The control
-// path + WDT.refresh() run every pass between these, so Wi-Fi can never starve
-// the loop. Each modem call is also individually capped at WIFI_MODEM_TIMEOUT_MS
-// (vs the WiFiS3 default 10 000 ms) so a single stalled TCP window can't freeze
-// loop() for seconds (issue #54).
-void wifiUpdate() {
-  if (!wifiUp) return;
-
-  modem.timeout(WIFI_MODEM_TIMEOUT_MS);
-
-  // (A) A page transfer is in flight → send exactly ONE chunk and yield. Control
-  // + failsafe + watchdog refresh run before we get back here next pass.
-  if (pageRemaining > 0) {
-    if (!pageClient.connected()) {
-      // client went away mid-transfer
-      pageClient.stop();
-      pagePtr = nullptr;
-      pageRemaining = 0;
-    } else {
-      size_t chunk = pageRemaining > WIFI_PAGE_CHUNK ? WIFI_PAGE_CHUNK : pageRemaining;
-      size_t w = pageClient.write(reinterpret_cast<const uint8_t *>(pagePtr), chunk);
-      if (w == 0) {
-        // write stalled (modem timeout) — abort the transfer instead of spinning
-        // forever: a 0-byte write makes no progress, so without this the page
-        // never completes and SSE telemetry is starved one pass at a time.
-        pageClient.stop();
-        pagePtr = nullptr;
-        pageRemaining = 0;
-      } else {
-        pagePtr += w;
-        pageRemaining -= w;
-        if (pageRemaining == 0) {
-          pageClient.flush();
-          pageClient.stop();
-          pagePtr = nullptr;
-        }
-      }
-    }
-    modem.timeout(MODEM_TIMEOUT);
-    return;
-  }
-
-  // (B) Otherwise accept at most one new client this pass.
-  WiFiClient client = wifiServer.available();
-  if (client) {
-    // Read the request line + headers into one bounded buffer (cap + 25 ms) so
-    // we can route on the first line AND honor a conditional-GET If-None-Match
-    // for the cached dashboard. 512 B comfortably holds an iOS Safari header set.
-    char req[512];
-    int  ri = 0;
-    uint32_t t0 = millis();
-    while ((millis() - t0) < 25 && ri < (int)sizeof(req) - 1) {
-      while (client.available() && ri < (int)sizeof(req) - 1) req[ri++] = client.read();
-      if (ri >= 4 && req[ri - 4] == '\r' && req[ri - 3] == '\n' &&
-                     req[ri - 2] == '\r' && req[ri - 1] == '\n') break;  // end of headers
-    }
-    req[ri] = '\0';
-
-    if (strstr(req, "/events")) {
-      // Upgrade to a persistent Server-Sent Events stream. ALWAYS free any
-      // previous SSE socket first — even a dead/half-open one — so its ESP32
-      // link id is released (AT+CIPCLOSE) instead of leaking. The old code only
-      // closed it when still connected(), so a client that dropped Wi-Fi without
-      // a clean close leaked a link id every reconnect until the ~5-socket pool
-      // was exhausted and the server could accept nothing (#77).
-      sseClient.stop();
-      sseClient = client;
-      sseActive = true;
-      sseClient.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
-                        "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
-      sseLastMs = 0;                                   // push first frame immediately
-    } else if (strstr(req, "/data")) {
-      wifiSendData(client); client.flush(); client.stop();
-    } else {
-      // Static dashboard. If the browser already holds our ETag, reply 304 and
-      // skip the ~33 KB transfer entirely (issue #54); otherwise send the headers
-      // now and stream the body incrementally over the next passes (branch A).
-      bool cached = strstr(req, "If-None-Match") && strstr(req, pageEtag);
-      if (cached) {
-        wifiSend304(client);
-        client.flush();
-        client.stop();
-      } else {
-        wifiBeginPage(client);     // body streams over the next passes (branch A)
-      }
-    }
-    modem.timeout(MODEM_TIMEOUT);
-    return;                                            // one modem op done this pass
-  }
-
-  // (C) Idle → push at most one SSE telemetry frame, AND proactively reap the
-  // socket the instant it dies so a dropped client can't leak its ESP32 link id
-  // and exhaust the ~5-socket pool (#77). The push starts with a ": hb\n" comment
-  // (a no-op for EventSource) that exercises the TCP socket so Safari/iOS doesn't
-  // park the connection in a stalled state.
-  if (sseActive) {
-    if (!sseClient.connected()) {
-      sseClient.stop();          // peer gone (e.g. Wi-Fi dropped) → free the link id NOW
-      sseActive = false;
-    } else {
-      uint32_t now = millis();
-      if (now - sseLastMs >= SSE_INTERVAL_MS) {
-        sseLastMs = now;
-        // Build the whole SSE frame — heartbeat comment, data line, terminator —
-        // into one buffer and ship it in a SINGLE write() (one AT round-trip vs
-        // three, issue #54). SSE_FRAME_CAP holds the 11-byte prefix + JSON + "\n\n".
-        char frame[SSE_FRAME_CAP];
-        int len = snprintf(frame, sizeof(frame), ": hb\ndata: ");
-        // Guard the snprintf return before using it as an offset (consistent with
-        // wifiBeginPage/wifiSend304). The fixed 11-byte prefix can't really
-        // truncate, but this keeps the frame+len / cap math provably in-bounds.
-        if (len > 0 && len < (int)sizeof(frame) - 2) {
-          // Reserve the last 2 bytes for the "\n\n" terminator so the JSON body
-          // can never crowd it out; buildTelemJson clamps to the cap we pass.
-          len += buildTelemJson(frame + len, sizeof(frame) - len - 2);
-          frame[len++] = '\n';
-          frame[len++] = '\n';
-          size_t w = sseClient.write(reinterpret_cast<const uint8_t *>(frame), len);
-          if (w == 0) {          // 0-byte write = dead socket → reap immediately (#77)
-            sseClient.stop();
-            sseActive = false;
-          }
-        }
-      }
-    }
-  }
-
-  modem.timeout(MODEM_TIMEOUT);   // restore default 10 s timeout on the way out
-}
+// Non-blocking, and bounded to AT MOST ONE modem write per loop pass (#69).
+// The serving machine (page chunks, request routing, SSE) lives in
+// infrastructure/network/DashboardServer.cpp (#181).
+void wifiUpdate() { dashboardServiceUpdate(); }
 
 
 // ═══════════════════════════════════════════════════════════════

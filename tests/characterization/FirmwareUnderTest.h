@@ -23,6 +23,10 @@
 // infrastructure/xc/, linked into every characterization binary.
 #include "../../sketches/rc_test/src/infrastructure/xc/XbusTelemetryAdapter.h"
 
+// Dashboard serving state (#181): the network machine lives in
+// infrastructure/network/, reachable through these externs.
+#include "../../sketches/rc_test/src/infrastructure/network/WifiService.h"
+
 // The Servo objects live in infrastructure/arduino/PwmEscAdapter.cpp
 // (#172), linked into every characterization binary; resetFirmwareState()
 // reaches them through these declarations. Same pattern for the S.BUS
@@ -104,7 +108,7 @@ inline void resetFirmwareState() {
   tempWarnSinceMs = 0;
   tempEcoSinceMs = 0;
   tempCutSinceMs = 0;
-  // [WIFI]
+  // [WIFI] — serving state lives in the network adapter (#181)
   sseClient = WiFiClient{};
   pageClient = WiFiClient{};
   wifiUp = false;
@@ -112,8 +116,9 @@ inline void resetFirmwareState() {
   snprintf(pageEtag, sizeof(pageEtag), "\"d0\"");
   sseLastMs = 0;
   sseActive = false;
-  pagePtr = nullptr;
+  pagePointer = nullptr;
   pageRemaining = 0;
+  dashboardPageHtml = nullptr;
   wifiDbgPrev = 0;
   // [DEBUG]
   prevPrint = 0;

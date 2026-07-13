@@ -30,14 +30,17 @@ drive exactly as before.
   as a parameter, hardware effects returned as actions for the sketch to
   execute; the sketch keeps thin delegates until the composition root lands
 - **Ports + adapters** — `src/ports/` link-time seams (ESC output,
-  joystick ADC, piezo alert, RC input, ESC telemetry) with their
-  `src/infrastructure/` adapters (`arduino/` + `radiolink/` + `xc/`)
-  owning the Servo objects, the ADC settle sequence, the piezo pin, the
-  S.BUS UART + parser, and the [X.BUS telemetry](xbus-telemetry.md)
-  poller: infrastructure is the only layer that includes hardware
-  libraries, vendor types (the bfs S.BUS frame) are translated to domain
-  types (`RcFrame`) at the port boundary, and the telemetry port owns the
-  `EscTelem` type it delivers while the sketch keeps owning the array
+  joystick ADC, piezo alert, RC input, ESC telemetry, dashboard service)
+  with their `src/infrastructure/` adapters (`arduino/` + `radiolink/` +
+  `xc/` + `network/`) owning the Servo objects, the ADC settle sequence,
+  the piezo pin, the S.BUS UART + parser, the
+  [X.BUS telemetry](xbus-telemetry.md) poller, and the
+  [Wi-Fi dashboard](wifi-dashboard.md) serving machine: infrastructure is
+  the only layer that includes hardware libraries, vendor types (the bfs
+  S.BUS frame) are translated to domain types (`RcFrame`) at the port
+  boundary, the telemetry port owns the `EscTelem` type it delivers while
+  the sketch keeps owning the array, and the network layer only ever
+  handles encoded bytes (the reverse `TelemetryFrameSource` seam)
 - **Observers read a snapshot** — `src/application/SystemSnapshot.h` is the
   immutable per-cycle observation; the dashboard JSON and debug CSV
   encoders (`src/telemetry/`) consume it `const&` and can no longer reach

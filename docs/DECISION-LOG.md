@@ -5,6 +5,37 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 10 final slice: infrastructure/network/ (#181)
+
+- The `[WIFI]` serving machine moved to `src/infrastructure/network/`
+  behind `ports/DashboardServicePort.h`: `WifiService` (AP bring-up +
+  FNV-1a ETag #109 + shared serving state, extern for the harness),
+  `DashboardServer` (bounded request read/route, /data one-shot, ETag/304
+  path, incremental one-chunk-per-pass page transfer #69 with 0-byte-write
+  aborts), `SseStream` (SSE upgrade with unconditional prior-socket reap
+  #77, single-write heartbeat+data frame #54). All #69/#54/#77 invariants
+  moved line-for-line; SSE branch mechanically restructured from a nested
+  else into early returns (same predicates, same order).
+- **Dependency inversion:** `ports/TelemetryFrameSource.h` is a REVERSE
+  link-time seam — declared in ports/, implemented by the .ino (delegates
+  to buildTelemJson), called by the network layer where wifiUpdate used to
+  call buildTelemJson. Infrastructure never includes application/ or
+  telemetry/; it ships bytes.
+- Identity stays sketch-owned and is passed at initialize: credentials
+  (arduino_secrets.h never leaves the .ino), WIFI_AP_CHANNEL, and the
+  INDEX_HTML page pointer. The four serving tunables (SSE_INTERVAL_MS 200,
+  SSE_FRAME_CAP 448, WIFI_PAGE_CHUNK 1024, WIFI_MODEM_TIMEOUT_MS 50) moved
+  from [CONFIG] into WifiService.h with the machine — values unchanged,
+  single home (the target config/ layer re-homes them later). The ready
+  beep stays application-side (initialize returns AP-up); the beep now
+  fires ~1 ms later at boot (after the banner prints) — non-observable.
+- `wifiMode()`, `wifiDebug()` (reads adapter state via extern) and
+  `wifiSeq` stay in the .ino. `pagePtr` renamed `pagePointer` on move
+  (naming.md). Verified: 26/26 host binaries green, ZERO expectation
+  changes; flash 117660 (+64), RAM 9848 (+12: the page-pointer global —
+  layout, not behavior). Step 10 COMPLETE — only step 11 FirmwareApp
+  remains in Phase D's §9 sequence.
+
 ## 2026-07-13 — SystemSnapshot: observers read one immutable per-cycle struct (#132)
 
 - `src/application/SystemSnapshot.h` (first `application/` file — the #150
