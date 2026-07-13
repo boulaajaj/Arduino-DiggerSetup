@@ -11,7 +11,7 @@
 #include "../../ports/TelemetryFrameSource.h"
 #include "WifiService.h"
 
-void sseAccept(WiFiClient& client) {
+void sseAccept(const WiFiClient& client) {
   // Upgrade to a persistent Server-Sent Events stream. ALWAYS free any
   // previous SSE socket first — even a dead/half-open one — so its ESP32
   // link id is released (AT+CIPCLOSE) instead of leaking. The old code only
