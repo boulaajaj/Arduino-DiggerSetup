@@ -194,7 +194,7 @@ polls via `telemetrySourceUpdate()` on Serial1 (D0/D1):
 ## Architecture Summary
 
 Sketch: `sketches/rc_test/rc_test.ino` (GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The version
-string is defined ONCE — `FIRMWARE_VERSION` at the top of `[CONFIG]` (#124).
+string is defined ONCE — `FIRMWARE_VERSION` in `src/config/BuildInfo.h` (#124, #185).
 No doc carries a live copy; dated records (DECISION-LOG,
 FIRMWARE-UPLOAD-LOG) cite versions historically.
 
@@ -300,7 +300,7 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in [CONFIG]; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
+sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in src/config/BuildInfo.h; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
 sketches/rc_test/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
 sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
@@ -310,6 +310,7 @@ sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyType
 sketches/rc_test/src/application/        — SystemSnapshot.h (#132): immutable per-cycle observation consumed const& by the observer encoders
 sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
 sketches/rc_test/src/alerts/             — Alert policy + players (#183): AlertTypes.h + AlertPolicy (priority ladder, low-V latch, inactivity) + PatternPlayer (one-shot + repeating) — pure logic; the piezo stays behind ports/AlertOutputPort.h
+sketches/rc_test/src/config/             — Tunables per domain (#185): BuildInfo.h (FIRMWARE_VERSION SSOT) + Pins.h + Input/Drive/Battery/Thermal/Alert/Telemetry/Wifi/SafetyConfig.h — values are law, included by the .ino (adapter-owned tunables stay single-homed in infrastructure/)
 sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem) + DashboardServicePort.h + TelemetryFrameSource.h (reverse seam: app encodes, network ships bytes)
 sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode) + network/ (WifiService + DashboardServer + SseStream — the #69/#54/#77 serving machine + its tunables, #181)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
@@ -352,7 +353,7 @@ monitor.py                               — Simple serial monitor
 
 - All code in `rc_test.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
 - Structs go in `types.h` (solves Arduino auto-prototype limitation)
-- All tunable constants go in the `[CONFIG]` section — no magic numbers in code
+- All tunable constants live in `src/config/` per-domain headers (#185; the `[CONFIG]` section is now their include point) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `infrastructure/xc/`, Wi-Fi serving tunables in `infrastructure/network/`)
 - When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
 
 ### Testing (#47 — details in docs/TESTING.md)
@@ -387,8 +388,8 @@ monitor.py                               — Simple serial monitor
 - Comment each `[MODULE]` section header with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 - **README describes behavior, never tunable numbers** (#124): current values
-  live in `[CONFIG]`. PROJECT-PLAN and OPERATOR-GUIDE are technical
-  references — numbers are allowed there but must match `[CONFIG]` (drift is
+  live in `src/config/`. PROJECT-PLAN and OPERATOR-GUIDE are technical
+  references — numbers are allowed there but must match `src/config/` (drift is
   a doc bug)
 
 ### ESC / motor configuration changes

@@ -41,6 +41,10 @@ drive exactly as before.
   boundary, the telemetry port owns the `EscTelem` type it delivers while
   the sketch keeps owning the array, and the network layer only ever
   handles encoded bytes (the reverse `TelemetryFrameSource` seam)
+- **Config is a layer** — every tunable lives in `src/config/` per-domain
+  headers (BuildInfo carries the version single source of truth, Pins
+  carries the application pin map); the `[CONFIG]` section of the sketch
+  is now their include point, and values are law
 - **Alerts are a layer** — the beep vocabulary lives in `src/alerts/`:
   `AlertPolicy` (the priority ladder, the low-voltage latch with its own
   plausibility form, inactivity tracking) + `PatternPlayer` (one-shot and
