@@ -11,6 +11,11 @@
 
 #include <Arduino.h>
 
+void joystickInitialize() {
+  analogReadResolution(14);  // moved verbatim from setup() (#187) — the
+                             // 14-bit range every axis constant assumes
+}
+
 void joystickReadAxes(int yPin, int xPin, int* rawY, int* rawX) {
   analogRead(yPin);
   delayMicroseconds(100);

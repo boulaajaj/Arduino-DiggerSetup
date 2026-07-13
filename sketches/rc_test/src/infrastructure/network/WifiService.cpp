@@ -25,6 +25,8 @@ WiFiClient pageClient;
 const char *pagePointer = nullptr;
 size_t     pageRemaining = 0;
 
+uint8_t dashboardServiceRadioStatus() { return WiFi.status(); }
+
 bool dashboardServiceInitialize(const char* ssid, const char* password,
                                 uint8_t apChannel, const char* pageHtml) {
   dashboardPageHtml = pageHtml;
