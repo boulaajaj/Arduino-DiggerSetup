@@ -29,10 +29,10 @@ drive exactly as before.
   `src/domain/safety/`. All pure logic — no Arduino includes, time passed
   as a parameter, hardware effects returned as actions for the sketch to
   execute; the sketch keeps thin delegates until the composition root lands
-- **First port + adapter** — `src/ports/EscOutputPort.h` (a link-time seam)
-  with `src/infrastructure/arduino/PwmEscAdapter.cpp` owning the Servo
-  objects: infrastructure is the only layer that includes hardware
-  libraries
+- **Ports + adapters** — `src/ports/` link-time seams (ESC output,
+  joystick ADC, piezo alert) with their `src/infrastructure/arduino/`
+  adapters owning the Servo objects, the ADC settle sequence and the piezo
+  pin: infrastructure is the only layer that includes hardware libraries
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

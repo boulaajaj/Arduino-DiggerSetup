@@ -5,6 +5,25 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 10 slice 2: JoystickPort + AlertOutputPort adapters (#174)
+
+- `ports/JoystickPort.h` + `infrastructure/arduino/AdcJoystickAdapter.cpp`:
+  the ADC conditioning sequence moved VERBATIM (discard-read → 100 µs mux
+  settle → real read, Y then X — hardware timing at the 100 Hz joystick
+  cache cadence, non-blocking budget unchanged). `updateJoystick()` keeps
+  the cadence guard, deadband/expo/gain pipeline and cachedJoy writes.
+- `ports/AlertOutputPort.h` + `infrastructure/arduino/PiezoAdapter.cpp`:
+  pinMode+LOW at initialize, one digitalWrite per set. The horn/pattern/
+  alarm OR-priority stays in `[BEEPER]` (alert policy, not hardware —
+  destined for the alerts/ layer later); `beeperUpdate()` computes the
+  same boolean and calls `alertOutputSet(...)`.
+- Verified: all 25 host binaries green, zero expectation changes (stub
+  analogRead/GPIO captures now reached through the adapters); compile
+  clean — flash 117304 (+68 vs 117236), RAM 9828 (+4: the piezo pin int).
+  Remaining step-10 adapters: S.BUS receiver, X.BUS telemetry poller,
+  Wi-Fi/network, watchdog + clock (port-less in the target — land with the
+  FirmwareApp composition root, step 11).
+
 ## 2026-07-13 — Phase D step 10 slice 1: EscOutputPort + PwmEscAdapter (#172)
 
 - First infrastructure slice: `ports/EscOutputPort.h` (link-time seam per

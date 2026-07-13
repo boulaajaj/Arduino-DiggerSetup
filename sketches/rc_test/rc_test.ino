@@ -76,6 +76,8 @@
 #include "src/domain/safety/OutputGate.h"
 #include "src/telemetry/TelemetryScaling.h"
 #include "src/ports/EscOutputPort.h"
+#include "src/ports/JoystickPort.h"
+#include "src/ports/AlertOutputPort.h"
 
 
 // Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
@@ -512,10 +514,10 @@ void updateJoystick(uint32_t now) {
   if ((now - lastAdcTime) < ADC_INTERVAL) return;
   lastAdcTime = now;
 
-  analogRead(PIN_JOY_Y); delayMicroseconds(100);
-  cachedJoy.rawY = analogRead(PIN_JOY_Y);
-  analogRead(PIN_JOY_X); delayMicroseconds(100);
-  cachedJoy.rawX = analogRead(PIN_JOY_X);
+  // The ADC conditioning sequence (discard-read, 100 µs settle, real read)
+  // lives in infrastructure/arduino/AdcJoystickAdapter.cpp behind
+  // ports/JoystickPort.h (#117 step 10 slice 2, #174).
+  joystickReadAxes(PIN_JOY_Y, PIN_JOY_X, &cachedJoy.rawY, &cachedJoy.rawX);
 
   float normY = constrain((float)(joyDeadband(cachedJoy.rawY) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
   float normX = constrain((float)(joyDeadband(cachedJoy.rawX) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
@@ -801,7 +803,10 @@ const uint16_t* beepSeq = nullptr;
 int      beepLen = 0, beepIdx = -1;
 uint32_t beepPhaseMs = 0;
 
-void beeperInit() { pinMode(PIN_BEEPER, OUTPUT); digitalWrite(PIN_BEEPER, LOW); }
+// The pin work lives in infrastructure/arduino/PiezoAdapter.cpp behind
+// ports/AlertOutputPort.h (#117 step 10 slice 2, #174); the horn/pattern/
+// alarm priority policy stays here.
+void beeperInit() { alertOutputInitialize(PIN_BEEPER); }
 
 // Queue a non-blocking on/off pattern (durations in ms, starting with ON).
 void beepStart(const uint16_t *seq, int len) {
@@ -819,7 +824,7 @@ void beeperUpdate() {
     patternOn = (beepIdx >= 0 && beepIdx < beepLen) && (beepIdx % 2 == 0);
   }
   // Horn (manual) ORs over one-shot patterns ORs over [ALERT] alarms.
-  digitalWrite(PIN_BEEPER, (hornActive || patternOn || alarmOutputOn) ? HIGH : LOW);
+  alertOutputSet(hornActive || patternOn || alarmOutputOn);
 }
 
 
