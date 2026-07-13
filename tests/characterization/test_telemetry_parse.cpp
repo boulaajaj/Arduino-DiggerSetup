@@ -10,7 +10,9 @@
 static std::vector<uint8_t> responseFrame(uint8_t esc, uint16_t vbatRaw, uint16_t ibusRaw,
                                           uint16_t speedRaw, uint16_t tescRaw, uint16_t tmotRaw) {
   std::vector<uint8_t> f = {XBUS_HEADER_SLAVE, esc, 0x00, XBUS_FUNCTION_READ, 15};
-  const uint8_t regs[5] = {REGISTER_BATTERY_VOLTAGE, REGISTER_BUS_CURRENT, REGISTER_MOTOR_SPEED, REGISTER_ESC_TEMPERATURE, REGISTER_MOTOR_TEMPERATURE};
+  const uint8_t regs[5] = {REGISTER_BATTERY_VOLTAGE, REGISTER_BUS_CURRENT,
+                           REGISTER_MOTOR_SPEED, REGISTER_ESC_TEMPERATURE,
+                           REGISTER_MOTOR_TEMPERATURE};
   const uint16_t vals[5] = {vbatRaw, ibusRaw, speedRaw, tescRaw, tmotRaw};
   for (int i = 0; i < 5; i++) {
     f.push_back(regs[i]);

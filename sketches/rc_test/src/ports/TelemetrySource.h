@@ -25,4 +25,7 @@ void telemetrySourceInitialize();
 
 // Poll the bus (non-blocking; call every loop pass). Fills/refreshes the
 // caller's telemetry array and runs the per-ESC staleness watchdog.
+// Contract: the caller value-initializes the array before the first call
+// (e.g. `EscTelem telem[N] = {};`) — `valid` must start false, since the
+// first sample of each ESC seeds the EMA instead of folding into it.
 void telemetrySourceUpdate(EscTelem* telemetry, uint8_t escCount);
