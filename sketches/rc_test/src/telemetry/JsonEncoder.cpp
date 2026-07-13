@@ -9,6 +9,7 @@
 
 int encodeTelemetryJson(char *body, size_t capacity,
                         const SystemSnapshot &snapshot, unsigned long sequence) {
+  if (capacity == 0) return 0;  // the overflow clamp below would underflow to -1
   // Per-ESC age (ms since last good frame); 999999 if never received.
   uint32_t age0 = snapshot.esc[0].lastGoodMs
                       ? (snapshot.nowMs - snapshot.esc[0].lastGoodMs) : 999999UL;

@@ -1286,8 +1286,10 @@ void debugPrint(uint32_t now) {
 
   // Formatting (integer-scaled — no float printf on this core) lives in
   // telemetry/CsvEncoder (#132); this shim owns the cadence and the print.
+  // NOTE: `now` is µs (loop clock); the snapshot contract is ms, so read
+  // millis() here — the CSV does not use nowMs, so output is unchanged.
   char buf[200];
-  encodeDebugCsv(buf, sizeof(buf), buildSystemSnapshot(now));
+  encodeDebugCsv(buf, sizeof(buf), buildSystemSnapshot(millis()));
   Serial.println(buf);
 }
 
