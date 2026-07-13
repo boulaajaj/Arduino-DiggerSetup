@@ -1,7 +1,7 @@
 // domain/safety — the drive ALLOW/DENY supervisor (#117 step 8, #168).
 // Behavior is locked by tests/characterization/test_output_gate.cpp,
 // tests/invariants/test_invariant_cutoff_dominates.cpp,
-// test_invariant_stale_rc_neutral.cpp and
+// tests/invariants/test_invariant_stale_rc_neutral.cpp and
 // tests/safety/test_safety_supervisor_domain.cpp.
 #include "SafetySupervisor.h"
 
