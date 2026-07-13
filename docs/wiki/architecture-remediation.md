@@ -30,9 +30,12 @@ drive exactly as before.
   as a parameter, hardware effects returned as actions for the sketch to
   execute; the sketch keeps thin delegates until the composition root lands
 - **Ports + adapters** — `src/ports/` link-time seams (ESC output,
-  joystick ADC, piezo alert) with their `src/infrastructure/arduino/`
-  adapters owning the Servo objects, the ADC settle sequence and the piezo
-  pin: infrastructure is the only layer that includes hardware libraries
+  joystick ADC, piezo alert, RC input) with their `src/infrastructure/`
+  adapters (`arduino/` + `radiolink/`) owning the Servo objects, the ADC
+  settle sequence, the piezo pin, and the S.BUS UART + parser:
+  infrastructure is the only layer that includes hardware libraries, and
+  vendor types (the bfs S.BUS frame) are translated to domain types
+  (`RcFrame`) at the port boundary
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

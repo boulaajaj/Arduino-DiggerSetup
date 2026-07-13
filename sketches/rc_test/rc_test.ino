@@ -56,7 +56,6 @@
 #include <Arduino.h>
 #include <WiFiS3.h>
 #include <WDT.h>        // RA4M1 hardware watchdog — control-loop runaway backstop (#69)
-#include "sbus.h"
 #include "types.h"
 #include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
@@ -78,17 +77,12 @@
 #include "src/ports/EscOutputPort.h"
 #include "src/ports/JoystickPort.h"
 #include "src/ports/AlertOutputPort.h"
+#include "src/ports/RcInputPort.h"
 
 
-// Second hardware UART on D11=TX(pin 11) / D12=RX(pin 12) via SCI0.
-// S.BUS only needs RX; TX is unused. Named `sbusUart` (not Serial2)
-// to avoid the macro collision with the core's pre-declared _UART2_.
-// UNO R4 WiFi: SCI0 is on D11/D12 (Nano R4 used A4/A5 for SCI0).
-// These pin constants live here (not in [CONFIG] below) because sbusUart is a
-// global constructed at static-init time — it must see them before [CONFIG].
-const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
-const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
-UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
+// The second hardware UART (SCI0, D11/D12), the S.BUS parser and their pin
+// constants moved to infrastructure/radiolink/SbusReceiverAdapter.cpp
+// behind ports/RcInputPort.h (#117 step 10 slice 3, #176).
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -431,8 +425,7 @@ ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
 // [RC] — S.BUS input on sbusUart / SCI0 (D12 RX, NPN inverter)
 // ═══════════════════════════════════════════════════════════════
 
-bfs::SbusRx sbusRx(&sbusUart);
-bfs::SbusData sbusData;
+RcFrame rcFrame = {};                    // latest received frame (domain type)
 bool sbusValid = false;
 uint32_t sbusLastFrame = 0;
 const uint32_t SBUS_TIMEOUT = 100000UL;  // 100ms
@@ -447,9 +440,9 @@ int rcDeadband(int pw) {
   return centerSnapDeadband(pw, SVC, RC_DEADBAND);
 }
 
-int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_THR]))   : SVC; }
-int rcSteering() { return sbusValid ? rcDeadband(sbusToServo(sbusData.ch[SBUS_CH_STEER])) : SVC; }
-int rcOverride() { return sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR]) : SVMIN; }
+int rcThrottle() { return sbusValid ? rcDeadband(sbusToServo(rcFrame.channels[SBUS_CH_THR]))   : SVC; }
+int rcSteering() { return sbusValid ? rcDeadband(sbusToServo(rcFrame.channels[SBUS_CH_STEER])) : SVC; }
+int rcOverride() { return sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_OVR]) : SVMIN; }
 
 // RC axis command (xSpeed/zRotation), post-gain and reverse-limit — pre-mix,
 // pre-curvatureDrive. The mix combines RC + joystick at this axis level (#90),
@@ -471,7 +464,7 @@ DriveCommand rcCommand() {
 // ═══════════════════════════════════════════════════════════════
 //
 // updateGear() is defined here (after [RC]) so it can read sbusValid /
-// sbusData directly. The gearScale and currentGear globals it writes
+// rcFrame directly. The gearScale and currentGear globals it writes
 // are declared up in [CONFIG] so the drive functions and curvatureDrive
 // can read them for the Eco-only conditional caps.
 
@@ -486,7 +479,7 @@ void updateGear() {
   static const GearPolicyParameters GEAR_POLICY_PARAMETERS{
       GEAR_LOW_SCALE, GEAR_MID_SCALE, GEAR_HIGH_SCALE, OVR_LO, OVR_HI};
   GearSelection selection = gearPolicySelect(
-      sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR]) : 0, sbusValid,
+      sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_GEAR]) : 0, sbusValid,
       ecoLockLatched || tempEcoActive, GEAR_POLICY_PARAMETERS);
   gearScale = selection.scale;
   currentGear = (Gear)selection.level;
@@ -1189,7 +1182,7 @@ int buildTelemJson(char *body, size_t cap) {
     "\"e0\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d},"
     "\"e1\":{\"ok\":%d,\"age\":%lu,\"rpm\":%ld,\"cur\":%d,\"v\":%d,\"tE\":%d,\"tM\":%d}}",
     (unsigned long)nowMs, (unsigned long)wifiSeq, (int)currentGear, wifiMode(),
-    sbusData.failsafe ? 1 : 0, sbusData.lost_frame ? 1 : 0,
+    rcFrame.failsafe ? 1 : 0, rcFrame.lostFrame ? 1 : 0,
     ecoLockLatched ? 1 : 0, batteryCutoffLatched ? 1 : 0,
     tempWarnActive ? 1 : 0, tempEcoActive ? 1 : 0, tempCutActive ? 1 : 0,
     outL, outR,
@@ -1428,10 +1421,10 @@ void debugPrint(uint32_t now) {
   if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
 
-  int rcT = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_THR])   : SVC;
-  int rcS = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_STEER]) : SVC;
-  int rc4 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_GEAR])  : SVC;
-  int rc5 = sbusValid ? sbusToServo(sbusData.ch[SBUS_CH_OVR])   : SVMIN;
+  int rcT = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_THR])   : SVC;
+  int rcS = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_STEER]) : SVC;
+  int rc4 = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_GEAR])  : SVC;
+  int rc5 = sbusValid ? sbusToServo(rcFrame.channels[SBUS_CH_OVR])   : SVMIN;
 
   // Telemetry, integer-scaled so we avoid float printf on this core.
   int v0 = (int)lroundf(telem[0].voltage    * 10.0f);
@@ -1449,7 +1442,7 @@ void debugPrint(uint32_t now) {
            rcT, rcS, rc4, rc5,
            cachedJoy.rawY, cachedJoy.rawX,
            outL, outR, (int)currentGear,
-           sbusData.failsafe, sbusData.lost_frame,
+           rcFrame.failsafe, rcFrame.lostFrame,
            v0, i0, telem[0].rpmHz, e0, m0, telem[0].valid ? 1 : 0,
            v1, i1, telem[1].rpmHz, e1, m1, telem[1].valid ? 1 : 0);
   Serial.println(buf);
@@ -1462,7 +1455,7 @@ void debugPrint(uint32_t now) {
 
 void setup() {
   analogReadResolution(14);
-  sbusRx.Begin();
+  rcInputInitialize();
   outputInit();
   beeperInit();
   alertInit();
@@ -1490,13 +1483,12 @@ void loop() {
   uint32_t now = micros();
 
   // 1. Read inputs
-  if (sbusRx.Read()) {
-    sbusData = sbusRx.data();
+  if (rcInputReadFrame(&rcFrame)) {
     sbusLastFrame = now;
-    sbusValid = !sbusData.failsafe;
+    sbusValid = !rcFrame.failsafe;
   }
   if ((now - sbusLastFrame) > SBUS_TIMEOUT) sbusValid = false;
-  hornActive = sbusValid && (sbusData.ch[SBUS_CH_HORN] > HORN_ON_RAW);
+  hornActive = sbusValid && (rcFrame.channels[SBUS_CH_HORN] > HORN_ON_RAW);
 
   // 1.5 Staged low-battery protection (#65) — evaluate BEFORE gear select so the
   // Eco lock can override it. Stage 1 (~11 V) forces Eco; Stage 2 (10 V) cuts.

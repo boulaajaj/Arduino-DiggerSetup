@@ -5,6 +5,34 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 10 slice 3: RcInputPort + SbusReceiverAdapter (#176)
+
+- `ports/RcInputPort.h` defines the RC input contract in domain types:
+  `RcFrame {int16_t channels[16]; bool failsafe; bool lostFrame;}` +
+  `rcInputInitialize()` / `rcInputReadFrame(RcFrame*)`. The bfs vendor
+  S.BUS type never crosses the port — first slice to translate a vendor
+  type at the boundary rather than pass it through.
+- `infrastructure/radiolink/SbusReceiverAdapter.cpp` owns `UART
+  sbusUart(11, 12)` (SCI0 — the not-`Serial2` collision detail) and
+  `bfs::SbusRx` (moved from the `.ino`); on `Read()` success it copies 16
+  channels + failsafe/lost_frame into the caller's `RcFrame`. First
+  non-`arduino/` infrastructure folder (vendor-specific: radiolink).
+- The `.ino`'s `bfs::SbusData sbusData` global became `RcFrame rcFrame`;
+  every consumer renamed mechanically (`.ch[` → `.channels[`,
+  `.lost_frame` → `.lostFrame`). The loop() read block keeps its exact
+  freshness semantics (`sbusLastFrame = now` on frame, `SBUS_TIMEOUT`
+  staleness unchanged). `#include "sbus.h"` moved to the adapter
+  (empirically verified — arduino-cli library detection scans src/).
+- Harness: `feedSbusFrame()` now scripts through `rcInputReadFrame()`
+  exactly like loop(); `resetFirmwareState()` resets `rcFrame` and
+  re-creates the extern `sbusRx` (parser residue = power-cycle
+  equivalence). Stub sbus.h frame queue is global, so scripting is
+  unchanged.
+- Verified: all 25 host binaries green, ZERO expectation changes; compile
+  clean — flash 117356 (+52), RAM 9832 (+4; linkage/layout of the moved
+  objects, not behavior). Remaining step-10 adapters: X.BUS telemetry
+  poller, Wi-Fi/network; watchdog + clock land with FirmwareApp (step 11).
+
 ## 2026-07-13 — Phase D step 10 slice 2: JoystickPort + AlertOutputPort adapters (#174)
 
 - `ports/JoystickPort.h` + `infrastructure/arduino/AdcJoystickAdapter.cpp`:

@@ -21,9 +21,13 @@
 
 // The Servo objects live in infrastructure/arduino/PwmEscAdapter.cpp
 // (#172), linked into every characterization binary; resetFirmwareState()
-// reaches them through these declarations.
+// reaches them through these declarations. Same pattern for the S.BUS
+// receiver objects in infrastructure/radiolink/SbusReceiverAdapter.cpp
+// (#176).
 extern Servo escL;
 extern Servo escR;
+extern UART sbusUart;
+extern bfs::SbusRx sbusRx;
 
 // Restore every MUTABLE firmware global to its boot value. Must be kept in
 // sync with rc_test.ino: when a PR adds a mutable global there, it adds the
@@ -39,8 +43,10 @@ inline void resetFirmwareState() {
   tempWarnActive = false;
   tempEcoActive = false;
   tempCutActive = false;
-  // [RC]
-  sbusData = bfs::SbusData{};
+  // [RC] — the parser object lives in the S.BUS adapter (#176); a fresh one
+  // drops any last-frame residue exactly like a power cycle would.
+  rcFrame = RcFrame{};
+  sbusRx = bfs::SbusRx(&sbusUart);
   sbusValid = false;
   sbusLastFrame = 0;
   // [JOYSTICK]
@@ -127,14 +133,13 @@ inline int leftEscMicroseconds()  { return stub::servoOnPin(PIN_ESC_L).lastMicro
 inline int rightEscMicroseconds() { return stub::servoOnPin(PIN_ESC_R).lastMicroseconds; }
 
 // Queue one S.BUS frame and run the sbus-read portion the way loop() does,
-// so sbusValid/sbusData/sbusLastFrame update exactly as in flight.
+// so sbusValid/rcFrame/sbusLastFrame update exactly as in flight.
 inline void feedSbusFrame(const bfs::SbusData& frame) {
   stub::queueSbusFrame(frame);
   uint32_t now = micros();
-  if (sbusRx.Read()) {
-    sbusData = sbusRx.data();
+  if (rcInputReadFrame(&rcFrame)) {
     sbusLastFrame = now;
-    sbusValid = !sbusData.failsafe;
+    sbusValid = !rcFrame.failsafe;
   }
 }
 
