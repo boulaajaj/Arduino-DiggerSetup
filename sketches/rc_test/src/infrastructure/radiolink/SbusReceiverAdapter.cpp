@@ -28,10 +28,16 @@ void rcInputInitialize() {
   sbusRx.Begin();
 }
 
+// The copy is bounded by the PORT's channel count; the vendor frame must
+// carry at least that many or this fails to compile (never a silent
+// out-of-bounds read/write if the library's channel count ever changes).
+static_assert(bfs::SbusData::NUM_CH >= RcFrame::CHANNEL_COUNT,
+              "vendor S.BUS frame carries fewer channels than RcFrame");
+
 bool rcInputReadFrame(RcFrame* out) {
   if (!sbusRx.Read()) return false;
   bfs::SbusData data = sbusRx.data();
-  for (int i = 0; i < bfs::SbusData::NUM_CH; i++) {
+  for (int i = 0; i < RcFrame::CHANNEL_COUNT; i++) {
     out->channels[i] = data.ch[i];
   }
   out->failsafe = data.failsafe;

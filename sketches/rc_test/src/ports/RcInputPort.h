@@ -10,7 +10,8 @@
 // One received RC frame: 16 raw channel values plus the receiver's own
 // failsafe/lost-frame flags.
 struct RcFrame {
-  int16_t channels[16];
+  static const uint8_t CHANNEL_COUNT = 16;
+  int16_t channels[CHANNEL_COUNT];
   bool failsafe;
   bool lostFrame;
 };
