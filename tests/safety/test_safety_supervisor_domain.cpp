@@ -9,7 +9,9 @@
 
 #include "../../sketches/rc_test/src/domain/safety/SafetySupervisor.h"
 
-// inputs{rcValid, batteryConfirmed, bootGraceElapsed, cutoffLatched, thermalCut}
+// SafetyInputs positional order:
+// {rcValid, batteryConfirmed, bootGraceElapsed, batteryCutoffLatched,
+//  thermalCutActive}
 
 TEST_CASE("all healthy: drive allowed with no failsafe reason") {
   SafetyDecision decision =
