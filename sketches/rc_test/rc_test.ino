@@ -54,7 +54,6 @@
 //   5V ──[10K]──┬──► NPN collector ──► D12 (sbusUart RX)
 
 #include <Arduino.h>
-#include <Servo.h>
 #include <WiFiS3.h>
 #include <WDT.h>        // RA4M1 hardware watchdog — control-loop runaway backstop (#69)
 #include "sbus.h"

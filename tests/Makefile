@@ -64,27 +64,27 @@ build/%: invariants/%.cpp $(HARNESS) $(FIRMWARE)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 
-build/%: battery/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: battery/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: thermal/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: thermal/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: telemetry/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: telemetry/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: operator_input/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: operator_input/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: drive/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: drive/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: safety/%.cpp $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: safety/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
