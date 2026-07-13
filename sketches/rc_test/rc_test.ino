@@ -74,6 +74,7 @@
 #include "src/domain/drive/GearPolicy.h"
 #include "src/domain/drive/CommandMixer.h"
 #include "src/domain/safety/SafetySupervisor.h"
+#include "src/domain/safety/OutputGate.h"
 #include "src/telemetry/TelemetryScaling.h"
 
 
@@ -592,36 +593,36 @@ uint32_t outHoldMs  = 0;
 int      rampFromL  = SVC;   // output captured when the gate closed (ease-out start)
 int      rampFromR  = SVC;
 
+// The state machine is extracted to src/domain/safety/OutputGate.* (#117
+// step 9, #170); this delegate mirrors the gate globals, reads the clock,
+// and executes the returned hardware actions in the original order:
+// attach, then write, then detach (the final neutral write precedes the
+// detach, so the ESCs see neutral before losing signal). The enum values
+// correspond — proven at compile time:
+static_assert((int)OUT_ACTIVE == (int)OUTPUT_GATE_ACTIVE &&
+              (int)OUT_HOLD == (int)OUTPUT_GATE_HOLD &&
+              (int)OUT_CUT == (int)OUTPUT_GATE_CUT,
+              "OutState and domain OutputGateMode values must correspond");
+
 void outputUpdate(bool driveAllowed, int mixL, int mixR) {
-  uint32_t nowMs = millis();
-  if (driveAllowed) {
-    if (outState == OUT_CUT) {        // resume after an RC-loss cut
-      escL.attach(PIN_ESC_L);
-      escR.attach(PIN_ESC_R);
-    }
-    outState = OUT_ACTIVE;
-    outputWrite(mixL, mixR);
-    return;
+  OutputGateState gate{(OutputGateMode)outState, outHoldMs, rampFromL,
+                       rampFromR};
+  OutputGateAction action =
+      outputGateStep(gate, driveAllowed, mixL, mixR, outL, outR, millis(),
+                     SVC, CUTOFF_HOLD_MS);
+  outState = (OutState)gate.mode;
+  outHoldMs = gate.holdStartMs;
+  rampFromL = gate.rampFromLeft;
+  rampFromR = gate.rampFromRight;
+  if (action.attach) {
+    escL.attach(PIN_ESC_L);
+    escR.attach(PIN_ESC_R);
   }
-  // Disallowed: ease out to neutral from the live command, then cut the PWM.
-  if (outState == OUT_ACTIVE) {
-    outState = OUT_HOLD;
-    outHoldMs = nowMs;
-    rampFromL = outL;                 // ease out FROM wherever the tracks are
-    rampFromR = outR;
+  if (action.write) outputWrite(action.leftPulse, action.rightPulse);
+  if (action.detach) {
+    escL.detach();                    // at neutral → stop pulsing → ESCs beep
+    escR.detach();
   }
-  if (outState == OUT_HOLD) {
-    float t = (CUTOFF_HOLD_MS > 0) ? (float)(nowMs - outHoldMs) / (float)CUTOFF_HOLD_MS : 1.0f;
-    if (t > 1.0f) t = 1.0f;
-    outputWrite(rampFromL + (int)((SVC - rampFromL) * t),
-                rampFromR + (int)((SVC - rampFromR) * t));
-    if (t >= 1.0f) {
-      escL.detach();                  // at neutral → stop pulsing → ESCs beep
-      escR.detach();
-      outState = OUT_CUT;
-    }
-  }
-  // OUT_CUT: emit nothing (no writes while detached).
 }
 
 

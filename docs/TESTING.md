@@ -46,8 +46,9 @@ tests/
 ├── drive/                      pure-domain suites for src/domain/drive/ (#117)
 │   ├── test_curvature_drive_domain.cpp
 │   └── test_gear_mixer_domain.cpp
-└── safety/                     pure-domain suite for src/domain/safety/ (#117)
-    └── test_safety_supervisor_domain.cpp
+└── safety/                     pure-domain suites for src/domain/safety/ (#117)
+    ├── test_safety_supervisor_domain.cpp
+    └── test_output_gate_domain.cpp
 ```
 
 The stub headers shadow the real Arduino/library headers via include order

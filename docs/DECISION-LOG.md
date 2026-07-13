@@ -5,6 +5,31 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 9: OutputGate extracted to src/domain/safety/ (#170)
+
+- `outputUpdate()`'s fail-safe state machine (#88/#65) moved VERBATIM to
+  `src/domain/safety/OutputGate.h/.cpp` as `outputGateStep(OutputGateState&,
+  driveAllowed, commanded, current, nowMs, neutralPulse, holdDurationMs) →
+  OutputGateAction {attach, write, pulses, detach}`. The pure machine owns
+  the ACTIVE/HOLD/CUT transitions and the exact float ease-out ramp
+  (zero-duration guard, >1 clamp, `rampFrom + (int)((neutral−rampFrom)·t)`);
+  the shim executes the hardware actions in the original order — attach,
+  write, detach — so the ESCs still see the final neutral write before
+  losing signal.
+- Behavior laws carried and unit-locked: ease-out starts from the LIVE
+  outputs snapshot; detach only after the ramp completes; resume-from-CUT
+  re-attaches while recovery mid-HOLD does NOT (ESCs were never detached);
+  CUT emits nothing. OutState↔OutputGateMode value correspondence
+  static_asserted in the shim (the GearLevel↔Gear pattern).
+- SVC and CUTOFF_HOLD_MS stay `[CONFIG]`, passed as parameters; millis()
+  read by the shim. Gate globals (outState/outHoldMs/rampFromL/R) stay in
+  the .ino, mirrored via the state struct — harness resets untouched.
+- Verified: all 25 host binaries green, zero expectation changes (new
+  `tests/safety/test_output_gate_domain.cpp`, 5 cases); compile clean —
+  flash 117160 (+160 vs 117000), RAM unchanged 9812. This completes the
+  DOMAIN extractions (§9 steps 1–9); steps 10–11 are infrastructure
+  adapters + the FirmwareApp composition root.
+
 ## 2026-07-12 — Phase D step 8: SafetySupervisor extracted to src/domain/safety/ (#168)
 
 - The inline drive gate in `loop()` — `driveAllowed = sbusValid &&
