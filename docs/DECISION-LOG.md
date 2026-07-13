@@ -5,6 +5,30 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Step-11 pre-slice: config/ layer extraction (#185)
+
+- Every `[CONFIG]` constant moved VERBATIM (values byte-identical) to
+  `src/config/` per the target's grouping: BuildInfo.h (FIRMWARE_VERSION —
+  the #124 SSOT gate is home-agnostic, now fires on this file), Pins.h
+  (application pins; documented include-order contract — it uses the
+  core's A0/A1 macros and must follow <Arduino.h>, config/ may not include
+  hardware headers), InputConfig, DriveConfig (incl. CALIBRATION_MODE +
+  the PIVOT_THROTTLE_TAPER static_assert), BatteryConfig, ThermalConfig,
+  AlertConfig (patterns + tunables), TelemetryConfig (PRINT_INTERVAL),
+  WifiConfig (AP channel), SafetyConfig (WDT_TIMEOUT_MS).
+- Deliberately NOT moved: the mutable state interleaved in [CONFIG]
+  (gearScale/currentGear, safety latches, thermal flags — state is not
+  configuration; goes with FirmwareApp), the outCapToX/reverseCap
+  delegates + Gear↔GearLevel static_assert (read globals + domain), and
+  constant NAMES (SVC/OVR_*/JOY_* stay verbatim — dozens of test files
+  reference them; renames are the #118 sweep's call).
+- Single-homed adapter tunables stay put (X.BUS poll constants in xc/
+  since #178; Wi-Fi serving tunables in network/ since #181).
+- Verified: 27 host binaries green, ZERO test edits; compile
+  BYTE-IDENTICAL (flash 117948, RAM 9848 — compile-time constants);
+  fitness OK. [CONFIG] in the .ino is now the config include point +
+  the state/delegate block.
+
 ## 2026-07-13 — Step-11 pre-slice: alerts/ layer extraction (#183)
 
 - `[BEEPER]`/`[ALERT]` policy and sequencing moved VERBATIM to
