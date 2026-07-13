@@ -38,6 +38,11 @@ drive exactly as before.
   libraries, vendor types (the bfs S.BUS frame) are translated to domain
   types (`RcFrame`) at the port boundary, and the telemetry port owns the
   `EscTelem` type it delivers while the sketch keeps owning the array
+- **Observers read a snapshot** — `src/application/SystemSnapshot.h` is the
+  immutable per-cycle observation; the dashboard JSON and debug CSV
+  encoders (`src/telemetry/`) consume it `const&` and can no longer reach
+  into module internals ([telemetry and
+  dashboard](telemetry-and-dashboard.md))
 - **Protection first** — the [characterization and invariant
   suites](testing.md) were built BEFORE any code moves, so every refactor
   step is verified against locked behavior

@@ -307,7 +307,8 @@ sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTyp
 sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
 sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
-sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178)
+sketches/rc_test/src/application/        — SystemSnapshot.h (#132): immutable per-cycle observation consumed const& by the observer encoders
+sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
 sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem)
 sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle sequence) + arduino/PiezoAdapter.cpp + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode)
 sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
