@@ -99,6 +99,13 @@ static bool tryParseResponse(EscTelem *telemetry, uint8_t esc, uint32_t nowMs) {
 // and never blocks: it drains RX across iterations and times out on silence.
 void telemetrySourceUpdate(EscTelem *telemetry, uint8_t escCount) {
   if (escCount == 0) return;  // the alternation modulo would divide by zero
+  if (telemetryPolledEscIndex >= escCount) {
+    // Caller-provided count shrank below the adapter-owned index (never in
+    // this firmware — escCount is always NUM_ESCS): restart the rotation
+    // rather than index the caller's array out of bounds.
+    telemetryPolledEscIndex = 0;
+    telemetryAwaitingResponse = false;
+  }
   uint32_t nowMs = millis();
 
   // Drain available bytes every iteration (cheap).
