@@ -7,7 +7,7 @@ Correlate visually: which lines move when motor speeds up?
 CSV: OutL,OutR, T0_b0,T0_b1, T1_b0,T1_b1, T2_b0,T2_b1, T3_b0,T3_b1,
      T4_b0,T4_b1, T5_b0,T5_b1, T6_b0,T6_b1, T7_b0,T7_b1
 
-Usage: python live_plot_telem.py
+Usage: python live_plot_telemetry.py
 """
 
 from collections import deque

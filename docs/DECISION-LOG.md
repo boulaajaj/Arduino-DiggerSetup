@@ -16,7 +16,13 @@ Updated by session hooks — only technical content, no personal info.
   to full words: `hw_diagnostic` → `hardware_diagnostic`, `telem_check` →
   `telemetry_check`, `telem_decode` → `telemetry_decode`. Acronym-compliant
   siblings (`pin_test`, `sbus_test`, `sbus_d12_test`, `usb_test`,
-  `serial2_test`, `beeper_test`) keep their names.
+  `beeper_test`) keep their names.
+- Follow-up in the same sweep (per the 2026-07-05 scope comment on #118):
+  `live_plot_telem.py` → `live_plot_telemetry.py`, `tools/ui-test-batt.mjs`
+  → `ui-test-battery.mjs`, `tools/ui-test-batcolor.mjs` →
+  `ui-test-battery-color.mjs`; `sketches/serial2_test/` DELETED
+  (operator-authorized — Nano-R4-era Serial2 collision test, obsolete on the
+  UNO R4 WiFi).
 - Mechanical sweep across 70 files (CI matrix, pre-commit gate, the
   tests/Makefile and FirmwareUnderTest.h include paths, scripts, docs,
   source comments);

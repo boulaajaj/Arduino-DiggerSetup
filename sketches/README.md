@@ -19,7 +19,6 @@ reference. Only the production sketch follows the architecture rules
 | `pin_test/` | `attachInterrupt()` support test on D2/D3/D4/D7 |
 | `sbus_test/` | LEGACY (Nano R4 era, S.BUS on D0) — superseded by `sbus_d12_test` |
 | `sbus_d12_test/` | S.BUS-on-D12 (SCI0) bring-up for the UNO R4 WiFi |
-| `serial2_test/` | OBSOLETE (Nano R4 only) — second UART on A4/A5 via SCI0 |
 | `telemetry_check/` | Read-only X.BUS telemetry bench tool (#36, 0x50 framing) |
 | `telemetry_decode/` | Early X.BUS decode experiment (ADUM1201 @ 19200 + joystick direct drive) |
 | `usb_test/` | USB CDC serial output sanity check |
