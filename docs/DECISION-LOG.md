@@ -19,8 +19,8 @@ Updated by session hooks — only technical content, no personal info.
   `beeper_test`) keep their names.
 - Follow-up in the same sweep (per the 2026-07-05 scope comment on #118):
   `live_plot_telem.py` → `live_plot_telemetry.py`, `tools/ui-test-batt.mjs`
-  → `ui-test-battery.mjs`, `tools/ui-test-batcolor.mjs` →
-  `ui-test-battery-color.mjs`; `sketches/serial2_test/` DELETED
+  → `tools/ui-test-battery.mjs`, `tools/ui-test-batcolor.mjs` →
+  `tools/ui-test-battery-color.mjs`; `sketches/serial2_test/` DELETED
   (operator-authorized — Nano-R4-era Serial2 collision test, obsolete on the
   UNO R4 WiFi).
 - Mechanical sweep across 70 files (CI matrix, pre-commit gate, the
