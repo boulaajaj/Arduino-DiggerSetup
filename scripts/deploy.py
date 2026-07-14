@@ -13,7 +13,7 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 # Defaults — override via command line or edit here when switching boards
 DEFAULT_FQBN = 'arduino:renesas_uno:unor4wifi'
 DEFAULT_PORT = 'COM7'
-DEFAULT_SKETCH = 'sketches/rc_test'
+DEFAULT_SKETCH = 'sketches/dual_track_control'
 
 parser = argparse.ArgumentParser(description='Deploy sketch to Arduino board')
 parser.add_argument('--fqbn', default=DEFAULT_FQBN, help='Board FQBN')

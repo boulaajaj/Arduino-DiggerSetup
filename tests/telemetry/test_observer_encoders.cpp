@@ -9,9 +9,9 @@
 #include <cstring>
 #include <string>
 
-#include "../../sketches/rc_test/src/application/SystemSnapshot.h"
-#include "../../sketches/rc_test/src/telemetry/CsvEncoder.h"
-#include "../../sketches/rc_test/src/telemetry/JsonEncoder.h"
+#include "../../sketches/dual_track_control/src/application/SystemSnapshot.h"
+#include "../../sketches/dual_track_control/src/telemetry/CsvEncoder.h"
+#include "../../sketches/dual_track_control/src/telemetry/JsonEncoder.h"
 
 // A fully-populated snapshot with distinct, hand-checkable values.
 static SystemSnapshot exampleSnapshot() {

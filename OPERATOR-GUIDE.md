@@ -160,7 +160,7 @@ each pattern means one thing, and nothing else.
 ## Adjusting Settings
 
 These values can be changed in the Arduino sketch
-(`sketches/rc_test/rc_test.ino`) by editing the tuning constants at the
+(`sketches/dual_track_control/dual_track_control.ino`) by editing the tuning constants at the
 top of the file:
 
 | Setting | Current Value | What It Does |
@@ -183,5 +183,5 @@ Acceleration / Drag parameters (see `docs/GL10-PARAMETERS.md`).
 After changing a value, re-upload the sketch to the Arduino using:
 
 ```bash
-arduino-cli upload -p COM7 --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
+arduino-cli upload -p COM7 --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control
 ```

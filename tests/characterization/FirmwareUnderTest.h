@@ -1,7 +1,7 @@
 // FirmwareUnderTest.h — compiles the REAL production sketch (byte-for-byte
 // unchanged) into a host test binary. Stub headers in tests/stubs shadow the
 // Arduino core via include order (-Istubs before anything else), so
-// rc_test.ino's own #includes resolve to the fakes.
+// dual_track_control.ino's own #includes resolve to the fakes.
 //
 // Each test file includes this header and becomes ONE self-contained binary
 // with the whole firmware inside it (no ODR issues, no state bleed between
@@ -17,15 +17,15 @@
 
 // The production firmware, unmodified. Everything it defines — functions,
 // globals, and (internal-linkage) constants — is visible to the tests.
-#include "../../sketches/rc_test/rc_test.ino"  // NOLINT(build/include)
+#include "../../sketches/dual_track_control/dual_track_control.ino"  // NOLINT(build/include)
 
 // X.BUS poller constants + extern state (#178): the poll machine lives in
 // infrastructure/xc/, linked into every characterization binary.
-#include "../../sketches/rc_test/src/infrastructure/xc/XbusTelemetryAdapter.h"
+#include "../../sketches/dual_track_control/src/infrastructure/xc/XbusTelemetryAdapter.h"
 
 // Dashboard serving state (#181): the network machine lives in
 // infrastructure/network/, reachable through these externs.
-#include "../../sketches/rc_test/src/infrastructure/network/WifiService.h"
+#include "../../sketches/dual_track_control/src/infrastructure/network/WifiService.h"
 
 // The Servo objects live in infrastructure/arduino/PwmEscAdapter.cpp
 // (#172), linked into every characterization binary; resetFirmwareState()
@@ -38,7 +38,7 @@ extern UART sbusUart;
 extern bfs::SbusRx sbusRx;
 
 // Restore every MUTABLE firmware global to its boot value. Must be kept in
-// sync with rc_test.ino: when a PR adds a mutable global there, it adds the
+// sync with dual_track_control.ino: when a PR adds a mutable global there, it adds the
 // reset here (the firmware-without-tests commit guard forces the pairing).
 // Constants need no entry.
 inline void resetFirmwareState() {

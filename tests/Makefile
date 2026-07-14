@@ -1,7 +1,7 @@
 # Host test suites: characterization (#47) + safety invariants (#131) +
 # pure-domain suites (one dir per extracted domain, #117 — e.g. battery/).
 # One binary per test file — characterization/invariants compile the REAL
-# rc_test.ino inside the stub Arduino environment (see stubs/); pure-domain
+# dual_track_control.ino inside the stub Arduino environment (see stubs/); pure-domain
 # suites compile only the extracted src/ code WITHOUT -Istubs, so an
 # accidental Arduino include in domain code fails the build loudly instead
 # of silently resolving to a fake.
@@ -22,13 +22,13 @@ DOMAIN_INCLUDES := -Ivendor/doctest
 # Infrastructure sources include hardware headers, so only the stub-backed
 # firmware suites compile them; the pure suites take the hardware-free set
 # (an accidental hardware include in domain code still fails loudly, #172).
-SKETCH_SRC_CPPS    := $(shell find ../sketches/rc_test/src -name '*.cpp' 2>/dev/null)
-SKETCH_SRC_HEADERS := $(shell find ../sketches/rc_test/src -name '*.h' 2>/dev/null)
-SKETCH_PURE_CPPS   := $(filter-out ../sketches/rc_test/src/infrastructure/% ../sketches/rc_test/src/application/%,$(SKETCH_SRC_CPPS))
+SKETCH_SRC_CPPS    := $(shell find ../sketches/dual_track_control/src -name '*.cpp' 2>/dev/null)
+SKETCH_SRC_HEADERS := $(shell find ../sketches/dual_track_control/src -name '*.h' 2>/dev/null)
+SKETCH_PURE_CPPS   := $(filter-out ../sketches/dual_track_control/src/infrastructure/% ../sketches/dual_track_control/src/application/%,$(SKETCH_SRC_CPPS))
 
-FIRMWARE := ../sketches/rc_test/rc_test.ino \
-            ../sketches/rc_test/types.h \
-            ../sketches/rc_test/web_page.h \
+FIRMWARE := ../sketches/dual_track_control/dual_track_control.ino \
+            ../sketches/dual_track_control/types.h \
+            ../sketches/dual_track_control/web_page.h \
             $(SKETCH_SRC_CPPS) $(SKETCH_SRC_HEADERS)
 HARNESS  := $(wildcard stubs/*.h) characterization/FirmwareUnderTest.h \
             $(wildcard invariants/*.h)

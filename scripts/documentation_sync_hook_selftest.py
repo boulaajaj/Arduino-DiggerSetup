@@ -40,7 +40,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         # 1. Watched firmware file fires with valid additionalContext JSON.
-        code, out = run_hook(payload("sketches/rc_test/rc_test.ino"), temp_dir)
+        code, out = run_hook(payload("sketches/dual_track_control/dual_track_control.ino"), temp_dir)
         fired = json.loads(out) if out else {}
         context = fired.get("hookSpecificOutput", {})
         check("fires on watched .ino", code == 0 and
@@ -48,7 +48,7 @@ def main():
               "DOCUMENTATION-SYNC" in context.get("additionalContext", ""))
 
         # 2. Same session again: deduped, silent.
-        code, out = run_hook(payload("sketches/rc_test/types.h"), temp_dir)
+        code, out = run_hook(payload("sketches/dual_track_control/types.h"), temp_dir)
         check("dedupes within a session", code == 0 and out == "")
 
         # 3. A different session fires again.
@@ -58,9 +58,9 @@ def main():
         check("fires again for a new session", code == 0 and out != "")
 
     silent_paths = (
-        "sketches/rc_test/web_page.h",            # generated
-        "sketches/rc_test/arduino_secrets.h",     # secret
-        "sketches/rc_test/src/generated/page.h",  # generated tree
+        "sketches/dual_track_control/web_page.h",            # generated
+        "sketches/dual_track_control/arduino_secrets.h",     # secret
+        "sketches/dual_track_control/src/generated/page.h",  # generated tree
         "src/generated/page.h",                   # generated tree, relative root
         "tests/vendor/doctest/doctest.h",         # third-party
         "tests/build/test_alerts",                # build artifact, relative root

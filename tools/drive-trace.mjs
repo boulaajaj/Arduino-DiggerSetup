@@ -2,13 +2,13 @@
 // pivot↔drive transition and turning behavior WITHOUT flashing.
 // Run: node tools/drive-trace.mjs
 //
-// Mirrors sketches/rc_test/rc_test.ino exactly (V7.34: #86 additive delta,
+// Mirrors sketches/dual_track_control/dual_track_control.ino exactly (V7.34: #86 additive delta,
 // #96 outer-track ceiling, #114 pivot-branch throttle taper). If you change
 // the firmware math, change it here too (kept deliberately small).
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smoothstep = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
-// [CONFIG] mirror — keep in sync with rc_test.ino
+// [CONFIG] mirror — keep in sync with dual_track_control.ino
 const PIVOT_BLEND_START = 0.05, PIVOT_BLEND_END = 0.55;
 const PIVOT_CAP = 0.60, PIVOT_CAP_ECO = 0.725;
 const TURN_TRACK_CAP = 0.70;

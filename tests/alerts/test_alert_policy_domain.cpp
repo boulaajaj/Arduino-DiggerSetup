@@ -5,8 +5,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/alerts/AlertPolicy.h"
-#include "../../sketches/rc_test/src/alerts/PatternPlayer.h"
+#include "../../sketches/dual_track_control/src/alerts/AlertPolicy.h"
+#include "../../sketches/dual_track_control/src/alerts/PatternPlayer.h"
 
 static const uint16_t SEQ_A[] = {100, 100};
 static const uint16_t SEQ_B[] = {500, 1500};

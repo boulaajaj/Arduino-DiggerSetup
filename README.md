@@ -98,7 +98,7 @@ down. Boost is already at the rail, so it has no extra turn headroom.
 
 Reverse is additionally capped below forward speed per gear, and pivot rotation
 has its own speed cap. The exact percentages are tunables — see the current
-values in `[CONFIG]` (`sketches/rc_test/rc_test.ino`) and the operator-facing
+values in `[CONFIG]` (`sketches/dual_track_control/dual_track_control.ino`) and the operator-facing
 table in [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md).
 
 ---
@@ -149,14 +149,14 @@ Board: **Arduino UNO R4 WiFi** · FQBN: `arduino:renesas_uno:unor4wifi`
 
 ```bash
 # First checkout only: create your local Wi-Fi credentials (gitignored)
-cp sketches/rc_test/arduino_secrets.h.example sketches/rc_test/arduino_secrets.h
+cp sketches/dual_track_control/arduino_secrets.h.example sketches/dual_track_control/arduino_secrets.h
 # ...then edit it with the real SSID/password.
 
 # Compile
-arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
+arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control
 
 # Upload (serial port, e.g. COM7)
-arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/rc_test
+arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control
 
 # Monitor / live plot
 python monitor.py
@@ -176,7 +176,7 @@ python live_plot.py
 | [`docs/XBUS-PROTOCOL.md`](docs/XBUS-PROTOCOL.md) | X.BUS telemetry protocol reference |
 | [`docs/DECISION-LOG.md`](docs/DECISION-LOG.md) | Technical decision history |
 
-The main firmware is [`sketches/rc_test/rc_test.ino`](sketches/rc_test/rc_test.ino),
+The main firmware is [`sketches/dual_track_control/dual_track_control.ino`](sketches/dual_track_control/dual_track_control.ino),
 organized into searchable `[MODULE]` sections (`[CONFIG]`, `[DRIVE]`, `[RC]`,
 `[JOYSTICK]`, `[GEAR]`, `[MIXER]`, `[OUTPUT]`, `[TELEMETRY]`, `[WIFI]`, `[DEBUG]`).
 

@@ -1,7 +1,7 @@
 """Generate the embedded dashboard header from its source (#120).
 
 dashboard/index.html is the single source of truth; this script wraps it
-verbatim into sketches/rc_test/web_page.h as the PROGMEM raw-string literal
+verbatim into sketches/dual_track_control/web_page.h as the PROGMEM raw-string literal
 the firmware serves at "/". Never edit web_page.h by hand.
 
 Usage:
@@ -48,7 +48,7 @@ def generate(repo_root: Path) -> bytes:
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
-    target = repo_root / "sketches" / "rc_test" / "web_page.h"
+    target = repo_root / "sketches" / "dual_track_control" / "web_page.h"
     generated = generate(repo_root)
     if "--check" in sys.argv:
         current = target.read_bytes().replace(b"\r\n", b"\n")

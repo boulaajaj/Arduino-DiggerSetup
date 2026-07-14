@@ -87,7 +87,7 @@ blindly; when step 3 doesn't compile it improvises, and nobody defined what
 **Good framing:** "Goal: `[TELEMETRY]` lives in `src/telemetry/` per
 ARCHITECTURE-TARGET.md §6, files ≤150 lines, dependency rules hold. Gate:
 `wsl -e make -C tests run` green (unchanged expectations), local
-`arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test`
+`arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control`
 clean, all CI workflows green, zero behavior change." The agent self-corrects
 against the gate in a loop and stops when it passes — or reports precisely
 which gate it cannot satisfy and why (per `.claude/rules/architecture.md`,
