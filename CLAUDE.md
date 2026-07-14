@@ -86,9 +86,9 @@ exceptions. The table columns are **Date · Version · SHA · Branch · Board/Po
 Notes**; record the **PR #** inside the **Branch** cell (e.g.
 `agent/C-Builder/foo (PR #93)`), and put **what changed** + **what to test** in
 **Notes**. **Version** is the sketch version string carried in the build (e.g.
-`dual_track_control V7.35`; rows before the 2026-07-13 rename say `rc_test`),
-not a git tag. This is the device's flight log; an unlogged flash is treated
-as not done.
+`dual_track_control V7.35`; rows before the 2026-07-13 rename carry the
+sketch's former name), not a git tag. This is the device's flight log; an
+unlogged flash is treated as not done.
 
 ## People
 
