@@ -222,8 +222,10 @@ Signal pipeline:
 6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
 7. X.BUS 0x10 telemetry polled read-only on Serial1; EMA-smoothed and streamed to the Wi-Fi dashboard (monitoring only).
 
-Code organized in searchable [MODULE] sections: [CONFIG], [DRIVE], [RC],
-[JOYSTICK], [GEAR], [MIXER], [OUTPUT], [TELEMETRY], [WIFI], [DEBUG]. Search `[NAME]` to jump.
+The former .ino [MODULE] sections now live in src/application/ files (#189):
+[CONFIG]→config/ + FirmwareState, [DRIVE]/[RC]/[GEAR]/[JOYSTICK]/[MIXER]→OperatorInput,
+[OUTPUT]→MotorOutput, [SAFETY]→SafetyControl, [TELEMETRY]/[BEEPER]/[ALERT]→AlertControl,
+[WIFI]/[DEBUG]→Monitoring, setup()/loop()→FirmwareApp. The section banners moved with the code.
 
 Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
 
@@ -300,14 +302,14 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — Main Arduino sketch (version: FIRMWARE_VERSION in src/config/BuildInfo.h; GL10 FOC + telemetry + Wi-Fi + alarms + safety)
+sketches/rc_test/rc_test.ino             — COMPOSITION ROOT ONLY (#189): includes src/application/FirmwareApp.h and delegates setup()/loop(); the firmware lives under src/
 sketches/rc_test/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
 sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
 sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
 sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
 sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
-sketches/rc_test/src/application/        — SystemSnapshot.h (#132: immutable per-cycle observation consumed const& by the observers) + RangeMath.h (#187: exact constrain()/map() semantics, macro- and hardware-free)
+sketches/rc_test/src/application/        — The application layer (#189): FirmwareApp.h/.cpp (composition-root marker + the verbatim setup/loop control cycle) + FirmwareState + OperatorInput + MotorOutput + SafetyControl + AlertControl + Monitoring (module shims moved from the .ino) + SystemSnapshot.h (#132) + RangeMath.h (#187)
 sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
 sketches/rc_test/src/alerts/             — Alert policy + players (#183): AlertTypes.h + AlertPolicy (priority ladder, low-V latch, inactivity) + PatternPlayer (one-shot + repeating) — pure logic; the piezo stays behind ports/AlertOutputPort.h
 sketches/rc_test/src/config/             — Tunables per domain (#185): BuildInfo.h (FIRMWARE_VERSION SSOT) + Pins.h + Input/Drive/Battery/Thermal/Alert/Telemetry/Wifi/SafetyConfig.h — values are law, included by the .ino (adapter-owned tunables stay single-homed in infrastructure/)
@@ -373,7 +375,7 @@ monitor.py                               — Simple serial monitor
 
 - **No blocking calls in the main loop** — no `delay()`, no `pulseIn()`, no `while` loops
 - Use `micros()` fresh at point of use — never capture before a blocking call and use after
-- Per-channel failsafe — each RC channel has an independent timeout, never combined
+- Per-input-path failsafe — every independent input path gets its own timeout. (S.BUS is ONE path: all 16 channels arrive in one frame, so the single frame-freshness timeout `SBUS_TIMEOUT` covers every channel identically — locked by the stale-RC invariant suite)
 - ISRs must be under 10us — read pin, store timestamp, exit
 
 ### Telemetry
