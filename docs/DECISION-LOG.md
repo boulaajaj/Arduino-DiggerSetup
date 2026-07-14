@@ -5,6 +5,36 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 11b: FirmwareApp composition root — §9 COMPLETE (#189)
+
+- The entire .ino shell moved VERBATIM into `src/application/`, split by
+  responsibility: FirmwareState (mutable cross-module state + the cap
+  delegates, now inline in its header for cross-TU odr-use), OperatorInput
+  ([DRIVE]/[RC]/[GEAR]/[JOYSTICK]/[MIXER]), MotorOutput ([OUTPUT]),
+  SafetyControl ([SAFETY]), AlertControl ([TELEMETRY]/[BEEPER]/[ALERT] —
+  owns telem[]), Monitoring ([WIFI] remnant + [DEBUG] + SystemSnapshot
+  construction; the ONE TU including web_page.h and arduino_secrets.h),
+  and FirmwareApp.h/.cpp — the #150 MARKER + setup()/loop() bodies as
+  firmwareSetup()/firmwareLoop() (watchdog refresh at its exact position).
+  rc_test.ino is now a 12-line composition root; **check_ino is ACTIVE and
+  passing** (the migration-window NOTE is gone).
+- Two structural consequences, both verified behavior-neutral: (1) the
+  AlertConfig pattern arrays became C++17 `inline` — ONE program-wide
+  entity, preserving the pointer-identity semantics playback and the tests
+  rely on (per-TU copies broke both); (2) config/Pins.h reaches A0/A1
+  through the types.h bridge (outside-src include) since application TUs
+  compile standalone; documented as interim until types.h dissolves.
+- Harness: FirmwareUnderTest.h unchanged — everything resolves through the
+  .ino → FirmwareApp.h chain; the pure suites now also exclude
+  application/ .cpps (the infrastructure-filter precedent — application
+  reaches Arduino.h via the types bridge).
+- Verified: 27 host binaries green, ZERO expectation changes; compile
+  flash BYTE-IDENTICAL (117796), RAM 9832 (−16, layout); fitness OK
+  (4 advisory soft-size warnings, hard cap respected everywhere).
+- **PHASE D §9 (steps 1–11) IS COMPLETE.** Remaining epic work: flip
+  architecture-fitness/unit-tests/hooks-selftest to required checks
+  (operator), the #118 rename sweep, #119/#121/#122, Phase E.
+
 ## 2026-07-13 — Phase D step 11a: the last hardware seams (#187)
 
 - Step 11 split in two: 11a (this) builds the remaining seams so the .ino

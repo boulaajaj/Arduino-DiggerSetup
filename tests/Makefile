@@ -24,7 +24,7 @@ DOMAIN_INCLUDES := -Ivendor/doctest
 # (an accidental hardware include in domain code still fails loudly, #172).
 SKETCH_SRC_CPPS    := $(shell find ../sketches/rc_test/src -name '*.cpp' 2>/dev/null)
 SKETCH_SRC_HEADERS := $(shell find ../sketches/rc_test/src -name '*.h' 2>/dev/null)
-SKETCH_PURE_CPPS   := $(filter-out ../sketches/rc_test/src/infrastructure/%,$(SKETCH_SRC_CPPS))
+SKETCH_PURE_CPPS   := $(filter-out ../sketches/rc_test/src/infrastructure/% ../sketches/rc_test/src/application/%,$(SKETCH_SRC_CPPS))
 
 FIRMWARE := ../sketches/rc_test/rc_test.ino \
             ../sketches/rc_test/types.h \

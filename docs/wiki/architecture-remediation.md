@@ -13,7 +13,8 @@ drive exactly as before.
   [0001-domain-oriented-firmware-architecture](../architecture/adr/0001-domain-oriented-firmware-architecture.md)
 - **Phases** — A Define → B Protect ([testing](testing.md) suites, done) →
   C Govern (CI fitness functions, done) → D Refactor (extract domains,
-  **active**) → E Polish
+  **complete** — the sketch is a composition root and the check_ino
+  fitness rule is active) → E Polish (next)
 - **Extracted domains so far** — the [battery ladder](battery-ladder.md)'s
   voltage-plausibility gate and its two staged state machines (Eco lock,
   cutoff + boot gate) live in `src/domain/battery/`; the
