@@ -1,6 +1,6 @@
 // Verify dashboard battery colour bands (green >30 / orange 20-30 / red <=20)
 // for BOTH the bar gradient bc(p) AND the % text colour batColor(p).
-//   node tools/ui-test-batcolor.mjs
+//   node tools/ui-test-battery-color.mjs
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';

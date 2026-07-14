@@ -1,6 +1,6 @@
 // Local test for the battery % curve (bp()). Injects mock pack voltages via the
 // dashboard's own applyData() and reads back the displayed %, so the SoC fix can
-// be verified WITHOUT flashing.  node tools/ui-test-batt.mjs
+// be verified WITHOUT flashing.  node tools/ui-test-battery.mjs
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
