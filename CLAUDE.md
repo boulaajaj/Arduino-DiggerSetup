@@ -375,7 +375,7 @@ monitor.py                               — Simple serial monitor
 
 - **No blocking calls in the main loop** — no `delay()`, no `pulseIn()`, no `while` loops
 - Use `micros()` fresh at point of use — never capture before a blocking call and use after
-- Per-channel failsafe — each RC channel has an independent timeout, never combined
+- Per-input-path failsafe — every independent input path gets its own timeout. (S.BUS is ONE path: all 16 channels arrive in one frame, so the single frame-freshness timeout `SBUS_TIMEOUT` covers every channel identically — locked by the stale-RC invariant suite)
 - ISRs must be under 10us — read pin, store timestamp, exit
 
 ### Telemetry
