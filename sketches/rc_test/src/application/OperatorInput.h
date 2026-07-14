@@ -13,6 +13,12 @@ extern bool sbusValid;
 extern uint32_t sbusLastFrame;
 const uint32_t SBUS_TIMEOUT = 100000UL;  // 100ms
 
+// Analog joystick pins — here rather than config/Pins.h because A0/A1 need
+// the core header and config/ stays hardware-free (this header already
+// carries the interim types.h bridge).
+const uint8_t PIN_JOY_Y  = A0;  // Throttle
+const uint8_t PIN_JOY_X  = A1;  // Steering
+
 extern JoystickState cachedJoy;
 extern DriveCommand  cachedJoyCmd;
 extern uint32_t      lastAdcTime;
