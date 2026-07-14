@@ -19,3 +19,6 @@ bool dashboardServiceInitialize(const char* ssid, const char* password,
 // bounded request read may perform multiple socket reads first). Call
 // every loop pass; a no-op until initialize succeeded.
 void dashboardServiceUpdate();
+
+// The radio's raw status code (WiFi.status()) — bench diagnostics only.
+int dashboardServiceRadioStatus();

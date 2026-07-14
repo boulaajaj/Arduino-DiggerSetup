@@ -54,8 +54,6 @@
 //   5V ──[10K]──┬──► NPN collector ──► D12 (sbusUart RX)
 
 #include <Arduino.h>
-#include <WiFiS3.h>
-#include <WDT.h>        // RA4M1 hardware watchdog — control-loop runaway backstop (#69)
 #include "types.h"
 #include "web_page.h"   // const char INDEX_HTML[] — the dashboard, served at "/"
 
@@ -85,6 +83,10 @@
 #include "src/ports/TelemetrySource.h"
 #include "src/ports/DashboardServicePort.h"
 #include "src/ports/TelemetryFrameSource.h"
+#include "src/ports/ClockPort.h"
+#include "src/ports/WatchdogPort.h"
+#include "src/ports/DebugConsolePort.h"
+#include "src/application/RangeMath.h"
 
 
 // The second hardware UART (SCI0, D11/D12), the S.BUS parser and their pin
@@ -179,8 +181,8 @@ ServoOutput wheelSpeedsToServo(WheelSpeeds ws) {
   ServoOutput out;
   out.left  = SVC + (int)(ws.left  * SOFT_RANGE);
   out.right = SVC + (int)(ws.right * SOFT_RANGE);
-  out.left  = constrain(out.left,  SVMIN, SVMAX);
-  out.right = constrain(out.right, SVMIN, SVMAX);
+  out.left  = clampInt(out.left,  SVMIN, SVMAX);
+  out.right = clampInt(out.right, SVMIN, SVMAX);
   return out;
 }
 
@@ -195,7 +197,7 @@ uint32_t sbusLastFrame = 0;
 const uint32_t SBUS_TIMEOUT = 100000UL;  // 100ms
 
 int sbusToServo(int raw) {
-  return map(constrain(raw, SBUS_MIN, SBUS_MAX), SBUS_MIN, SBUS_MAX, SVMIN, SVMAX);
+  return mapRange(clampInt(raw, SBUS_MIN, SBUS_MAX), SBUS_MIN, SBUS_MAX, SVMIN, SVMAX);
 }
 
 // Deadband math extracted to src/domain/operator_input/DeadbandPolicy.*
@@ -217,8 +219,8 @@ DriveCommand rcCommand() {
   // Apply tunable input gains, then clamp: RC keeps the gear's full forward
   // authority (1.0); reverse is the per-gear reverseCap() (55% Eco/Normal, 65%
   // Boost) (#87/#113).
-  xSpeed    = constrain(xSpeed * RC_THROTTLE_GAIN, -outCapToX(reverseCap()), 1.0f);
-  zRotation = constrain(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
+  xSpeed    = clampFloat(xSpeed * RC_THROTTLE_GAIN, -outCapToX(reverseCap()), 1.0f);
+  zRotation = clampFloat(zRotation * RC_STEERING_GAIN, -1.0f, 1.0f);
   return {xSpeed, zRotation};
 }
 
@@ -276,8 +278,8 @@ void updateJoystick(uint32_t now) {
   // ports/JoystickPort.h (#117 step 10 slice 2, #174).
   joystickReadAxes(PIN_JOY_Y, PIN_JOY_X, &cachedJoy.rawY, &cachedJoy.rawX);
 
-  float normY = constrain((float)(joyDeadband(cachedJoy.rawY) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
-  float normX = constrain((float)(joyDeadband(cachedJoy.rawX) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
+  float normY = clampFloat((float)(joyDeadband(cachedJoy.rawY) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
+  float normX = clampFloat((float)(joyDeadband(cachedJoy.rawX) - ADC_CENTER) / ADC_CENTER, -1.0f, 1.0f);
   float signY = (normY >= 0) ? 1.0f : -1.0f;
   float signX = (normX >= 0) ? 1.0f : -1.0f;
   cachedJoy.xSpeed    = signY * expoCurve(normY, EXPO_THROTTLE_LINEAR, EXPO_THROTTLE_CUBIC);
@@ -291,7 +293,7 @@ void updateJoystick(uint32_t now) {
   float fwdCap = (currentGear == GEAR_LOW)  ? JOY_CAP_ECO
                : (currentGear == GEAR_HIGH) ? JOY_CAP_BOOST
                                             : JOY_CAP_NORMAL;
-  xSpeed = constrain(xSpeed, -outCapToX(reverseCap()), outCapToX(fwdCap));
+  xSpeed = clampFloat(xSpeed, -outCapToX(reverseCap()), outCapToX(fwdCap));
   cachedJoyCmd = {xSpeed, zRotation};
 }
 
@@ -331,8 +333,8 @@ void outputInit() {
 }
 
 void outputWrite(int left, int right) {
-  outL = constrain(left,  SVMIN, SVMAX);
-  outR = constrain(right, SVMIN, SVMAX);
+  outL = clampInt(left,  SVMIN, SVMAX);
+  outR = clampInt(right, SVMIN, SVMAX);
   escOutputWritePulses(outL, outR);
 }
 
@@ -367,7 +369,7 @@ void outputUpdate(bool driveAllowed, int mixL, int mixR) {
   OutputGateState gate{(OutputGateMode)outState, outHoldMs, rampFromL,
                        rampFromR};
   OutputGateAction action =
-      outputGateStep(gate, driveAllowed, mixL, mixR, outL, outR, millis(),
+      outputGateStep(gate, driveAllowed, mixL, mixR, outL, outR, clockNowMs(),
                      SVC, CUTOFF_HOLD_MS);
   outState = (OutState)gate.mode;
   outHoldMs = gate.holdStartMs;
@@ -427,7 +429,7 @@ void beeperInit() { alertOutputInitialize(PIN_BEEPER); }
 // globals so every call site and test reference stays put.
 void beepStart(const uint16_t *seq, int len) {
   OneShotPatternState pattern{};
-  oneShotPatternStart(pattern, seq, len, millis());
+  oneShotPatternStart(pattern, seq, len, clockNowMs());
   beepSeq = pattern.sequence; beepLen = pattern.length;
   beepIdx = pattern.index;    beepPhaseMs = pattern.phaseMs;
 }
@@ -435,7 +437,7 @@ void beepStart(const uint16_t *seq, int len) {
 // Call every loop. Drives D8 from the horn (held) OR the active pattern.
 void beeperUpdate() {
   OneShotPatternState pattern{beepSeq, beepLen, beepIdx, beepPhaseMs};
-  bool patternOn = oneShotPatternStep(pattern, millis());
+  bool patternOn = oneShotPatternStep(pattern, clockNowMs());
   beepSeq = pattern.sequence; beepLen = pattern.length;
   beepIdx = pattern.index;    beepPhaseMs = pattern.phaseMs;
   // Horn (manual) ORs over one-shot patterns ORs over [ALERT] alarms.
@@ -460,8 +462,8 @@ void beeperUpdate() {
 //               Debounced so an acceleration sag can't trip it; once latched it
 //               beeps until power cycle even if voltage recovers.
 
-uint32_t rcOffSinceMs   = 0;      // millis() when RC went off (0 = RC on)
-uint32_t lowVStartMs    = 0;      // millis() when worst pack first dipped low (0 = above)
+uint32_t rcOffSinceMs   = 0;      // clockNowMs() when RC went off (0 = RC on)
+uint32_t lowVStartMs    = 0;      // clockNowMs() when worst pack first dipped low (0 = above)
 bool     lowVoltLatched = false;  // once true, stays until power cycle
 uint32_t alertBootMs    = 0;      // set in setup() — startup-grace reference
 
@@ -470,7 +472,7 @@ const uint16_t* alarmSeq = nullptr;
 int      alarmLen = 0, alarmIdx = 0;
 uint32_t alarmPhaseMs = 0;
 
-void alertInit() { alertBootMs = millis(); }
+void alertInit() { alertBootMs = clockNowMs(); }
 
 // NOTE: [ALERT] below is AUDIO-ONLY — it drives the D8 piezo and never touches the
 // motors. The motor-affecting battery cutoff lives in its own [SAFETY] section
@@ -482,7 +484,7 @@ void alertInit() { alertBootMs = millis(); }
 // alerts/PatternPlayer (#183); this shim mirrors the globals so every call
 // site and test reference stays put.
 void alertUpdate(bool rcOn) {
-  uint32_t nowMs = millis();
+  uint32_t nowMs = clockNowMs();
 
   bool inactiveAlarm = inactivityAlarmStep(rcOffSinceMs, rcOn, nowMs, INACT_RC_OFF_MS);
 
@@ -564,7 +566,7 @@ void batteryEcoLockUpdate() {        // Stage 1 — force Eco
   bool plausible = worstPackVoltage(&worst);
   BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
                             batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
-  batteryEcoLockStep(ladder, plausible, worst, millis(),
+  batteryEcoLockStep(ladder, plausible, worst, clockNowMs(),
                      ECO_LOCK_THRESH_V, ECO_LOCK_DEBOUNCE_MS);
   ecoLockLatched = ladder.ecoLockLatched;
   ecoLockStartMs = ladder.ecoLockStartMs;
@@ -576,7 +578,7 @@ void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   bool plausible = worstPackVoltage(&worst);
   BatteryLadderState ladder{ecoLockLatched, batteryCutoffLatched,
                             batteryOkConfirmed, ecoLockStartMs, cutoffStartMs};
-  bool cutoffJustLatched = batteryCutoffStep(ladder, plausible, worst, millis(),
+  bool cutoffJustLatched = batteryCutoffStep(ladder, plausible, worst, clockNowMs(),
                                              CUTOFF_THRESH_V, CUTOFF_DEBOUNCE_MS);
   batteryCutoffLatched = ladder.cutoffLatched;
   batteryOkConfirmed   = ladder.okConfirmed;
@@ -631,7 +633,7 @@ void thermalUpdate() {
                                 {tempEcoActive,  tempEcoSinceMs},
                                 {tempCutActive,  tempCutSinceMs}};
   bool cutReleased = thermalDeratingStep(
-      derating, haveReading, hot, millis(),
+      derating, haveReading, hot, clockNowMs(),
       ThermalDeratingThresholds{TEMP_WARN_ON_C, TEMP_WARN_OFF_C,
                                 TEMP_ECO_ON_C,  TEMP_ECO_OFF_C,
                                 TEMP_CUT_ON_C,  TEMP_CUT_OFF_C,
@@ -699,21 +701,32 @@ void wifiInit() {
 // Periodic Wi-Fi status line (every ~3 s) for bench diagnostics.
 uint32_t wifiDbgPrev = 0;
 void wifiDebug(uint32_t nowUs) {
-  if (!Serial || (nowUs - wifiDbgPrev) < 3000000UL) return;
+  if (!debugConsoleReady() || (nowUs - wifiDbgPrev) < 3000000UL) return;
   wifiDbgPrev = nowUs;
-  Serial.print("# WIFI up="); Serial.print(wifiUp);
-  Serial.print(" status="); Serial.print(WiFi.status());
-  Serial.print(" clients_seq="); Serial.println(wifiSeq);
+  // Lines assembled with snprintf and printed whole (#187); the byte stream
+  // matches the old Serial print-chains exactly (bool printed 1/0, decimal
+  // status/counters, two-digit uppercase hex + trailing space per byte).
+  char line[96];
+  snprintf(line, sizeof(line), "# WIFI up=%d status=%d clients_seq=%lu",
+           wifiUp ? 1 : 0, dashboardServiceRadioStatus(), (unsigned long)wifiSeq);
+  debugConsolePrintLine(line);
 
   // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
-  Serial.print("# XBUS rx_total="); Serial.print(telemetryDebugReceiveTotal);
-  Serial.print(" echo(0x0F)=");     Serial.print(telemetryDebugEchoCount);
-  Serial.print(" slave(0xF0)=");    Serial.print(telemetryDebugSlaveCount);
-  Serial.print(" snap=[");
-  for (int i = 0; i < telemetryDebugSnapshotLength; i++) {
-    char hex[4]; snprintf(hex, sizeof(hex), "%02X ", telemetryDebugSnapshot[i]); Serial.print(hex);
+  char xbus[144];
+  int n = snprintf(xbus, sizeof(xbus),
+                   "# XBUS rx_total=%lu echo(0x0F)=%lu slave(0xF0)=%lu snap=[",
+                   (unsigned long)telemetryDebugReceiveTotal,
+                   (unsigned long)telemetryDebugEchoCount,
+                   (unsigned long)telemetryDebugSlaveCount);
+  // snprintf returns the length it WOULD have written — clamp before using
+  // it as an offset so a truncated prefix can never index past the buffer.
+  if (n < 0) n = 0;
+  if (n > (int)sizeof(xbus) - 1) n = (int)sizeof(xbus) - 1;
+  for (int i = 0; i < telemetryDebugSnapshotLength && n < (int)sizeof(xbus) - 4; i++) {
+    n += snprintf(xbus + n, sizeof(xbus) - n, "%02X ", telemetryDebugSnapshot[i]);
   }
-  Serial.println("]");
+  snprintf(xbus + n, sizeof(xbus) - n, "]");
+  debugConsolePrintLine(xbus);
   telemetryDebugSnapshotLength = 0;   // reset for next window's snapshot
 }
 
@@ -751,7 +764,7 @@ SystemSnapshot buildSystemSnapshot(uint32_t nowMs) {
 // observation point.
 int buildTelemJson(char *body, size_t cap) {
   wifiSeq++;
-  return encodeTelemetryJson(body, cap, buildSystemSnapshot(millis()), wifiSeq);
+  return encodeTelemetryJson(body, cap, buildSystemSnapshot(clockNowMs()), wifiSeq);
 }
 
 // The network layer pulls frames through ports/TelemetryFrameSource.h —
@@ -777,29 +790,31 @@ void wifiUpdate() { dashboardServiceUpdate(); }
 uint32_t prevPrint = 0;
 
 void debugInit() {
-  Serial.begin(115200);
-  delay(50);
-  if (Serial) {
+  debugConsoleBegin(115200);
+  if (debugConsoleReady()) {
     // Version + short tag only (#124) — the changelog lives in git history
-    // and docs/FIRMWARE-UPLOAD-LOG.md, not in a string constant.
-    Serial.print("# === Digger ");
-    Serial.print(FIRMWARE_VERSION);
-    Serial.println(" — dual-input track control, GL10 FOC ===");
-    Serial.println("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
+    // and docs/FIRMWARE-UPLOAD-LOG.md, not in a string constant. Assembled
+    // into one line; the byte stream matches the old print-chain exactly.
+    char banner[96];
+    snprintf(banner, sizeof(banner),
+             "# === Digger %s — dual-input track control, GL10 FOC ===",
+             FIRMWARE_VERSION);
+    debugConsolePrintLine(banner);
+    debugConsolePrintLine("# CSV: RCThr,RCStr,RC4,RC5,JoyY,JoyX,OutL,OutR,Gear,FS,Lost,V0dV,I0dA,RPM0,TE0,TM0,OK0,V1dV,I1dA,RPM1,TE1,TM1,OK1");
   }
 }
 
 void debugPrint(uint32_t now) {
-  if (!Serial || (now - prevPrint) < PRINT_INTERVAL) return;
+  if (!debugConsoleReady() || (now - prevPrint) < PRINT_INTERVAL) return;
   prevPrint = now;
 
   // Formatting (integer-scaled — no float printf on this core) lives in
   // telemetry/CsvEncoder (#132); this shim owns the cadence and the print.
   // NOTE: `now` is µs (loop clock); the snapshot contract is ms, so read
-  // millis() here — the CSV does not use nowMs, so output is unchanged.
+  // clockNowMs() here — the CSV does not use nowMs, so output is unchanged.
   char buf[200];
-  encodeDebugCsv(buf, sizeof(buf), buildSystemSnapshot(millis()));
-  Serial.println(buf);
+  encodeDebugCsv(buf, sizeof(buf), buildSystemSnapshot(clockNowMs()));
+  debugConsolePrintLine(buf);
 }
 
 
@@ -808,7 +823,7 @@ void debugPrint(uint32_t now) {
 // ═══════════════════════════════════════════════════════════════
 
 void setup() {
-  analogReadResolution(14);
+  joystickInitialize();    // 14-bit ADC resolution (adapter-owned, #187)
   rcInputInitialize();
   outputInit();
   beeperInit();
@@ -818,23 +833,24 @@ void setup() {
   wifiInit();             // Wi-Fi AP + telemetry server (monitoring only)
 
   // Arm the hardware watchdog LAST — after the slow Wi-Fi AP bring-up — so init
-  // can't trip it. From here, loop() must call WDT.refresh() within
+  // can't trip it. From here, loop() must call watchdogRefresh() within
   // WDT_TIMEOUT_MS or the MCU resets: PWM stops, the ESCs see no signal and go
   // to neutral/failsafe, and the machine stops instead of holding the last
   // throttle. This is the runaway backstop for ANY loop stall (#69).
-  if (WDT.begin(WDT_TIMEOUT_MS)) {
-    if (Serial) {
-      Serial.print("# WDT armed @ ");
-      Serial.print(WDT.getTimeout());
-      Serial.println(" ms");
+  if (watchdogBegin(WDT_TIMEOUT_MS)) {
+    if (debugConsoleReady()) {
+      char line[48];
+      snprintf(line, sizeof(line), "# WDT armed @ %lu ms",
+               (unsigned long)watchdogTimeoutMs());
+      debugConsolePrintLine(line);
     }
-  } else if (Serial) {
-    Serial.println("# WDT FAILED to arm — no loop-stall backstop!");
+  } else if (debugConsoleReady()) {
+    debugConsolePrintLine("# WDT FAILED to arm — no loop-stall backstop!");
   }
 }
 
 void loop() {
-  uint32_t now = micros();
+  uint32_t now = clockNowUs();
 
   // 1. Read inputs
   if (rcInputReadFrame(&rcFrame)) {
@@ -868,7 +884,7 @@ void loop() {
   // BOTH tracks, so the GL10s learn the Arduino's true endpoints. Steering is
   // ignored so both ESCs see identical full-range signals for a clean capture.
   if (CALIBRATION_MODE && sbusValid) {
-    float thr = constrain((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
+    float thr = clampFloat((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
     int pwm = SVC + (int)(thr * SOFT_RANGE);
     mix.left = pwm;
     mix.right = pwm;
@@ -885,14 +901,14 @@ void loop() {
   // (BATTERY_CONFIRM_MS) so a dead X.BUS can't permanently disable driving.
   // The decision is extracted to src/domain/safety/SafetySupervisor.* (#117
   // step 8, #168); this call site owns the boundary reads (RC freshness,
-  // battery flags, the millis()-based boot grace) and today consumes only
+  // battery flags, the clockNowMs()-based boot grace) and today consumes only
   // driveAllowed — the FailsafeReason feeds the OutputGate and
   // SystemSnapshot steps. The thermal cut (#111) is NOT latched: when the
   // motor cools below TEMP_CUT_OFF_C the gate re-opens and outputUpdate()
   // re-attaches the ESCs automatically.
   SafetyDecision safety = safetySupervisorDecide(SafetyInputs{
       sbusValid, batteryOkConfirmed,
-      millis() - alertBootMs > BATTERY_CONFIRM_MS, batteryCutoffLatched,
+      clockNowMs() - alertBootMs > BATTERY_CONFIRM_MS, batteryCutoffLatched,
       tempCutActive});
   outputUpdate(safety.driveAllowed, mix.left, mix.right);
 
@@ -901,7 +917,7 @@ void loop() {
   // below (telemetry/Wi-Fi) ever stalls the loop beyond WDT_TIMEOUT_MS, the
   // refresh is missed, the MCU resets, and the machine stops instead of holding
   // the last throttle command (#69).
-  WDT.refresh();
+  watchdogRefresh();
 
   // 3.5 Telemetry — non-blocking X.BUS Read Register (0x10), read-only.
   // Never enters BUS_MODE, so it cannot affect the control output above.

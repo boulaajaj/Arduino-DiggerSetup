@@ -5,6 +5,9 @@
 // delivers one conditioned raw ADC pair.
 #pragma once
 
+// One-time ADC setup (the 14-bit resolution the axis math assumes).
+void joystickInitialize();
+
 // Read both axes with the ADC conditioning the hall-effect joystick needs
 // (discard-read, settle, real read — Y axis first, then X).
 void joystickReadAxes(int yPin, int xPin, int* rawY, int* rawX);

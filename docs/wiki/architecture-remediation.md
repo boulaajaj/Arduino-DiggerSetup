@@ -30,7 +30,8 @@ drive exactly as before.
   as a parameter, hardware effects returned as actions for the sketch to
   execute; the sketch keeps thin delegates until the composition root lands
 - **Ports + adapters** — `src/ports/` link-time seams (ESC output,
-  joystick ADC, piezo alert, RC input, ESC telemetry, dashboard service)
+  joystick ADC, piezo alert, RC input, ESC telemetry, dashboard service,
+  clock, watchdog, debug console)
   with their `src/infrastructure/` adapters (`arduino/` + `radiolink/` +
   `xc/` + `network/`) owning the Servo objects, the ADC settle sequence,
   the piezo pin, the S.BUS UART + parser, the

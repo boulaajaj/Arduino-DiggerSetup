@@ -5,6 +5,38 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Phase D step 11a: the last hardware seams (#187)
+
+- Step 11 split in two: 11a (this) builds the remaining seams so the .ino
+  becomes hardware-include-free; 11b moves the shell into src/application/
+  and activates check_ino. Rationale: application/ may not include
+  Arduino.h/WDT.h/WiFiS3.h (dependency table), but the shims still called
+  millis/micros, WDT, Serial, WiFi.status and analogReadResolution.
+- New seams (all 1-line passthroughs): ports/ClockPort.h + ArduinoClock
+  (clockNowMs/clockNowUs; ~13 mechanical call-site swaps),
+  ports/WatchdogPort.h + WatchdogAdapter (begin/timeoutMs/refresh — the
+  once-per-loop refresh invariant kept at its exact call site),
+  ports/DebugConsolePort.h + SerialConsoleAdapter (begin keeps debugInit's
+  verbatim boot delay(50); ready(); printLine). JoystickPort grew
+  joystickInitialize() (analogReadResolution(14), same boot position);
+  DashboardServicePort grew dashboardServiceRadioStatus() (WiFi.status —
+  wifiDebug's last WiFiS3 touch). <WDT.h> + <WiFiS3.h> removed from the
+  .ino; arduino-cli library detection re-verified via the src/ scan.
+- Debug lines (banner, WDT-armed, wifiDebug x2) converted from Serial
+  print-chains to snprintf-assembled whole lines — BYTE-IDENTICAL stream
+  by construction (bool as 1/0, decimal counters, %02X + space per
+  snapshot byte, println's CRLF via printLine). These lines are not
+  test-locked; identity argued by string construction in the PR.
+- Two documented mechanical substitutions (the #164 class) so 11b's moved
+  code compiles without Arduino.h: constrain() → clampInt/clampFloat
+  (exact macro ternary, 12 sites, types checked per site) and sbusToServo's
+  map() → mapRange (ArduinoCore-API's exact long formula), both in
+  src/application/RangeMath.h.
+- Verified: 27 host binaries green, ZERO expectation changes (the
+  control-loop suite's one-refresh-per-pass law now counts through
+  watchdogRefresh() — same stub counter); compile clean — flash 117796
+  (−152: line assembly replaced print-chain calls), RAM 9848 unchanged.
+
 ## 2026-07-13 — Step-11 pre-slice: config/ layer extraction (#185)
 
 - Every `[CONFIG]` constant moved VERBATIM (values byte-identical) to
