@@ -1,7 +1,9 @@
-// application — pure range clamping and linear mapping (#187). These carry
-// the EXACT Arduino constrain()/map() semantics, macro- and hardware-free,
-// so application code compiles without <Arduino.h>:
-// - clamp: ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+// application — pure range clamping and linear mapping (#187), macro- and
+// hardware-free so application code compiles without <Arduino.h>. For the
+// side-effect-free arguments every call site uses, results are identical
+// to the Arduino equivalents (the functions evaluate each argument once
+// and are int/float-typed, unlike the constrain() macro):
+// - clamp: the constrain() ternary, ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 // - mapRange: ArduinoCore-API map() verbatim — integer long math,
 //   (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
 #pragma once

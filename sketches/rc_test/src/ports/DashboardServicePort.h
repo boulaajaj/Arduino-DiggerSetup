@@ -21,4 +21,4 @@ bool dashboardServiceInitialize(const char* ssid, const char* password,
 void dashboardServiceUpdate();
 
 // The radio's raw status code (WiFi.status()) — bench diagnostics only.
-uint8_t dashboardServiceRadioStatus();
+int dashboardServiceRadioStatus();

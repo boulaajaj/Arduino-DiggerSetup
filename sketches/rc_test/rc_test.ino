@@ -708,7 +708,7 @@ void wifiDebug(uint32_t nowUs) {
   // status/counters, two-digit uppercase hex + trailing space per byte).
   char line[96];
   snprintf(line, sizeof(line), "# WIFI up=%d status=%d clients_seq=%lu",
-           wifiUp ? 1 : 0, (int)dashboardServiceRadioStatus(), (unsigned long)wifiSeq);
+           wifiUp ? 1 : 0, dashboardServiceRadioStatus(), (unsigned long)wifiSeq);
   debugConsolePrintLine(line);
 
   // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
