@@ -17,8 +17,9 @@ Updated by session hooks — only technical content, no personal info.
   `telemetry_check`, `telem_decode` → `telemetry_decode`. Acronym-compliant
   siblings (`pin_test`, `sbus_test`, `sbus_d12_test`, `usb_test`,
   `serial2_test`, `beeper_test`) keep their names.
-- Mechanical sweep across 70 files (CI matrix, pre-commit gate, tests/Makefile
-  + FirmwareUnderTest.h include paths, scripts, docs, source comments);
+- Mechanical sweep across 70 files (CI matrix, pre-commit gate, the
+  tests/Makefile and FirmwareUnderTest.h include paths, scripts, docs,
+  source comments);
   DECISION-LOG and FIRMWARE-UPLOAD-LOG history left untouched by design.
   Zero code changes — behavior-preserving by construction.
 
