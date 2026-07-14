@@ -8,7 +8,7 @@ reference. Only the production sketch follows the architecture rules
 
 | Sketch | What it is |
 | --- | --- |
-| `dual_track_control/` | **The shipped firmware** (V7.x lineage, formerly `rc_test`, #118): S.BUS + joystick input, curvature tank mix, gear caps, safety ladders, X.BUS telemetry, Wi-Fi dashboard. Everything under its `src/` tree. |
+| `dual_track_control/` | **The shipped firmware** (V7.x lineage, renamed in #118): S.BUS + joystick input, curvature tank mix, gear caps, safety ladders, X.BUS telemetry, Wi-Fi dashboard. Everything under its `src/` tree. |
 
 ## Bench / bring-up tools
 

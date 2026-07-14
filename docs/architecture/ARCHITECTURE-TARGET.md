@@ -2,7 +2,7 @@
 
 **Status:** adopted 2026-07-05 (epic #116, issue #128, ADR-0001)
 **Applies to:** the production firmware in `sketches/dual_track_control/`
-(renamed from `rc_test`, #118)
+(carried its former bring-up name until the #118 rename)
 
 This document is the contract for the Phase D refactor (#117, #130, #132) and
 the rulebook the CI architecture fitness functions (#129) enforce. Bench
