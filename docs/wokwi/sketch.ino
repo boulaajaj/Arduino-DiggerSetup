@@ -1,6 +1,6 @@
 // Excavator Track Controller — Wokwi Simulation Stub
 // This is a simplified version for Wokwi visualization.
-// The real sketch is in sketches/rc_test/rc_test.ino
+// The real sketch is in sketches/dual_track_control/dual_track_control.ino
 //
 // Board: Arduino UNO (stand-in for UNO R4 WiFi in Wokwi)
 //

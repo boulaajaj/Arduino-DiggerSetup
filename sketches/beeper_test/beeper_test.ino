@@ -15,7 +15,7 @@
 // SAFE ON BENCH: this sketch does NOT init Servo or touch D9/D10, so the
 // ESCs get no PWM and the motors are not driven. Keep wheels up anyway.
 //
-// This is a throwaway bench tool — the horn logic moves into rc_test.ino
+// This is a throwaway bench tool — the horn logic moves into dual_track_control.ino
 // (a non-blocking [BEEPER] module) once confirmed.
 
 #include "sbus.h"   // Bolder Flight Systems SBUS (same lib as the flight sketch)

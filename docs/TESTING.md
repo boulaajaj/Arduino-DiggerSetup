@@ -10,8 +10,8 @@ them green, proving behavior parity while no hardware is available.
 ## How it works — zero firmware changes
 
 The production sketch is not modified for testing. Each test binary compiles
-`sketches/rc_test/rc_test.ino` directly, plus the extracted
-`sketches/rc_test/src/**/*.cpp` domain sources the sketch delegates to as the
+`sketches/dual_track_control/dual_track_control.ino` directly, plus the extracted
+`sketches/dual_track_control/src/**/*.cpp` domain sources the sketch delegates to as the
 Phase D migration (#117) proceeds. Pure-domain suites (one dir per extracted
 domain, e.g. `battery/`) test the extracted code directly — no firmware, no
 stubs, and no `src/infrastructure/` sources (those include hardware headers
@@ -30,7 +30,7 @@ tests/
 │   ├── sbus.h                  scripted S.BUS frames (bfs::SbusRx/SbusData)
 │   └── SerialPortStub.h        Serial/Serial1/UART fakes — scripted RX, captured TX
 ├── characterization/
-│   ├── FirmwareUnderTest.h     includes the REAL rc_test.ino + firmware state reset
+│   ├── FirmwareUnderTest.h     includes the REAL dual_track_control.ino + firmware state reset
 │   └── test_*.cpp              one focused suite per behavior area
 ├── invariants/
 │   ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
@@ -151,6 +151,6 @@ Three layers, per issue #47:
    merge.
 
 The firmware-without-tests guard blocks a commit that stages changes under
-`sketches/rc_test/` without staging any change under `tests/`. If the
+`sketches/dual_track_control/` without staging any change under `tests/`. If the
 firmware change genuinely needs no test update (comment-only, debug text),
 re-run as `DIGGER_NO_TEST_CHANGE=1 git commit ...` and say why in the PR.

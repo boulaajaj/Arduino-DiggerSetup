@@ -139,10 +139,10 @@ the per-gear caps).
 
 ```bash
 # Compile
-arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test
+arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control
 
 # Upload (COM7)
-arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/rc_test
+arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control
 
 # Monitor / plot
 python monitor.py
@@ -154,7 +154,7 @@ python live_plot.py
 ## Status
 
 > Current firmware version: `FIRMWARE_VERSION` in
-> `sketches/rc_test/rc_test.ino` `[CONFIG]` (single source of truth, #124).
+> `sketches/dual_track_control/dual_track_control.ino` `[CONFIG]` (single source of truth, #124).
 > Live feature status: CLAUDE.md "Implementation Status". The list below is
 > a historical snapshot.
 
@@ -187,11 +187,11 @@ python live_plot.py
 ## File Map
 
 ```text
-sketches/rc_test/
-  rc_test.ino       — Main controller sketch (version: FIRMWARE_VERSION in [CONFIG])
+sketches/dual_track_control/
+  dual_track_control.ino       — Main controller sketch (version: FIRMWARE_VERSION in [CONFIG])
   types.h           — Shared structs (JoystickState, EscTelem, ...)
   web_page.h        — Embedded Wi-Fi dashboard (PROGMEM), served at "/"
-sketches/telem_check/ — Read-only X.BUS telemetry bench tool (0x50 framing)
+sketches/telemetry_check/ — Read-only X.BUS telemetry bench tool (0x50 framing)
 sketches/sbus_d12_test/ — S.BUS-on-D12 bring-up test
 docs/WIRING-GUIDE-V8.md        — Canonical hardware wiring reference (UNO R4 WiFi)
 docs/INTERFACE-BOARD-PERFBOARD.md — Soldered interface board build

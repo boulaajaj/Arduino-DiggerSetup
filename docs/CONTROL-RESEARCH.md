@@ -277,8 +277,8 @@ and future features.
 ### Module Pattern (Single .ino + types.h)
 
 ```text
-sketches/rc_test/
-  rc_test.ino    — Main sketch with [MODULE] sections
+sketches/dual_track_control/
+  dual_track_control.ino    — Main sketch with [MODULE] sections
   types.h        — Shared struct definitions
 ```
 

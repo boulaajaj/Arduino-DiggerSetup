@@ -7,7 +7,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/domain/safety/SafetySupervisor.h"
+#include "../../sketches/dual_track_control/src/domain/safety/SafetySupervisor.h"
 
 // SafetyInputs positional order:
 // {rcValid, batteryConfirmed, bootGraceElapsed, batteryCutoffLatched,

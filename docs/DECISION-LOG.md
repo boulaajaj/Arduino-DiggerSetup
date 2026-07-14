@@ -5,6 +5,24 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-13 — Rename sweep: production sketch + bench abbreviations (#118)
+
+- `sketches/rc_test/` → `sketches/dual_track_control/` — the production
+  firmware (7 versions deep: safety ladders, watchdog, Wi-Fi dashboard) no
+  longer carries a bring-up-test name. `dual_track_control` is the platform's
+  white-label name (`.claude/rules/naming.md`, #136 context). Version lineage
+  V7.x unchanged; FIRMWARE-UPLOAD-LOG history rows keep `rc_test`.
+- Bench sketches with abbreviations not on the permitted-acronym list renamed
+  to full words: `hw_diagnostic` → `hardware_diagnostic`, `telem_check` →
+  `telemetry_check`, `telem_decode` → `telemetry_decode`. Acronym-compliant
+  siblings (`pin_test`, `sbus_test`, `sbus_d12_test`, `usb_test`,
+  `serial2_test`, `beeper_test`) keep their names.
+- Mechanical sweep across 70 files (CI matrix, pre-commit gate, the
+  tests/Makefile and FirmwareUnderTest.h include paths, scripts, docs,
+  source comments);
+  DECISION-LOG and FIRMWARE-UPLOAD-LOG history left untouched by design.
+  Zero code changes — behavior-preserving by construction.
+
 ## 2026-07-13 — Phase D step 11b: FirmwareApp composition root — §9 COMPLETE (#189)
 
 - The entire .ino shell moved VERBATIM into `src/application/`, split by

@@ -11,8 +11,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/domain/thermal/ThermalDerating.h"
-#include "../../sketches/rc_test/src/domain/thermal/ThermalHysteresis.h"
+#include "../../sketches/dual_track_control/src/domain/thermal/ThermalDerating.h"
+#include "../../sketches/dual_track_control/src/domain/thermal/ThermalHysteresis.h"
 
 // Values mirror TEMP_*_ON_C / TEMP_*_OFF_C / TEMP_DEBOUNCE_MS /
 // TEMP_PLAUS_MIN_C / TEMP_PLAUS_MAX_C — but they are parameters here: the

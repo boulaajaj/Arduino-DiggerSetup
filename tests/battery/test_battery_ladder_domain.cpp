@@ -12,7 +12,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/domain/battery/BatteryLadder.h"
+#include "../../sketches/dual_track_control/src/domain/battery/BatteryLadder.h"
 
 // Values mirror ECO_LOCK_THRESH_V / ECO_LOCK_DEBOUNCE_MS / CUTOFF_THRESH_V /
 // CUTOFF_DEBOUNCE_MS — but they are parameters here: the domain functions

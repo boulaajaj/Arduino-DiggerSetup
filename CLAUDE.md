@@ -33,9 +33,9 @@ sits above all four: during epic #116, organization changes NOTHING observable
 4. **Goal-driven execution — hand the agent the goal + the gate, not steps.**
    The standing, verifiable success criteria for any firmware-touching change:
    - host suite green: `wsl -e make -C tests run` (characterization +
-     invariants — compiles the REAL `rc_test.ino`; also CI `unit-tests.yml`)
+     invariants — compiles the REAL `dual_track_control.ino`; also CI `unit-tests.yml`)
    - compiles clean locally:
-     `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test`
+     `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control`
    - CI green: `arduino-ci.yml`, `lint.yml`, `static-analysis.yml`,
      `code-quality.yml`, `structure-check.yml`, `unit-tests.yml`,
      `architecture-fitness.yml` (#129 — layer/size/naming rules on `src/`
@@ -86,8 +86,9 @@ exceptions. The table columns are **Date · Version · SHA · Branch · Board/Po
 Notes**; record the **PR #** inside the **Branch** cell (e.g.
 `agent/C-Builder/foo (PR #93)`), and put **what changed** + **what to test** in
 **Notes**. **Version** is the sketch version string carried in the build (e.g.
-`rc_test V7.18`), not a git tag. This is the device's flight log; an unlogged
-flash is treated as not done.
+`dual_track_control V7.35`; rows before the 2026-07-13 rename carry the
+sketch's former name), not a git tag. This is the device's flight log; an
+unlogged flash is treated as not done.
 
 ## People
 
@@ -193,7 +194,7 @@ polls via `telemetrySourceUpdate()` on Serial1 (D0/D1):
 
 ## Architecture Summary
 
-Sketch: `sketches/rc_test/rc_test.ino` (GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The version
+Sketch: `sketches/dual_track_control/dual_track_control.ino` (GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The version
 string is defined ONCE — `FIRMWARE_VERSION` in `src/config/BuildInfo.h` (#124, #185).
 No doc carries a live copy; dated records (DECISION-LOG,
 FIRMWARE-UPLOAD-LOG) cite versions historically.
@@ -302,22 +303,22 @@ and the Arduino-side filter was double-smoothing the stream (operator felt
 ```text
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/rc_test/rc_test.ino             — COMPOSITION ROOT ONLY (#189): includes src/application/FirmwareApp.h and delegates setup()/loop(); the firmware lives under src/
-sketches/rc_test/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
-sketches/rc_test/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
-sketches/rc_test/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
-sketches/rc_test/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
-sketches/rc_test/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
-sketches/rc_test/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
-sketches/rc_test/src/application/        — The application layer (#189): FirmwareApp.h/.cpp (composition-root marker + the verbatim setup/loop control cycle) + FirmwareState + OperatorInput + MotorOutput + SafetyControl + AlertControl + Monitoring (module shims moved from the .ino) + SystemSnapshot.h (#132) + RangeMath.h (#187)
-sketches/rc_test/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
-sketches/rc_test/src/alerts/             — Alert policy + players (#183): AlertTypes.h + AlertPolicy (priority ladder, low-V latch, inactivity) + PatternPlayer (one-shot + repeating) — pure logic; the piezo stays behind ports/AlertOutputPort.h
-sketches/rc_test/src/config/             — Tunables per domain (#185): BuildInfo.h (FIRMWARE_VERSION SSOT) + Pins.h + Input/Drive/Battery/Thermal/Alert/Telemetry/Wifi/SafetyConfig.h — values are law, included by the .ino (adapter-owned tunables stay single-homed in infrastructure/)
-sketches/rc_test/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem) + DashboardServicePort.h + TelemetryFrameSource.h (reverse seam: app encodes, network ships bytes) + ClockPort.h + WatchdogPort.h + DebugConsolePort.h (#187 — the last hardware seams)
-sketches/rc_test/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle + resolution) + arduino/PiezoAdapter.cpp + arduino/ArduinoClock.cpp + arduino/WatchdogAdapter.cpp + arduino/SerialConsoleAdapter.cpp (#187) + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode) + network/ (WifiService + DashboardServer + SseStream — the #69/#54/#77 serving machine + its tunables, #181)
-sketches/rc_test/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
-sketches/rc_test/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
-sketches/telem_check/telem_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
+sketches/dual_track_control/dual_track_control.ino             — COMPOSITION ROOT ONLY (#189): includes src/application/FirmwareApp.h and delegates setup()/loop(); the firmware lives under src/
+sketches/dual_track_control/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
+sketches/dual_track_control/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
+sketches/dual_track_control/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
+sketches/dual_track_control/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
+sketches/dual_track_control/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
+sketches/dual_track_control/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
+sketches/dual_track_control/src/application/        — The application layer (#189): FirmwareApp.h/.cpp (composition-root marker + the verbatim setup/loop control cycle) + FirmwareState + OperatorInput + MotorOutput + SafetyControl + AlertControl + Monitoring (module shims moved from the .ino) + SystemSnapshot.h (#132) + RangeMath.h (#187)
+sketches/dual_track_control/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
+sketches/dual_track_control/src/alerts/             — Alert policy + players (#183): AlertTypes.h + AlertPolicy (priority ladder, low-V latch, inactivity) + PatternPlayer (one-shot + repeating) — pure logic; the piezo stays behind ports/AlertOutputPort.h
+sketches/dual_track_control/src/config/             — Tunables per domain (#185): BuildInfo.h (FIRMWARE_VERSION SSOT) + Pins.h + Input/Drive/Battery/Thermal/Alert/Telemetry/Wifi/SafetyConfig.h — values are law, included by the .ino (adapter-owned tunables stay single-homed in infrastructure/)
+sketches/dual_track_control/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem) + DashboardServicePort.h + TelemetryFrameSource.h (reverse seam: app encodes, network ships bytes) + ClockPort.h + WatchdogPort.h + DebugConsolePort.h (#187 — the last hardware seams)
+sketches/dual_track_control/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle + resolution) + arduino/PiezoAdapter.cpp + arduino/ArduinoClock.cpp + arduino/WatchdogAdapter.cpp + arduino/SerialConsoleAdapter.cpp (#187) + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode) + network/ (WifiService + DashboardServer + SseStream — the #69/#54/#77 serving machine + its tunables, #181)
+sketches/dual_track_control/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
+sketches/dual_track_control/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
+sketches/telemetry_check/telemetry_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
 sketches/sbus_d12_test/sbus_d12_test.ino — S.BUS-on-D12 bring-up test
 dashboard/index.html                     — Wi-Fi dashboard SOURCE (single source of truth; web_page.h generated from it, #120)
 docs/WIRING-GUIDE-V8.md                  — Canonical hardware wiring reference (UNO R4 WiFi)
@@ -353,7 +354,7 @@ monitor.py                               — Simple serial monitor
 
 ### Architecture
 
-- All code in `rc_test.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
+- All code in `dual_track_control.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
 - Structs go in `types.h` (solves Arduino auto-prototype limitation)
 - All tunable constants live in `src/config/` per-domain headers (#185; the `[CONFIG]` section is now their include point) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `infrastructure/xc/`, Wi-Fi serving tunables in `infrastructure/network/`)
 - When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
@@ -362,9 +363,9 @@ monitor.py                               — Simple serial monitor
 
 - The host characterization suite (`make -C tests run`, WSL/Linux) is the
   behavior-parity gate for every firmware-touching PR. It compiles the REAL
-  `rc_test.ino` — keep it green before and after any change.
+  `dual_track_control.ino` — keep it green before and after any change.
 - Commits are hard-blocked by `.githooks/pre-commit`: red tests block, and a
-  `sketches/rc_test/` change without a `tests/` change blocks
+  `sketches/dual_track_control/` change without a `tests/` change blocks
   (`DIGGER_NO_TEST_CHANGE=1` for genuinely test-neutral edits).
 - A changed test EXPECTATION is a behavior change, not a refactor — needs its
   own issue + operator sign-off.
@@ -423,8 +424,8 @@ per-parameter code-context analysis.
 
 ## Build & Upload
 
-- First checkout: `cp sketches/rc_test/arduino_secrets.h.example
-  sketches/rc_test/arduino_secrets.h` and fill in the real Wi-Fi credentials
+- First checkout: `cp sketches/dual_track_control/arduino_secrets.h.example
+  sketches/dual_track_control/arduino_secrets.h` and fill in the real Wi-Fi credentials
   (gitignored, #125). CI copies the template automatically.
 - Board: Arduino UNO R4 WiFi
 - FQBN: `arduino:renesas_uno:unor4wifi`
@@ -432,4 +433,4 @@ per-parameter code-context analysis.
 - Port: COM7
 - Serial: 115200 baud
 - VS Code: Ctrl+Shift+B → "Live Plot" for real-time monitoring
-- Upload: `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/rc_test && arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/rc_test`
+- Upload: `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control && arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control`

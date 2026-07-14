@@ -12,7 +12,7 @@
   changes mixed into structural PRs; characterization tests green before and
   after; local `arduino-cli` compile before every push.
 - **Commit test gate (#47)**: `.githooks/pre-commit` hard-blocks commits when
-  the host suite (`make -C tests run`) is red or when `sketches/rc_test/`
+  the host suite (`make -C tests run`) is red or when `sketches/dual_track_control/`
   changes without a `tests/` change. Agents never use `--no-verify` — fix the
   tests instead. Details: `docs/TESTING.md`.
 - **Decisions get logged** in `docs/DECISION-LOG.md` as they are made (terse:

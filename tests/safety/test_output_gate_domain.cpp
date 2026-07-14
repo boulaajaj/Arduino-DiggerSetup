@@ -8,7 +8,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/domain/safety/OutputGate.h"
+#include "../../sketches/dual_track_control/src/domain/safety/OutputGate.h"
 
 // Values mirror SVC / CUTOFF_HOLD_MS — parameters here.
 const int NEUTRAL = 1500;

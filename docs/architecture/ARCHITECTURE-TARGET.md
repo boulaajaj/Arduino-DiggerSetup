@@ -1,12 +1,12 @@
 # Target Architecture — Dual Track Control
 
 **Status:** adopted 2026-07-05 (epic #116, issue #128, ADR-0001)
-**Applies to:** the production firmware, migrating from `sketches/rc_test/` to
-`sketches/dual_track_control/` (rename tracked in #118)
+**Applies to:** the production firmware in `sketches/dual_track_control/`
+(carried its former bring-up name until the #118 rename)
 
 This document is the contract for the Phase D refactor (#117, #130, #132) and
 the rulebook the CI architecture fitness functions (#129) enforce. Bench
-sketches (`sketches/*_test/`, `hw_diagnostic`, …) are exempt — they are
+sketches (`sketches/*_test/`, `hardware_diagnostic`, …) are exempt — they are
 throwaway bring-up tools by design.
 
 ---
@@ -168,7 +168,7 @@ watchdog refresh stays exactly once per cycle, after the control path.
 ## 5. State ownership
 
 **One domain owns its state; no other domain writes it.** The concrete sins
-this outlaws (all present in `rc_test.ino` today):
+this outlaws (all present in `dual_track_control.ino` today):
 
 - `[SAFETY]` writing `[ALERT]`'s `lowVoltLatched` → instead `SafetyDecision`
   carries `alarmRequested`; `AlertPolicy` reads it and owns its own latch.

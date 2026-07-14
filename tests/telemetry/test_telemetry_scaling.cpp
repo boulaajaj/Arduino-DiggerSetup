@@ -10,8 +10,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/rc_test/src/infrastructure/xc/XbusTelemetryAdapter.h"
-#include "../../sketches/rc_test/src/telemetry/TelemetryScaling.h"
+#include "../../sketches/dual_track_control/src/infrastructure/xc/XbusTelemetryAdapter.h"
+#include "../../sketches/dual_track_control/src/telemetry/TelemetryScaling.h"
 
 TEST_CASE("VBAT decode: unsigned tenths of a volt") {
   CHECK(vbatRawToVolts(126) == doctest::Approx(12.6f));

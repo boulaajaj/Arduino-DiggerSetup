@@ -57,7 +57,7 @@ The watchdog (#69, `WDT_TIMEOUT_MS` 250 ms) cannot fire in the host stub; the
 host suite asserts its *contract* — exactly one `WDT.refresh()` per loop pass
 (`tests/characterization/test_control_loop.cpp`; the stub counts calls, it
 does not assert ordering). That the single refresh sits *after* the control
-path is a code-placement rule (`[MODULE]` loop order in `rc_test.ino`,
+path is a code-placement rule (`[MODULE]` loop order in `dual_track_control.ino`,
 enforced by review + `.claude/rules/firmware-realtime.md`). That a WDT reset
 actually stops PWM is physical behavior — tracked in
 `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.

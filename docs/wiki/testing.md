@@ -1,6 +1,6 @@
 # Testing
 
-Host-side suites that compile the **real firmware** (`rc_test.ino`) against
+Host-side suites that compile the **real firmware** (`dual_track_control.ino`) against
 stub Arduino headers — no hardware needed. Canonical guide, commands, and the
 commit gate: [TESTING](../TESTING.md).
 

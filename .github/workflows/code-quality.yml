@@ -36,9 +36,9 @@ jobs:
           echo "=== Anti-Pattern Check ==="
           warnings=0
 
-          # Flag delay() in production sketch (rc_test)
-          if grep -rn 'delay(' sketches/rc_test/ --include='*.ino' --include='*.cpp' --include='*.h' | grep -v '//.*delay' | grep -v 'delayMicroseconds'; then
-            echo "WARNING: delay() found in production sketch (rc_test) — blocking call"
+          # Flag delay() in production sketch (dual_track_control)
+          if grep -rn 'delay(' sketches/dual_track_control/ --include='*.ino' --include='*.cpp' --include='*.h' | grep -v '//.*delay' | grep -v 'delayMicroseconds'; then
+            echo "WARNING: delay() found in production sketch (dual_track_control) — blocking call"
             warnings=$((warnings + 1))
           fi
 

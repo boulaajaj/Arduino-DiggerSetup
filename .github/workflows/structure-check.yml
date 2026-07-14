@@ -69,11 +69,13 @@ jobs:
           done < <(find . -name '*.py' -not -path './.git/*' -not -path './node_modules/*')
 
           # Check: .md files only in root, docs/ (any depth), .github/ (any depth),
-          # or .claude/ (any depth — agent rules/skills live there, issue #134)
+          # .claude/ (any depth — agent rules/skills live there, issue #134),
+          # or sketches/README.md (production-vs-bench index, issue #118)
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
-            if [ "$dir" != "." ] &&
+            if [ "$nf" != "sketches/README.md" ] &&
+               [ "$dir" != "." ] &&
                [ "$dir" != "docs" ] && [[ "$dir" != docs/* ]] &&
                [ "$dir" != ".github" ] && [[ "$dir" != .github/* ]] &&
                [ "$dir" != ".claude" ] && [[ "$dir" != .claude/* ]]; then
