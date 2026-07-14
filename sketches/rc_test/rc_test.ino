@@ -718,6 +718,10 @@ void wifiDebug(uint32_t nowUs) {
                    (unsigned long)telemetryDebugReceiveTotal,
                    (unsigned long)telemetryDebugEchoCount,
                    (unsigned long)telemetryDebugSlaveCount);
+  // snprintf returns the length it WOULD have written — clamp before using
+  // it as an offset so a truncated prefix can never index past the buffer.
+  if (n < 0) n = 0;
+  if (n > (int)sizeof(xbus) - 1) n = (int)sizeof(xbus) - 1;
   for (int i = 0; i < telemetryDebugSnapshotLength && n < (int)sizeof(xbus) - 4; i++) {
     n += snprintf(xbus + n, sizeof(xbus) - n, "%02X ", telemetryDebugSnapshot[i]);
   }
