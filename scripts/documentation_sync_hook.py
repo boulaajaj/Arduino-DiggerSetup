@@ -34,7 +34,7 @@ EXCLUDED = (
 )
 
 PROMPT = (
-    "[DOCUMENTATION-SYNC HOOK #156] Production code changed this session "
+    "[DOCUMENTATION-SYNC HOOK #156] Watched code changed this session "
     "(first hit: {path}). Before this task ends, verify the documentation "
     "still matches the code and update it in the SAME PR wherever it does "
     "not: docs/wiki/ notes covering the changed area (same-PR rule, "
@@ -42,8 +42,9 @@ PROMPT = (
     "docs/architecture/FILE-MAP.md, docs/TESTING.md, docs/SAFETY.md, "
     "docs/WIRING-GUIDE-V8.md for pin/UART changes, docs/XBUS-PROTOCOL.md "
     "for X.BUS changes, and "
-    "OPERATOR-GUIDE.md for operator-facing behavior. Tunable values stay "
-    "canonical in sketches/dual_track_control/src/config/ — docs describe "
+    "OPERATOR-GUIDE.md for operator-facing behavior. Production-sketch "
+    "tunables stay canonical in sketches/dual_track_control/src/config/ "
+    "(bench sketches keep constants local) — docs describe "
     "behavior, never live numbers "
     "(#124). If everything already matches, say so briefly and move on."
 )
