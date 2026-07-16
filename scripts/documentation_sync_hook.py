@@ -38,10 +38,10 @@ PROMPT = (
     "(first hit: {path}). Before this task ends, verify the documentation "
     "still matches the code and update it in the SAME PR wherever it does "
     "not: docs/wiki/ notes covering the changed area (same-PR rule, "
-    "docs/wiki/README.md), docs/architecture/ARCHITECTURE-TARGET.md, the "
+    "docs/wiki/README.md), docs/architecture/ARCHITECTURE-TARGET.md, "
     "docs/architecture/FILE-MAP.md, docs/TESTING.md, docs/SAFETY.md, and "
     "OPERATOR-GUIDE.md for operator-facing behavior. Tunable values stay "
-    "canonical in [CONFIG] — docs describe behavior, never live numbers "
+    "canonical in src/config/ — docs describe behavior, never live numbers "
     "(#124). If everything already matches, say so briefly and move on."
 )
 
