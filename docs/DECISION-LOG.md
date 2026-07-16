@@ -7,7 +7,7 @@ Updated by session hooks — only technical content, no personal info.
 
 ## 2026-07-16 — CLAUDE.md trimmed to ~200 lines (#197)
 
-- Root CLAUDE.md 445 → 202 lines. Facts kept (purpose, covenant + gate,
+- Root CLAUDE.md 445 → 203 lines. Facts kept (purpose, covenant + gate,
   safety invariants, architecture boundaries, build commands, workflow
   pointers); detail moved to single homes: full file map →
   `docs/architecture/FILE-MAP.md` (verbatim; doc-sync hook message updated
