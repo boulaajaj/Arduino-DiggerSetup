@@ -57,6 +57,7 @@
 | **D9** | PWM Left | Arduino → ESC | — | ESC Left throttle |
 | **D10** | PWM Right | Arduino → ESC | — | ESC Right throttle |
 | **D12** | S.BUS RX | Board → Arduino | sbusUart (SCI0) | Interface board J6 |
+| **D8** | Piezo beeper | Arduino → piezo | — | Active piezo: alarms + horn (V7.11) |
 | **A0** | Joystick Y | Joystick → Arduino | — | Throttle axis (14-bit ADC) |
 | **A1** | Joystick X | Joystick → Arduino | — | Steering axis (14-bit ADC) |
 | **VIN** | Power in | ESC → Arduino | — | BEC 7.4V |
