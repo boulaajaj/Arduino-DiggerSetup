@@ -355,10 +355,13 @@ monitor.py                               — Simple serial monitor
 
 ### Architecture
 
-- All code in `dual_track_control.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
-- Structs go in `types.h` (solves Arduino auto-prototype limitation)
-- All tunable constants live in `src/config/` per-domain headers (#185; the `[CONFIG]` section is now their include point) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `infrastructure/xc/`, Wi-Fi serving tunables in `infrastructure/network/`)
-- When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
+These bullets describe the production sketch `sketches/dual_track_control/`;
+bench/test sketches under `sketches/` are deliberately single-file tools.
+
+- The `.ino` is a composition root ONLY (#189): it includes `src/application/FirmwareApp.h` and delegates `setup()`/`loop()`. Firmware code lives under `src/` in layers — `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` (dependency rules: `.claude/rules/architecture.md`). The former `[MODULE]` banners moved into `src/application/` files — search `[NAME]` still jumps there
+- Shared structs sit in `types.h` — the interim shared-types bridge, slated to dissolve (it also sidesteps the Arduino auto-prototype limitation); domain-owned types live with their domain (e.g. `DriveTypes.h`, `SafetyTypes.h`)
+- All tunable constants live in `src/config/` per-domain headers (#185), included by `src/application/FirmwareApp.h`; the firmware's mutable cross-module state lives in `src/application/FirmwareState.h` (#189) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `src/infrastructure/xc/`, Wi-Fi serving tunables in `src/infrastructure/network/`)
+- File policy: one file = one concept, 150-line soft / 250-line hard limit (`.claude/rules/architecture.md`) — split by responsibility, never into `Part2`-style fragments
 
 ### Testing (#47 — details in docs/TESTING.md)
 
@@ -389,7 +392,7 @@ monitor.py                               — Simple serial monitor
 
 - Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
 - Use `constrain()` at all servo output boundaries
-- Comment each `[MODULE]` section header with a brief description
+- Comment each module section banner — the bracketed `[NAME]` markers that moved into `dual_track_control`'s `src/application/` files (#189) — with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 - **README describes behavior, never tunable numbers** (#124): current values
   live in `src/config/`. PROJECT-PLAN and OPERATOR-GUIDE are technical
