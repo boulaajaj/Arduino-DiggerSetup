@@ -11,8 +11,8 @@ Updated by session hooks — only technical content, no personal info.
   safety invariants, architecture boundaries, build commands, workflow
   pointers); detail moved to single homes: full file map →
   `docs/architecture/FILE-MAP.md` (verbatim; doc-sync hook message updated
-  to point there); pins/UART detail → docs/WIRING-GUIDE-V8.md (already
-  canonical there); X.BUS detail → docs/XBUS-PROTOCOL.md; Implementation
+  to point there); pins/UART detail → `docs/WIRING-GUIDE-V8.md` (already
+  canonical there); X.BUS detail → `docs/XBUS-PROTOCOL.md`; Implementation
   Status section
   DELETED (board is SSOT) — its one untracked TODO became issue #208
   (track-speed asymmetry; its "#54 pending" line was stale, #54 closed).
