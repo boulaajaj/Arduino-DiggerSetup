@@ -19,6 +19,14 @@ the Karpathy method (#53) plus the behavior-preservation covenant
   [firmware-realtime](../../.claude/rules/firmware-realtime.md) ·
   [dashboard](../../.claude/rules/dashboard.md) ·
   [workflow](../../.claude/rules/workflow.md)
+- **Project skills** (#127) — repeatable procedures the agent runs on
+  demand, one folder per skill under `.claude/skills/`: safety-review,
+  flash-and-log, new-module, field-tune, wiki-impact-review,
+  prepare-pull-request. Each skill owns its procedure; canonical docs and
+  this wiki only point to it.
+- **Reviewer subagents** (#127) — read-only specialist reviewers under
+  `.claude/agents/` (architecture, safety, tests, documentation) that
+  challenge a diff before it is marked ready — they report, never edit.
 - **Review bots** — `.coderabbit.yaml` (epic-scoped covenant steering) and
   [copilot-instructions](../../.github/copilot-instructions.md) mirror the
   same rules so bot reviews align with the program

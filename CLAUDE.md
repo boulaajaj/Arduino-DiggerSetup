@@ -336,6 +336,8 @@ docs/SAFETY.md                           — Safety-invariant registry: propulsi
 docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
 docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
 tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/ + per-domain, e.g. battery/)
+.claude/skills/                          — Project skills (#127): safety-review, flash-and-log, new-module, field-tune, wiki-impact-review, prepare-pull-request (one procedure per folder)
+.claude/agents/                          — Read-only reviewer subagents (#127): architecture, safety, tests, documentation
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
 live_plot.py                             — Real-time matplotlib monitor
 monitor.py                               — Simple serial monitor
@@ -403,28 +405,31 @@ bench/test sketches under `sketches/` are deliberately single-file tools.
 
 Every ESC parameter (XC-Link Bluetooth app, X.BUS register, programming
 card) must be evaluated against **what PWM commands the Arduino code
-actually sends** before recommending a value. Per-direction caps,
-asymmetric scalings, and brake limits can silently clip legitimate
-commands and break features.
+actually sends** before recommending a value — per-direction caps,
+asymmetric scalings, and brake limits can silently clip legitimate commands
+and break features (e.g. the GL10 default `Max Reverse Force = 50%`
+collapses the pivot differential). The full command-path checklist is owned
+by the **`safety-review` skill** (`.claude/skills/safety-review/SKILL.md`) —
+run it before ANY parameter suggestion. Per-parameter code-context analysis:
+`docs/GL10-PARAMETERS.md`.
 
-Concrete example: `curvatureDrive` in pivot mode commands one track
-forward and the other in reverse (e.g. left = +55%, right = -55%) at
-high gear. The GL10's factory default `Max Reverse Force = 50%` would
-deliver only -27.5% on the reverse track, collapsing the pivot
-differential. Setting it to 100% lets pivot work as designed.
+## Skills & Reviewer Agents (#127)
 
-Before any XC-Link parameter change:
+Repeatable procedures are packaged as project skills in `.claude/skills/`
+(each owns its procedure — this file only points):
 
-1. List every command path that drives each motor (RC throttle, RC
-   pivot/curvature, joystick equivalents, gear scaling, override mixer).
-2. Identify the per-direction min/max each path can produce.
-3. Verify the proposed setting does not clip, scale, or distort any of
-   those commands in a way that breaks an intended behavior.
-4. Call out cross-impacts explicitly with the specific feature affected
-   — never just hand over a value.
+- **safety-review** — command-path checklist + invariants walk before any
+  control-path change or ESC parameter suggestion
+- **flash-and-log** — upload procedure + the mandatory FIRMWARE-UPLOAD-LOG row
+- **new-module** — layer placement + conventions for new firmware files
+- **field-tune** — drive-feel constant changes (covenant-compliant)
+- **wiki-impact-review** — diff → affected docs/wiki walk + receipt
+- **prepare-pull-request** — issue-first lifecycle: draft PR, review rounds,
+  autonomous merge protocol
 
-See `docs/GL10-PARAMETERS.md` for the full GL10 parameter list with
-per-parameter code-context analysis.
+Read-only reviewer subagents live in `.claude/agents/`:
+`architecture-reviewer`, `safety-reviewer`, `tests-reviewer`,
+`documentation-reviewer` — run the relevant ones before marking a PR ready.
 
 ## Build & Upload
 
