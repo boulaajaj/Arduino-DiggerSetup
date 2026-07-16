@@ -47,13 +47,13 @@ Safety-critical: code errors can cause a 50lb machine with a child riding it to 
 - **Missing constrain() on servo output**: Every value written to `writeMicroseconds()` MUST be constrained to 1000-2000.
 - **Integer overflow**: Watch for arithmetic that could overflow 32-bit `int` (e.g. multiplying two large values like `micros()` differences, sensor readings). Flag multiplication without explicit casts. Extra care if code is ever ported to 8/16-bit AVR platforms.
 - **Float without f suffix**: Flag `1.0` (promotes to `double`). The Cortex-M4 FPU handles single-precision `float` in hardware, but `double` has no hardware support on the RA4M1 — double-precision operations fall back to software emulation and are significantly slower. Always use `1.0f` to keep arithmetic in the hardware FPU.
-- **Magic numbers**: Flag raw numeric constants outside `src/config/` per-domain headers (or the owning adapter for single-homed infrastructure tunables — X.BUS poll constants in `src/infrastructure/xc/`, Wi-Fi serving tunables in `src/infrastructure/network/`). All tunables must be named constants.
+- **Magic numbers**: In the production sketch (`sketches/dual_track_control/`), flag raw numeric constants outside `src/config/` per-domain headers (or the owning adapter for single-homed infrastructure tunables — X.BUS poll constants in `src/infrastructure/xc/`, Wi-Fi serving tunables in `src/infrastructure/network/`). All tunables must be named constants; single-file bench/test sketches keep theirs local.
 - **Missing failsafe**: Any new RC input path must have a timeout/failsafe that returns to neutral (SVC = 1500) when signal is lost.
 - **Global state mutation**: Flag functions that modify global state without clear documentation. Prefer passing state explicitly.
 
 ## Code Quality Checks (Flag as suggestions)
 - **Cyclomatic complexity**: Flag functions with more than 3 levels of nesting or more than 10 branches.
-- **Single Responsibility**: One file = one concept (150-line soft / 250-line hard limit, `.claude/rules/architecture.md`); layers under `src/` respect the dependency direction (`.ino` → `application/` only; `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` — full table in `.claude/rules/architecture.md`). Flag functions that mix input reading with output writing.
+- **Single Responsibility**: One file = one concept (150-line soft / 250-line hard limit, `.claude/rules/architecture.md`). In the production sketch (`sketches/dual_track_control/` — bench/test sketches are single-file tools), layers under `src/` respect the dependency direction (`.ino` → `application/` only; `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` — full table in `.claude/rules/architecture.md`). Flag functions that mix input reading with output writing.
 - **Inefficient patterns**: Flag nested loops, repeated calculations that could be cached, or string operations in the hot loop.
 - **Consistent naming**: Constants = UPPER_SNAKE_CASE, structs = PascalCase, functions = camelCase, pins = PIN_NAME.
 

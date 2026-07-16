@@ -355,6 +355,9 @@ monitor.py                               — Simple serial monitor
 
 ### Architecture
 
+These bullets describe the production sketch `sketches/dual_track_control/`;
+bench/test sketches under `sketches/` are deliberately single-file tools.
+
 - The `.ino` is a composition root ONLY (#189): it includes `src/application/FirmwareApp.h` and delegates `setup()`/`loop()`. Firmware code lives under `src/` in layers — `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` (dependency rules: `.claude/rules/architecture.md`). The former `[MODULE]` banners moved into `src/application/` files — search `[NAME]` still jumps there
 - Structs shared with the `.ino` go in `types.h` (solves the Arduino auto-prototype limitation); domain-owned types live with their domain (e.g. `DriveTypes.h`, `SafetyTypes.h`)
 - All tunable constants live in `src/config/` per-domain headers (#185), included by `src/application/FirmwareApp.h` (#189; the former `[CONFIG]` block's mutable state lives in `src/application/FirmwareState.h`) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `src/infrastructure/xc/`, Wi-Fi serving tunables in `src/infrastructure/network/`)
@@ -389,7 +392,7 @@ monitor.py                               — Simple serial monitor
 
 - Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
 - Use `constrain()` at all servo output boundaries
-- Comment each `[MODULE]` section banner (now living in `src/application/` files) with a brief description
+- Comment each `[MODULE]` section banner (a `dual_track_control` convention; the banners live in its `src/application/` files) with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 - **README describes behavior, never tunable numbers** (#124): current values
   live in `src/config/`. PROJECT-PLAN and OPERATOR-GUIDE are technical

@@ -12,8 +12,9 @@ paths:
 - **Float literals carry `f`** (`1.0f`, not `1.0`) — `double` is
   software-emulated on the RA4M1.
 - **All tunables live in `src/config/`** per-domain headers (#185), included
-  by `src/application/FirmwareApp.h` (#189). No magic numbers at point of
-  use. (Adapter-owned tunables stay single-homed with their machines in
+  by `src/application/FirmwareApp.h` (#189) — this applies to the production
+  sketch `sketches/dual_track_control/`; single-file bench/test sketches keep
+  their few constants local and named. No magic numbers at point of use. (Adapter-owned tunables stay single-homed with their machines in
   `src/infrastructure/` — X.BUS poll constants, Wi-Fi serving tunables.)
 - **Per-channel failsafe**: any new input path gets an independent timeout
   that returns to neutral (SVC = 1500).
