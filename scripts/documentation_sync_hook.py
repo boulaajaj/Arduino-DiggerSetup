@@ -43,7 +43,8 @@ PROMPT = (
     "docs/WIRING-GUIDE-V8.md for pin/UART changes, docs/XBUS-PROTOCOL.md "
     "for X.BUS changes, and "
     "OPERATOR-GUIDE.md for operator-facing behavior. Tunable values stay "
-    "canonical in src/config/ — docs describe behavior, never live numbers "
+    "canonical in sketches/dual_track_control/src/config/ — docs describe "
+    "behavior, never live numbers "
     "(#124). If everything already matches, say so briefly and move on."
 )
 
