@@ -134,18 +134,23 @@ Three layers, per issue #47:
 2. **`.claude/hooks/test-gate.sh`** — Claude Code `PreToolUse[Bash]` hook
    that makes layer 1 agent-proof: it refuses `--no-verify` outright and
    blocks commits in a clone where `core.hooksPath` was never activated.
-   Wire it in `.claude/settings.json`:
+   Wired in `.claude/settings.json` (#193):
 
    ```json
    "PreToolUse": [
      {
        "matcher": "Bash",
        "hooks": [
-         { "type": "command", "command": "bash .claude/hooks/test-gate.sh", "timeout": 30000 }
+         { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.sh\"", "timeout": 30000 }
        ]
      }
    ]
    ```
+
+   Registration itself is CI-checked: `scripts/check_hook_registration.py`
+   (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
+   not referenced by any registered hook, and functionally exercises the
+   gate (blocks `--no-verify`/`-n`, blocks inactive `core.hooksPath`).
 
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.
