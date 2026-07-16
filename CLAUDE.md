@@ -355,10 +355,10 @@ monitor.py                               — Simple serial monitor
 
 ### Architecture
 
-- All code in `dual_track_control.ino` is organized in `[MODULE]` sections — search `[NAME]` to jump
-- Structs go in `types.h` (solves Arduino auto-prototype limitation)
+- The `.ino` is a composition root ONLY (#189): it includes `src/application/FirmwareApp.h` and delegates `setup()`/`loop()`. Firmware code lives under `src/` in layers — `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` (dependency rules: `.claude/rules/architecture.md`). The former `[MODULE]` banners moved into `src/application/` files — search `[NAME]` still jumps there
+- Structs shared with the `.ino` go in `types.h` (solves the Arduino auto-prototype limitation); domain-owned types live with their domain (e.g. `DriveTypes.h`, `SafetyTypes.h`)
 - All tunable constants live in `src/config/` per-domain headers (#185; the `[CONFIG]` section is now their include point) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `infrastructure/xc/`, Wi-Fi serving tunables in `infrastructure/network/`)
-- When the sketch exceeds ~500 lines, split into `.h/.cpp` pairs (not multiple `.ino` files)
+- File policy: one file = one concept, 150-line soft / 250-line hard limit (`.claude/rules/architecture.md`) — split by responsibility, never into `Part2`-style fragments
 
 ### Testing (#47 — details in docs/TESTING.md)
 
@@ -389,7 +389,7 @@ monitor.py                               — Simple serial monitor
 
 - Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
 - Use `constrain()` at all servo output boundaries
-- Comment each `[MODULE]` section header with a brief description
+- Comment each `[MODULE]` section banner (now living in `src/application/` files) with a brief description
 - Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
 - **README describes behavior, never tunable numbers** (#124): current values
   live in `src/config/`. PROJECT-PLAN and OPERATOR-GUIDE are technical
