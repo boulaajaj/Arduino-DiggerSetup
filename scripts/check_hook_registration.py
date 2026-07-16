@@ -42,7 +42,7 @@ def gate_exit_code(command, working_dir):
     # leak into the temp-repo assertions (the gate reads effective config).
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
-    result = subprocess.run(["sh", TEST_GATE], input=payload,
+    result = subprocess.run(["bash", TEST_GATE], input=payload,
                             capture_output=True, text=True,
                             cwd=working_dir, env=environment)
     return result.returncode
@@ -66,12 +66,13 @@ def main():
     check("at least one hook script exists", bool(hook_scripts))
     for script in hook_scripts:
         check(f"{script} is registered in .claude/settings.json",
-              any(script in command for command in commands))
+              any(f".claude/hooks/{script}" in command
+                  for command in commands))
 
     # 2. Behavior — exercise the gate in a temp repo where core.hooksPath is
     #    controlled (exit 2 = blocked, exit 0 = allowed through).
-    if shutil.which("sh") is None or shutil.which("git") is None:
-        print("check-hook-registration: sh/git unavailable — "
+    if shutil.which("bash") is None or shutil.which("git") is None:
+        print("check-hook-registration: bash/git unavailable — "
               "functional checks skipped (registration checks still ran)")
     else:
         with tempfile.TemporaryDirectory() as temp_dir:
