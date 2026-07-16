@@ -5,6 +5,18 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-15 — Phase E: project skills + read-only reviewer subagents (#127)
+
+- Six project skills created under `.claude/skills/` (safety-review,
+  flash-and-log, new-module, field-tune, wiki-impact-review,
+  prepare-pull-request) — each skill OWNS its procedure; CLAUDE.md's ESC
+  section reduced to the iron rule + a pointer (dedup per #127 acceptance).
+- Four read-only reviewer subagents under `.claude/agents/` (architecture,
+  safety, tests, documentation) — report-only, no edit tools in practice;
+  run before marking a PR ready.
+- CLAUDE.md gained the Skills & Reviewer Agents index; agent-governance wiki
+  note updated in the same PR.
+
 ## 2026-07-15 — test-gate hook wired + external-review verification (#193)
 
 - `.claude/hooks/test-gate.sh` was dead code: `.claude/settings.json` had no
