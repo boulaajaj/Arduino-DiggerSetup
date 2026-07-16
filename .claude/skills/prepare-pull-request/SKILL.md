@@ -24,8 +24,9 @@ description: The full PR lifecycle procedure for this repo — use when starting
 
 ## 3. Review rounds (repeat until quiet)
 
-1. Mark ready; request Copilot (`gh api -X POST .../requested_reviewers`) and
-   comment `@coderabbitai review`.
+1. Mark ready; request Copilot —
+   `gh api -X POST repos/<owner>/<repo>/pulls/<PR>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`
+   — and comment `@coderabbitai review`.
 2. For each finding: VERIFY the claim against the code first (bots have been
    wrong — and right — here; never apply a behavior-changing suggestion, see
    `.claude/rules/behavior-preservation.md`).

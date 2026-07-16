@@ -12,8 +12,9 @@ Updated by session hooks — only technical content, no personal info.
   prepare-pull-request) — each skill OWNS its procedure; CLAUDE.md's ESC
   section reduced to the iron rule + a pointer (dedup per #127 acceptance).
 - Four read-only reviewer subagents under `.claude/agents/` (architecture,
-  safety, tests, documentation) — report-only, no edit tools in practice;
-  run before marking a PR ready.
+  safety, tests, documentation) — tool-restricted to Read/Grep/Glob
+  (enforceably read-only; the caller supplies the diff); run before marking
+  a PR ready.
 - CLAUDE.md gained the Skills & Reviewer Agents index; agent-governance wiki
   note updated in the same PR.
 

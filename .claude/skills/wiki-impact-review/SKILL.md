@@ -12,13 +12,13 @@ change-impact manifest of #199 lands, use this table + `docs/wiki/home.md`):
 
 | Changed area | Reconsider |
 | --- | --- |
-| `src/domain/drive/`, OperatorInput, MotorOutput | wiki control-pipeline notes, OPERATOR-GUIDE.md |
-| `src/domain/battery|thermal|safety/`, SafetyControl | wiki safety notes, docs/SAFETY.md |
-| `src/infrastructure/network/`, dashboard/ | wiki telemetry/dashboard notes |
-| `src/infrastructure/xc|radiolink/`, telemetry | wiki telemetry notes, docs/XBUS-PROTOCOL.md, WIRING-GUIDE |
-| `src/ports/`, layer moves, new files | wiki architecture notes, ARCHITECTURE-TARGET.md, CLAUDE.md file map |
-| `.claude/`, `.github/`, scripts/hooks | wiki agent-governance note, docs/TESTING.md |
-| `src/config/` value changes | OPERATOR-GUIDE.md + PROJECT-PLAN.md (numbers there must match) |
+| `src/domain/drive/`, OperatorInput, MotorOutput | wiki control-pipeline notes, `OPERATOR-GUIDE.md` |
+| `src/domain/battery/`, `src/domain/thermal/`, `src/domain/safety/`, SafetyControl | wiki safety notes, `docs/SAFETY.md` |
+| `src/infrastructure/network/`, `dashboard/` | wiki telemetry/dashboard notes |
+| `src/infrastructure/xc/`, `src/infrastructure/radiolink/`, `src/telemetry/` | wiki telemetry notes, `docs/XBUS-PROTOCOL.md`, `docs/WIRING-GUIDE-V8.md` |
+| `src/ports/`, layer moves, new files | wiki architecture notes, `docs/architecture/ARCHITECTURE-TARGET.md`, CLAUDE.md file map |
+| `.claude/`, `.github/`, `scripts/`, hooks | wiki agent-governance note, `docs/TESTING.md` |
+| `src/config/` value changes | `OPERATOR-GUIDE.md` + `PROJECT-PLAN.md` (numbers there must match) |
 
 ## 2. Verify, then update or attest
 
