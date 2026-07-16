@@ -8,7 +8,8 @@ description: Documentation-impact walk for a diff — use before finishing any P
 ## 1. Map the diff to knowledge pages
 
 For each changed area, open the pages that describe it (until the
-change-impact manifest of #199 lands, use this table + `docs/wiki/home.md`):
+change-impact manifest of #199 lands, use this table + `docs/wiki/home.md`).
+`src/...` entries below are relative to `sketches/dual_track_control/`:
 
 | Changed area | Reconsider |
 | --- | --- |

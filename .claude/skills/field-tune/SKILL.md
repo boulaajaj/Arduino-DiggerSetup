@@ -29,7 +29,9 @@ do not reintroduce Arduino-side filtering.
 2. Run the `safety-review` skill if the change touches caps, reverse,
    pivot, or any per-direction limit.
 3. Host suite: update the affected expectations (they are law — the diff
-   must show exactly which numbers moved), everything else stays green.
+   must show exactly which numbers moved), everything else stays green. The
+   PR body cites the authorizing issue and the operator's sign-off — the
+   evidence the tests-reviewer requires for any expectation change.
 4. Flash via the `flash-and-log` skill (each iteration gets its log row).
 5. Field-validate with the operator (Jason on RC, Malaki on joystick as
    relevant) — record what was felt, not just what was measured.

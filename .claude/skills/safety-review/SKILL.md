@@ -27,6 +27,9 @@ Agreement principle 1 (think before coding).
 
 - No blocking calls in the loop path: `delay()`, `pulseIn()`, unbounded `while`.
 - Every value reaching `writeMicroseconds()` passes `constrain()` (1000–2000 µs).
+- Non-finite handling: NaN/Inf/out-of-range inputs must still produce
+  constrained outputs — the invariant suite locks this (`docs/TESTING.md`);
+  check any new arithmetic on the output path against it.
 - Any NEW input path has its own timeout returning to neutral (SVC = 1500).
 - Float literals carry `f`; no raw tunables outside `src/config/` (production
   sketch) or the owning adapter.
