@@ -53,7 +53,7 @@ Safety-critical: code errors can cause a 50lb machine with a child riding it to 
 
 ## Code Quality Checks (Flag as suggestions)
 - **Cyclomatic complexity**: Flag functions with more than 3 levels of nesting or more than 10 branches.
-- **Single Responsibility**: One file = one concept (150-line soft / 250-line hard limit, `.claude/rules/architecture.md`); layers under `src/` respect the dependency direction (`.ino` → `application/` → `domain/`+`ports/`; `infrastructure/` implements `ports/`). Flag functions that mix input reading with output writing.
+- **Single Responsibility**: One file = one concept (150-line soft / 250-line hard limit, `.claude/rules/architecture.md`); layers under `src/` respect the dependency direction (`.ino` → `application/` only; `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` — full table in `.claude/rules/architecture.md`). Flag functions that mix input reading with output writing.
 - **Inefficient patterns**: Flag nested loops, repeated calculations that could be cached, or string operations in the hot loop.
 - **Consistent naming**: Constants = UPPER_SNAKE_CASE, structs = PascalCase, functions = camelCase, pins = PIN_NAME.
 
