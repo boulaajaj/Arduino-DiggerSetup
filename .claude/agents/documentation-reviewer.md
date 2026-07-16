@@ -17,7 +17,7 @@ Read/Grep/Glob. Check, using the mapping in the `wiki-impact-review` skill
   carry a documentation receipt in its body.
 - **Wiki hygiene**: notes stay links-only — no tunable values copied in;
   `python scripts/check_wiki.py` is green on the branch.
-- **Instruction surfaces agree with code**: CLAUDE.md file map lists
+- **Instruction surfaces agree with code**: `docs/architecture/FILE-MAP.md` lists
   new/moved/deleted files; `docs/TESTING.md`, `docs/SAFETY.md`,
   `OPERATOR-GUIDE.md` match observable behavior; numbers quoted in
   PROJECT-PLAN/OPERATOR-GUIDE match `src/config/`.

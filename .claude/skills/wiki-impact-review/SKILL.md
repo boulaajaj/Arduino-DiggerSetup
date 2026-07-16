@@ -17,7 +17,7 @@ change-impact manifest of #199 lands, use this table + `docs/wiki/home.md`).
 | `src/domain/battery/`, `src/domain/thermal/`, `src/domain/safety/`, SafetyControl | wiki safety notes, `docs/SAFETY.md` |
 | `src/infrastructure/network/`, `dashboard/` | wiki telemetry/dashboard notes |
 | `src/infrastructure/xc/`, `src/infrastructure/radiolink/`, `src/telemetry/` | wiki telemetry notes, `docs/XBUS-PROTOCOL.md`, `docs/WIRING-GUIDE-V8.md` |
-| `src/ports/`, layer moves, new files | wiki architecture notes, `docs/architecture/ARCHITECTURE-TARGET.md`, CLAUDE.md file map |
+| `src/ports/`, layer moves, new files | wiki architecture notes, `docs/architecture/ARCHITECTURE-TARGET.md`, `docs/architecture/FILE-MAP.md` |
 | `.claude/`, `.github/`, `scripts/`, hooks | wiki agent-governance note, `docs/TESTING.md` |
 | `src/config/` value changes | `OPERATOR-GUIDE.md` + `PROJECT-PLAN.md` (numbers there must match) |
 

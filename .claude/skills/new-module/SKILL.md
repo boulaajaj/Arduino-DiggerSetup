@@ -35,7 +35,7 @@ the boundary.
 
 - Host tests for the new concept under `tests/` (domain logic must be
   host-testable by construction — no hardware includes).
-- Wiki + doc sync: CLAUDE.md file map, affected `docs/wiki/` notes,
+- Wiki + doc sync: `docs/architecture/FILE-MAP.md`, affected `docs/wiki/` notes,
   `docs/architecture/ARCHITECTURE-TARGET.md` if the layer map changed.
 - Green gate: host suite + local `arduino-cli` compile + CI checks
   (`architecture-fitness` will mechanically verify the layer rules).
