@@ -101,7 +101,8 @@ USB-C debug/upload. X.BUS frames, registers, and scaling:
 
 `sketches/dual_track_control/dual_track_control.ino` is a composition root
 ONLY (#189) — it includes `src/application/FirmwareApp.h` and delegates
-`setup()`/`loop()`. Layers under `src/` (rules:
+`setup()`/`loop()`. **Every `src/...` path in this file is relative to
+`sketches/dual_track_control/`.** Layers under `src/` (rules:
 `.claude/rules/architecture.md`; spec:
 `docs/architecture/ARCHITECTURE-TARGET.md`):
 
