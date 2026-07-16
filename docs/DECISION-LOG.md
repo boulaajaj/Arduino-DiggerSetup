@@ -5,6 +5,22 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-15 — test-gate hook wired + external-review verification (#193)
+
+- `.claude/hooks/test-gate.sh` was dead code: `.claude/settings.json` had no
+  `PreToolUse` entry, so the #47 agent-proof layer never executed (found by
+  external repo review of `main@ea085d0`; TESTING.md had documented the wiring
+  as if present). Registered as `PreToolUse[Bash]` and CI-guarded: new
+  `scripts/check_hook_registration.py` (in `hooks-selftest.yml`) fails when a
+  script in `.claude/hooks/` is unregistered, and functionally exercises the
+  gate (blocks `--no-verify`/`-n`, blocks inactive `core.hooksPath`) — 7/7.
+- Same review verified via API: `main` branch protection requires 1 approval
+  but ZERO required status checks — all 9 CI workflows advisory (→ #196;
+  already flagged 2026-07-13 as pending operator work). Wiki lint confirmed
+  structural-only (links/orphans/reachability/tunable-drift) — semantic sync
+  tracked in Phase F milestone (#199, #200, #202).
+- Review follow-ups filed as #193–#203; Phase F milestone created.
+
 ## 2026-07-13 — Rename sweep: production sketch + bench abbreviations (#118)
 
 - `sketches/rc_test/` → `sketches/dual_track_control/` — the production
