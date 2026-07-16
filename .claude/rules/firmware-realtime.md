@@ -14,7 +14,7 @@ paths:
 - **All tunables live in `src/config/`** per-domain headers (#185); the
   `[CONFIG]` section is only their include point. No magic numbers at point
   of use. (Adapter-owned tunables stay single-homed with their machines in
-  `infrastructure/` — X.BUS poll constants, Wi-Fi serving tunables.)
+  `src/infrastructure/` — X.BUS poll constants, Wi-Fi serving tunables.)
 - **Per-channel failsafe**: any new input path gets an independent timeout
   that returns to neutral (SVC = 1500).
 - **Watchdog refresh stays exactly once per loop pass**, after the control
