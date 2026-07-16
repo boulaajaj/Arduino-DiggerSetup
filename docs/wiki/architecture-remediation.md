@@ -6,7 +6,8 @@ structure — **without changing one observable behavior**
 drive exactly as before.
 
 - **Target architecture** —
-  [ARCHITECTURE-TARGET](../architecture/ARCHITECTURE-TARGET.md): layers
+  [ARCHITECTURE-TARGET](../architecture/ARCHITECTURE-TARGET.md) (annotated
+  inventory: [FILE-MAP](../architecture/FILE-MAP.md), #197): layers
   (`application` / `domain` / `ports` / `infrastructure`), dependency rules,
   migration order
 - **Founding ADR** —

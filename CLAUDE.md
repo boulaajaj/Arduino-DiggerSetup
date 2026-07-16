@@ -18,388 +18,147 @@ sits above all four: during epic #116, organization changes NOTHING observable
 1. **Think before coding — never guess on safety-relevant ambiguity.**
    Ambiguity on pin assignments, ESC parameters, safety caps/thresholds, or
    timing → stop and ask. Before any XC-Link / ESC parameter suggestion, run
-   the command-path checklist (see "ESC / motor configuration changes" below)
-   — that checklist IS this principle for our domain. State assumptions
-   explicitly; push back on needless complexity instead of silently building it.
+   the **`safety-review` skill** — its command-path checklist IS this
+   principle for our domain. State assumptions explicitly; push back on
+   needless complexity instead of silently building it.
 2. **Simplicity first.** Senior-engineer default: no speculative features, no
    abstraction for one caller, 100 lines over 1000. The file policy (150
    soft / 250 hard, `.claude/rules/architecture.md`) is the mechanical
    backstop, not the goal.
 3. **Surgical changes.** Touch only what the task needs: no reformatting, no
    renaming, no drive-by "improvements" to code the diff didn't have to
-   visit. Naming fixes happen when a file is extracted/moved (per
-   `.claude/rules/naming.md`), never as ride-alongs. A reviewer should be
-   able to read the diff and see exactly one intent.
+   visit (naming fixes only when a file is extracted/moved, per
+   `.claude/rules/naming.md`). A reviewer should read the diff and see
+   exactly one intent.
 4. **Goal-driven execution — hand the agent the goal + the gate, not steps.**
-   The standing, verifiable success criteria for any firmware-touching change:
+   The standing success criteria for any firmware-touching change:
    - host suite green: `wsl -e make -C tests run` (characterization +
-     invariants — compiles the REAL `dual_track_control.ino`; also CI `unit-tests.yml`)
+     invariants — compiles the REAL `dual_track_control.ino`)
    - compiles clean locally:
      `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control`
-   - CI green: `arduino-ci.yml`, `lint.yml`, `static-analysis.yml`,
-     `code-quality.yml`, `structure-check.yml`, `unit-tests.yml`,
-     `architecture-fitness.yml` (#129 — layer/size/naming rules on `src/`
-     trees), `wiki-lint.yml` (#145 — docs/wiki graph health),
-     `hooks-selftest.yml` (#156/#193 — documentation-sync hook health +
-     hook registration/test-gate check)
+   - CI green: `arduino-ci`, `lint`, `static-analysis`, `code-quality`,
+     `structure-check`, `unit-tests`, `architecture-fitness` (#129),
+     `wiki-lint` (#145), `hooks-selftest` (#156/#193)
    - no blocking calls in `loop()` (`delay()`, `pulseIn()`, unbounded `while`)
    - zero behavior change unless the task's own issue explicitly authorizes it
 
-   An agent that satisfies the gate is done; an agent that can't must say why
-   — see `docs/AGENT-EXAMPLES.md` for good/bad task-framing pairs.
+   An agent that satisfies the gate is done; one that can't must say why —
+   worked examples: `docs/AGENT-EXAMPLES.md`.
 
-## Project Board — Single Source of Truth
+## Workflow — Board, PRs, Flashes
 
-[Project #1](https://github.com/users/boulaajaj/projects/1) is the **single
-source of truth** for what is pending, in progress, and done. Anything being
-worked on **must** show as **In Progress** on the board.
-
-**The rule: starting work = open a draft PR, and every PR gets its own issue.**
-As soon as work begins, open a *draft* PR whose body links its issue with a
-`Closes #N` line. One PR ↔ one issue — never a PR with no issue (it won't appear
-on the board, by design). A draft PR is the earliest GitHub-visible signal, and
-the board automation keys off it:
-
-- `.github/workflows/board-pr-in-review.yml` → when a PR links an **In Progress**
-  issue, the PR card is added and set to **In Review**. A PR with no linked
-  In-Progress issue is left off the board entirely.
-- `.github/workflows/board-merged-pr-done.yml` → when a PR already on the board is
-  **merged**, its card **and its linked closing issues** move to **Done** (only
-  cards already on the board; it never adds a stray card).
-- Built-in Project workflow (enabled in the UI) moves **closed issues** to
-  **Done**.
-
-> **Automation limits (so expectations are right):** the In-Review step only
-> fires when the linked closing issue is already **In Progress**, and it is
-> skipped on PRs that don't receive the `PROJECTS_TOKEN` secret (e.g. fork PRs).
-> In those cases set the board status by hand. Setting the issue itself to
-> In Progress is still manual today.
-
-So: **never leave active work as a bare branch with no PR** — it is invisible to
-the board. One commit + a draft PR is enough to make it show. Agents must follow
-this without being asked.
-
-## Firmware Flash — Always Log It
-
-**Every** firmware upload to the digger (production *or* bench/test) gets a row
-appended to `docs/FIRMWARE-UPLOAD-LOG.md`, immediately after the flash — no
-exceptions. The table columns are **Date · Version · SHA · Branch · Board/Port ·
-Notes**; record the **PR #** inside the **Branch** cell (e.g.
-`agent/C-Builder/foo (PR #93)`), and put **what changed** + **what to test** in
-**Notes**. **Version** is the sketch version string carried in the build (e.g.
-`dual_track_control V7.35`; rows before the 2026-07-13 rename carry the
-sketch's former name), not a git tag. This is the device's flight log; an
-unlogged flash is treated as not done.
+- [Project #1](https://github.com/users/boulaajaj/projects/1) is the **single
+  source of truth**: anything being worked on shows as **In Progress** there.
+- **Issue first, always; starting work = draft PR** with `Closes #N` — one
+  PR ↔ one issue, one open PR at a time. Never leave active work as a bare
+  branch (invisible to the board). Board automation moves linked PRs to
+  In Review and merged work to Done; setting an issue In Progress is manual.
+- The full lifecycle (branch naming, review-round protocol, autonomous merge
+  protocol) is the **`prepare-pull-request` skill**; standing rules:
+  `.claude/rules/workflow.md`.
+- **Every firmware flash gets a row in `docs/FIRMWARE-UPLOAD-LOG.md`
+  immediately** — an unlogged flash is treated as not done. Procedure:
+  **`flash-and-log` skill**.
 
 ## People
 
-- **Jason** — RC transmitter operator (safety supervisor)
-- **Malaki** — Rider/operator using the joystick
-- **boulaajaj** — GitHub owner / builder
+**Jason** — RC operator (safety supervisor) · **Malaki** — rider on the
+joystick · **boulaajaj** — GitHub owner / builder
 
 ## Hardware Stack
 
-| Component | Model | Key Detail |
-| --- | --- | --- |
-| Controller | Arduino **UNO R4 WiFi** | Renesas RA4M1 (48MHz, 14-bit ADC, 5V tolerant) + ESP32-S3 Wi-Fi coprocessor |
-| ESC (x2) | XC GL10 80A FOC | Standard 50 Hz servo PWM input, internal FOC compensation, IP67 |
-| Motor (x2) | XC GL540L | Sensored brushless, paired with GL10 |
-| Battery (x2) | OVONIC 3S LiPo 15000mAh 130C | 11.1V, EC5 connector |
-| RC System | Radiolink RC6GS V3 + R7FG | 6CH gun-style (trigger = throttle, wheel = steering); the Arduino does the tank mixing |
-| Joystick | Genie 101174GT dual-axis | 5V, 0-5V analog, hall-effect (direct to ADC — 5V tolerant) |
-
-**Hardware history:** previously ran XC sensored ESCs/motors with an
-Arduino-side dual-loop PID. Swapped to GL10 + GL540L on 2026-04-25 — the FOC ESC
-handles motor acceleration compensation and smoothness internally, so the
-Arduino's job shrank to input mixing, override switching, and gear caps. The
-earlier dual-loop PID / hall-sensor-tap control plans are retired (see
-"Control strategy"). Then migrated Nano R4 → UNO R4 WiFi for onboard Wi-Fi
-telemetry. V7.6 removed the reverse-direction beeper; audible alerts returned in
-V7.11–V7.12 as a battery + inactivity alarm on D8 (issue #51 / #68).
-
-## Control strategy (PWM out, FOC inside the ESC)
-
-**The Arduino generates the throttle/reverse command and sends it as servo PWM.
-The GL10's internal FOC executes it.**
-
-| Who | Job |
+| Component | Model |
 | --- | --- |
-| Arduino (RA4M1) | Read RC + joystick → expo/deadband → curvatureDrive mix → override → gear cap → output servo PWM (1000–2000 µs) per track on D9/D10. |
-| GL10 ESC (FOC) | Convert that PWM command into smooth motor drive (phase currents, accel ramp, drag) — internal to the ESC. |
+| Controller | Arduino UNO R4 WiFi (RA4M1 48MHz, 14-bit ADC, 5V tolerant; ESP32-S3 Wi-Fi coprocessor) |
+| ESC ×2 | XC GL10 80A FOC (50 Hz servo PWM in, internal FOC) |
+| Motor ×2 | XC GL540L sensored brushless |
+| Battery ×2 | OVONIC 3S LiPo 11.1V 15000mAh (EC5) |
+| RC | Radiolink RC6GS V3 + R7FG (gun-style; Arduino does the tank mixing) |
+| Joystick | Genie 101174GT dual-axis hall-effect, 0–5V analog |
 
-- **Open-loop command** — the Arduino does NOT read RPM and correct the output.
-  Stick → PWM → ESC executes. No Arduino-side PID / feedforward / inertia.
-- **Telemetry is monitoring-only** — X.BUS 0x10 is read-only for the dashboard,
-  never fed back into throttle. No path from Wi-Fi to motor output (permanent).
+## Control Strategy (PWM out, FOC inside the ESC)
 
-## Pin Assignments (UNO R4 WiFi)
+- Arduino: read RC + joystick → expo/deadband → curvatureDrive mix →
+  override → gear cap → servo PWM (1000–2000 µs) per track on D9/D10.
+  The GL10's internal FOC owns command smoothing (no Arduino-side filtering
+  — V7.2 removed it; smoothness is the top priority, `docs/MISSION.md`).
+- **Open-loop, permanent**: no RPM feedback, no PID.
+- **Telemetry is monitoring-only, permanent**: X.BUS func 0x10 (read
+  register — never 0x50, which would seize control authority) polled
+  read-only on Serial1; no path from Wi-Fi or telemetry to motor output.
+- **Never `SoftwareSerial` for telemetry** — hardware UARTs only.
 
-```text
-A0  <- Joystick Y axis (Throttle)          [14-bit ADC, 0-5V direct (5V tolerant)]
-A1  <- Joystick X axis (Steering)          [14-bit ADC, 0-5V direct (5V tolerant)]
-D11    (sbusUart TX on SCI0 — unused; S.BUS is RX-only)
-D12 <- S.BUS RX (sbusUart on SCI0 via NPN inverter) [All RC channels at 100k 8E2]
-D8     (reserved — future battery-aware beeper)
-D9  -> Left Track ESC                       [Servo PWM, 50 Hz, 1000-2000 us]
-D10 -> Right Track ESC                      [Servo PWM]
-D0/D1 -> Serial1 (X.BUS half-duplex telemetry bus to both ESCs, 115200 8N1)
-USB-C -> USB CDC Serial for debug + firmware upload
-5V  -> RC Receiver + Joystick VCC + S.BUS inverter
-VIN <- Battery / BEC (7-24V)
-GND -> All components (common ground)
-```
+## Pins, Wiring, Protocols
 
-### UART Architecture (UNO R4 WiFi)
-
-The UNO R4 WiFi exposes Serial1 (SCI2 on D0/D1) plus a second UART that can be
-instantiated on D11 (TX) / D12 (RX) via the RA4M1's SCI0 channel. The S.BUS
-adapter (`src/infrastructure/radiolink/SbusReceiverAdapter.cpp`, #176)
-declares it under a unique name (NOT `Serial2`, which collides with the core's
-pre-declared `_UART2_`, and is also reserved for the ESP32-S3 Wi-Fi bridge):
-
-```cpp
-static const uint8_t PIN_SBUS_TX = 11;  // SCI0 TX (D11) — unused, S.BUS is RX-only
-static const uint8_t PIN_SBUS_RX = 12;  // SCI0 RX (D12) — inverted S.BUS in
-UART sbusUart(PIN_SBUS_TX, PIN_SBUS_RX);
-bfs::SbusRx sbusRx(&sbusUart);
-```
-
-| Port | Hardware | Pin | Function |
-| --- | --- | --- | --- |
-| Serial | USB CDC | (USB-C) | Debug telemetry / firmware upload |
-| Serial1 | UART (SCI2) | D0 (RX) / D1 (TX) | X.BUS telemetry bus to both ESCs (115200 8N1) |
-| sbusUart | UART (SCI0) | D11 (TX) / D12 (RX) | S.BUS RX from R7FG via inverter (100000 8E2) |
-
-> **Note:** on the UNO R4 WiFi, SCI0 is on D11/D12 (the Nano R4 used A4/A5).
-> S.BUS is electrically inverted at idle; an NPN-based inverter flips it so
-> `sbusUart` sees standard UART polarity (idle HIGH). Full wiring:
-> `docs/WIRING-GUIDE-V8.md`.
-
-### Telemetry (live)
-
-`src/ports/TelemetrySource.h` defines `EscTelem { voltage, busCurrentA, rpmHz,
-motorTempC, escTempC, lastGoodMs, valid }` (re-exported via `types.h`, #178).
-The X.BUS poller lives in `src/infrastructure/xc/XbusTelemetryAdapter.cpp`
-behind that port; the sketch's `[TELEMETRY]` shim owns the `telem[]` array and
-polls via `telemetrySourceUpdate()` on Serial1 (D0/D1):
-
-- **X.BUS Read Register (func 0x10), NOT Throttle (0x50).** 0x10 is
-  point-to-point service control — it never puts the ESC into BUS_MODE, so PWM
-  control authority is fully preserved. 0x50 would fight our PWM.
-- **Registers:** 0x0C VbatBus (×0.1 V), 0x0D IbusBus (×0.1 A), 0x02 motSpeed
-  (electrical Hz), 0x20 mos-Tem, 0x22 mot-Tem (raw − 40 °C).
-- **Cadence:** non-blocking, alternating ESCs (~30-40 Hz/ESC underlying), EMA on
-  V/I/temps, instantaneous RPM, 5 s per-ESC freshness watchdog. Both ESCs
-  confirmed reporting (2026-06-13).
-- **Standing rule:** never `SoftwareSerial` for telemetry — hardware UARTs only.
+Canonical reference: `docs/WIRING-GUIDE-V8.md` (pin map, UART table, S.BUS
+inverter, interface board). Quick summary: A0/A1 joystick (14-bit ADC),
+D12 S.BUS RX via NPN inverter (`sbusUart` on SCI0, D11 TX unused), D9/D10
+track PWM, D0/D1 Serial1 X.BUS telemetry to both ESCs, D8 active piezo,
+USB-C debug/upload. X.BUS frames, registers, and scaling:
+`docs/XBUS-PROTOCOL.md`.
 
 ## Architecture Summary
 
-Sketch: `sketches/dual_track_control/dual_track_control.ino` (GL10 FOC + telemetry + Wi-Fi + alarms + battery/thermal safety) + `types.h` + `web_page.h`. The version
-string is defined ONCE — `FIRMWARE_VERSION` in `src/config/BuildInfo.h` (#124, #185).
-No doc carries a live copy; dated records (DECISION-LOG,
-FIRMWARE-UPLOAD-LOG) cite versions historically.
+`sketches/dual_track_control/dual_track_control.ino` is a composition root
+ONLY (#189) — it includes `src/application/FirmwareApp.h` and delegates
+`setup()`/`loop()`. Layers under `src/` (rules:
+`.claude/rules/architecture.md`; spec:
+`docs/architecture/ARCHITECTURE-TARGET.md`):
 
-Signal pipeline:
+- `domain/` pure logic (battery, thermal, operator_input, drive, safety)
+- `application/` orchestration + state (the former `[MODULE]` sections;
+  banners moved with the code — search `[NAME]` to jump)
+- `ports/` hardware contracts · `infrastructure/` the ONLY layer with
+  hardware includes · `telemetry/` + `alerts/` observers and alert policy
+- `config/` tunables per domain — values are law; `FIRMWARE_VERSION` SSOT
+  in `src/config/BuildInfo.h` (#124); no doc carries a live copy
 
-1. RC inputs: S.BUS on `sbusUart` (D12 RX via NPN inverter), all 16 channels
-2. Joystick via 14-bit ADC (A0, A1, cached at 100 Hz) → deadband → expo curve (separate throttle/steering coefficients)
-3. Both inputs → curvatureDrive() (symmetric add + desaturate, smoothstep blend into pivot mode):
-   - At speed: inner track slows, outer track speeds up by the same delta — average wheel speed = xSpeed
-   - At standstill: pivot mode counter-rotates the tracks, capped at PIVOT_SPEED_CAP (60%)
-   - Feeding throttle mid-pivot: the pivot branch's throttle term is tapered by
-     steering (`PIVOT_THROTTLE_TAPER` 0.70, #114) so the machine arcs out of the
-     pivot (outer holds, inner eases through zero) instead of surging forward
-4. Override mode select (RC CH5: Mode 1=RC only, Mode 2=RC overrides joy, Mode 3=50/50 blend)
-5. Gear cap (RC CH4): Eco 65% / Normal 80% / Boost 100% — caps the AVERAGE
-   track speed (folded into curvatureDrive), so in a turn the outer track uses
-   the gear→rail headroom and Eco/Normal hold speed through corners; Boost is at
-   the rail. In Eco the pivot cap gets a boost so the operator keeps usable
-   maneuvering authority. **Reverse is capped per gear via `reverseCap()`: 55%
-   Eco/Normal, 65% Boost (#113)** — a TRUE percentage only because the GL10s were
-   recalibrated to the full 1000/1500/2000 µs range on 2026-07-03 (they had been
-   calibrated while reverse was capped at 65%, so they mislearned 65% as 100%
-   reverse; see DECISION-LOG). Joystick throttle carries a gain (clamped to the
-   gear cap).
-6. Servo PWM out to GL10 ESCs on D9/D10 (50 Hz, 1000-2000 us). The FOC ESC owns command smoothing internally.
-7. X.BUS 0x10 telemetry polled read-only on Serial1; EMA-smoothed and streamed to the Wi-Fi dashboard (monitoring only).
+Signal pipeline: S.BUS (16ch) + joystick ADC → deadband/expo →
+curvatureDrive (symmetric add + desaturate, smoothstep pivot blend, pivot
+cap, throttle taper #114) → override mode (CH5: RC only / RC overrides /
+50-50) → gear cap (CH4 Eco/Normal/Boost — caps AVERAGE track speed, turn
+headroom by design; per-gear reverse cap #113) → servo PWM out. Loop
+~20 kHz non-blocking, `micros()`-based; per-input-path failsafe (S.BUS is
+ONE path — one frame-freshness timeout covers all 16 channels).
 
-The former .ino [MODULE] sections now live in src/application/ files (#189):
-[CONFIG]→config/ + FirmwareState, [DRIVE]/[RC]/[GEAR]/[JOYSTICK]/[MIXER]→OperatorInput,
-[OUTPUT]→MotorOutput, [SAFETY]→SafetyControl, [TELEMETRY]/[BEEPER]/[ALERT]→AlertControl,
-[WIFI]/[DEBUG]→Monitoring, setup()/loop()→FirmwareApp. The section banners moved with the code.
+Full annotated inventory: **`docs/architecture/FILE-MAP.md`**.
 
-Loop rate: ~20,000 Hz (non-blocking), micros()-based timing.
+## Dashboard & Alerts
 
-## Wi-Fi telemetry dashboard
-
-- UNO R4 WiFi AP `Digger-Telemetry` (WPA2) at `192.168.4.1`. The dashboard is
-  embedded in flash (`web_page.h`, served at `/`) and streams telemetry over
-  Server-Sent Events (`/events`) at ~5 Hz (`SSE_INTERVAL_MS = 200`); `/data` one-shot JSON kept for debug.
-- **Monitoring only — no control input over Wi-Fi, ever** (safety; permanent
-  decision). The dashboard source is `dashboard/index.html`; `web_page.h` is
-  generated from it (`python scripts/generate_web_page.py`, CI-enforced, #120).
-
-## Audible Alerts — Implemented (V7.11–V7.12, active piezo on D8)
-
-The V7.6-removed reverse beeper returned as a battery + inactivity alarm system.
-An active piezo on **D8** is driven non-blocking by `[BEEPER]` / `[ALERT]`; the
-horn ORs over one-shot patterns, which OR over repeating alarms. The original
-percentage-based plan was implemented as a simpler **voltage** threshold:
-
-| Event | Pattern | Trigger |
-| --- | --- | --- |
-| Wi-Fi ready | beep-beep (once at boot) | AP up |
-| Horn | continuous tone (held) | RC CH7 SWD button (`HORN_ON_RAW`) |
-| Inactivity ("unplug me") | one long beep / 2 s | RC off > 60 s (`INACT_RC_OFF_MS`) |
-| Low battery | three fast chirps / ~1.2 s, **latched** | worse pack EMA < 10.5 V (`LOWV_THRESH_V`), debounced 3 s, suppressed first 60 s |
-
-The alarms themselves are **sound-only** — motor-affecting protection lives in
-the separate `[SAFETY]` staged ladder (#65, shipped): Eco lock at 10.8 V and a
-latched hard cutoff at 10.0 V, with the alarm chirping along with the cut so a
-cutoff is never silent. See OPERATOR-GUIDE.md for the operator-facing beep
-table.
+- Wi-Fi AP `Digger-Telemetry` at `192.168.4.1`, SSE ~5 Hz — **monitoring
+  only, permanent**. Source of truth `dashboard/index.html`; `web_page.h` is
+  GENERATED (`scripts/generate_web_page.py`, CI-enforced #120) — never
+  hand-edit.
+- Active piezo on D8 (`src/alerts/`): ready beep, horn, inactivity alarm,
+  latched low-battery chirps — sound-only. Motor-affecting protection is the
+  separate `[SAFETY]` staged ladder (#65). Beep table: `OPERATOR-GUIDE.md`;
+  thresholds: `src/config/`.
 
 ## Key Design Decisions
 
-### GL10 FOC Replaces Custom PID Loops (DECIDED 2026-04-25)
-
-The previous control plan layered current-feedforward + RPM-feedback PID on top
-of the older sensored ESC. With the GL10's internal FOC, that whole stack moves
-into the ESC. Arduino code keeps:
-
-- Input shaping (expo, deadband, curvatureDrive)
-- Mixing (override switch)
-- Gear caps (Eco / Normal / Boost via RC CH4 — average-speed cap with turn headroom)
-
-V7.2 removed the Arduino-side inertia filter (`applyInertia` / `TAU_*`): the
-GL10's own Acceleration + Drag Force settings own command smoothing end-to-end,
-and the Arduino-side filter was double-smoothing the stream (operator felt
-"vehicle keeps coasting after stick release").
-
-## Implementation Status
-
-- [x] V5.0 sketch: curvatureDrive, S.BUS, expo, soft limits
-- [x] GL10 + GL540L hardware swap (2026-04-25)
-- [x] V7.0–V7.6: S.BUS on `sbusUart`, GL10 PWM control, tank curvature, gear spread, beeper removed
-- [x] Migrated Nano R4 → UNO R4 WiFi (S.BUS on D11/D12, Serial1 free for X.BUS)
-- [x] Soldered interface board (X.BUS merge + S.BUS inverter)
-- [x] V7.7: X.BUS 0x10 telemetry integrated — both ESCs (V / I / RPM / temps)
-- [x] V7.8: Wi-Fi telemetry dashboard (SSE, monitoring-only)
-- [x] V7.9–V7.10: bounded modem timeout, coalesced SSE, AP ch11, page caching (#54)
-- [x] V7.11–V7.12: beeper/horn + battery & inactivity alarms on D8 (#51, #68)
-- [x] V7.13: loop watchdog + incremental Wi-Fi serving (#69)
-- [x] V7.14: smooth pivot↔drive blend + Eco/Normal turn headroom + gear step-up + joystick gain (#72)
-- [x] Field test at reduced power
-- [x] Host characterization suite + commit test gate (#47 — epic #116 Phase B)
-- [x] Safety invariants + fault-injection suite, docs/SAFETY.md registry (#131 — epic #116 Phase B)
-- [x] Karpathy method + behavior-preservation covenant on every agent surface (#53)
-- [ ] Wi-Fi serving latency mitigation (issue #54 — hardware-gated)
-- [ ] Track-speed asymmetry investigation — per-ESC throttle calibration
-- [x] Staged low-battery protection: Eco lock 10.8 V + latched motor cutoff 10.0 V (#65)
-- [ ] Current-sensor wiring/calibration on A2/A3 (issue #5)
-
-## File Map
-
-```text
-PROJECT-PLAN.md                          — Full technical specification
-OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
-sketches/dual_track_control/dual_track_control.ino             — COMPOSITION ROOT ONLY (#189): includes src/application/FirmwareApp.h and delegates setup()/loop(); the firmware lives under src/
-sketches/dual_track_control/types.h                 — Shared structs (JoystickState, ...; EscTelem re-exported from ports/TelemetrySource.h)
-sketches/dual_track_control/src/domain/battery/     — Extracted domain (#117): BatteryTypes.h + VoltagePlausibility.h/.cpp + BatteryLadder.h/.cpp (pure logic, host-testable)
-sketches/dual_track_control/src/domain/thermal/     — Extracted domain (#117): ThermalTypes.h + ThermalHysteresis.h/.cpp + ThermalDerating.h/.cpp (pure logic, host-testable)
-sketches/dual_track_control/src/domain/operator_input/ — Extracted domain (#117): ExpoCurve.h/.cpp + DeadbandPolicy.h/.cpp (pure input shaping, host-testable)
-sketches/dual_track_control/src/domain/drive/       — Extracted domain (#117): DriveTypes.h + CurvatureDrive.h/.cpp + GearPolicy.h/.cpp + CommandMixer.h/.cpp (curvature mix, gear policy, RC/joystick mixer)
-sketches/dual_track_control/src/domain/safety/      — Extracted domain (#117): SafetyTypes.h + SafetySupervisor.h/.cpp + OutputGate.h/.cpp (drive allow/deny + FailsafeReason; ACTIVE/HOLD/CUT gate)
-sketches/dual_track_control/src/application/        — The application layer (#189): FirmwareApp.h/.cpp (composition-root marker + the verbatim setup/loop control cycle) + FirmwareState + OperatorInput + MotorOutput + SafetyControl + AlertControl + Monitoring (module shims moved from the .ino) + SystemSnapshot.h (#132) + RangeMath.h (#187)
-sketches/dual_track_control/src/telemetry/          — Extracted observer layer (#117): TelemetryScaling.h (×10 wire encode, header-only; register decode moved to infrastructure/xc/, #178) + JsonEncoder (dashboard JSON frame) + CsvEncoder (debug CSV line) — both read only the SystemSnapshot (#132)
-sketches/dual_track_control/src/alerts/             — Alert policy + players (#183): AlertTypes.h + AlertPolicy (priority ladder, low-V latch, inactivity) + PatternPlayer (one-shot + repeating) — pure logic; the piezo stays behind ports/AlertOutputPort.h
-sketches/dual_track_control/src/config/             — Tunables per domain (#185): BuildInfo.h (FIRMWARE_VERSION SSOT) + Pins.h + Input/Drive/Battery/Thermal/Alert/Telemetry/Wifi/SafetyConfig.h — values are law, included by the .ino (adapter-owned tunables stay single-homed in infrastructure/)
-sketches/dual_track_control/src/ports/              — Hardware contracts as link-time seams (#130): EscOutputPort.h + JoystickPort.h + AlertOutputPort.h + RcInputPort.h (RcFrame) + TelemetrySource.h (EscTelem) + DashboardServicePort.h + TelemetryFrameSource.h (reverse seam: app encodes, network ships bytes) + ClockPort.h + WatchdogPort.h + DebugConsolePort.h (#187 — the last hardware seams)
-sketches/dual_track_control/src/infrastructure/     — The ONLY layer with hardware includes (#130): arduino/PwmEscAdapter.cpp (owns the Servos) + arduino/AdcJoystickAdapter.cpp (ADC settle + resolution) + arduino/PiezoAdapter.cpp + arduino/ArduinoClock.cpp + arduino/WatchdogAdapter.cpp + arduino/SerialConsoleAdapter.cpp (#187) + radiolink/SbusReceiverAdapter.cpp (owns sbusUart + the S.BUS parser) + xc/XbusTelemetryAdapter.h/.cpp (X.BUS 0x10 poller + register decode) + network/ (WifiService + DashboardServer + SseStream — the #69/#54/#77 serving machine + its tunables, #181)
-sketches/dual_track_control/arduino_secrets.h.example — Wi-Fi credential template (#125); copy to arduino_secrets.h (gitignored)
-sketches/dual_track_control/web_page.h              — GENERATED from dashboard/index.html (scripts/generate_web_page.py) — never hand-edit
-sketches/telemetry_check/telemetry_check.ino     — Read-only X.BUS telemetry bench tool (0x50 framing)
-sketches/sbus_d12_test/sbus_d12_test.ino — S.BUS-on-D12 bring-up test
-dashboard/index.html                     — Wi-Fi dashboard SOURCE (single source of truth; web_page.h generated from it, #120)
-docs/WIRING-GUIDE-V8.md                  — Canonical hardware wiring reference (UNO R4 WiFi)
-docs/INTERFACE-BOARD-PERFBOARD.md        — Soldered interface board build
-docs/GL10-Manual.pdf                     — XC-ESC official user manual (image-based, 3 pages)
-docs/GL10-PARAMETERS.md                  — GL10 parameter reference + code-context analysis
-docs/GL10-OPERATION.md                   — Startup, throttle calibration, factory reset, LED/beep reference
-docs/XBUS-PROTOCOL.md                    — XC X.BUS protocol reference (used by live telemetry)
-docs/CONTROL-RESEARCH.md                 — Tank mix, RC input, loop patterns research
-docs/MISSION.md                          — Project design philosophy (smoothness above all)
-docs/DECISION-LOG.md                     — Technical decision log
-docs/TESTING.md                          — Host characterization + invariants suites + commit gate (#47, #131)
-docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
-docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
-docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
-tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/ + per-domain, e.g. battery/)
-.claude/skills/                          — Project skills (#127): safety-review, flash-and-log, new-module, field-tune, wiki-impact-review, prepare-pull-request (one procedure per folder)
-.claude/agents/                          — Read-only reviewer subagents (#127): architecture, safety, tests, documentation
-.githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
-live_plot.py                             — Real-time matplotlib monitor
-monitor.py                               — Simple serial monitor
-```
+GL10 FOC replaced the custom PID stack (2026-04-25); UNO R4 WiFi replaced
+Nano R4 (onboard Wi-Fi); open-loop and monitoring-only telemetry are
+permanent scope decisions. Rationale + dated history (hardware swaps, beeper
+lineage): `docs/DECISION-LOG.md`.
 
 ## Coding Rules
 
-> **Rule system (epic #116):** detailed, path-scoped rules live in
-> `.claude/rules/` (architecture, naming, state ownership, real-time firmware,
-> dashboard, workflow) and the canonical architecture spec is
-> `docs/architecture/ARCHITECTURE-TARGET.md` (+ ADRs in
-> `docs/architecture/adr/`). Those files win over the summaries below; this
-> section stays as the quick reference. While the epic #116 migration runs:
-> refactors are behavior-preserving, compile locally before every push, and
-> no hardware is available — physical checks go to
-> `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.
+Path-scoped rules in `.claude/rules/` and the architecture spec WIN over any
+summary. Quick reference:
 
-### Architecture
-
-These bullets describe the production sketch `sketches/dual_track_control/`;
-bench/test sketches under `sketches/` are deliberately single-file tools.
-
-- The `.ino` is a composition root ONLY (#189): it includes `src/application/FirmwareApp.h` and delegates `setup()`/`loop()`. Firmware code lives under `src/` in layers — `application/` → `domain/` + `ports/` + `telemetry/` + `alerts/` + `config/`; `infrastructure/` implements `ports/` (dependency rules: `.claude/rules/architecture.md`). The former `[MODULE]` banners moved into `src/application/` files — search `[NAME]` still jumps there
-- Shared structs sit in `types.h` — the interim shared-types bridge, slated to dissolve (it also sidesteps the Arduino auto-prototype limitation); domain-owned types live with their domain (e.g. `DriveTypes.h`, `SafetyTypes.h`)
-- All tunable constants live in `src/config/` per-domain headers (#185), included by `src/application/FirmwareApp.h`; the firmware's mutable cross-module state lives in `src/application/FirmwareState.h` (#189) — no magic numbers in code. Exception: adapter-owned tunables are single-homed with their machines (X.BUS poll constants in `src/infrastructure/xc/`, Wi-Fi serving tunables in `src/infrastructure/network/`)
-- File policy: one file = one concept, 150-line soft / 250-line hard limit (`.claude/rules/architecture.md`) — split by responsibility, never into `Part2`-style fragments
-
-### Testing (#47 — details in docs/TESTING.md)
-
-- The host characterization suite (`make -C tests run`, WSL/Linux) is the
-  behavior-parity gate for every firmware-touching PR. It compiles the REAL
-  `dual_track_control.ino` — keep it green before and after any change.
-- Commits are hard-blocked by `.githooks/pre-commit`: red tests block, and a
-  `sketches/dual_track_control/` change without a `tests/` change blocks
-  (`DIGGER_NO_TEST_CHANGE=1` for genuinely test-neutral edits).
-- A changed test EXPECTATION is a behavior change, not a refactor — needs its
-  own issue + operator sign-off.
-- New mutable firmware global ⇒ add it to `resetFirmwareState()` in
-  `tests/characterization/FirmwareUnderTest.h`.
-
-### Real-Time Safety
-
-- **No blocking calls in the main loop** — no `delay()`, no `pulseIn()`, no `while` loops
-- Use `micros()` fresh at point of use — never capture before a blocking call and use after
-- Per-input-path failsafe — every independent input path gets its own timeout. (S.BUS is ONE path: all 16 channels arrive in one frame, so the single frame-freshness timeout `SBUS_TIMEOUT` covers every channel identically — locked by the stale-RC invariant suite)
-- ISRs must be under 10us — read pin, store timestamp, exit
-
-### Telemetry
-
-- **Never** use `SoftwareSerial` for telemetry input. Hardware UARTs only.
-  Bit-banged debug TX is OK if needed.
-
-### Style
-
-- Use `float` with `f` suffix for FPU (`1.0f` not `1.0`) — `double` is software-emulated
-- Use `constrain()` at all servo output boundaries
-- Comment each module section banner — the bracketed `[NAME]` markers that moved into `dual_track_control`'s `src/application/` files (#189) — with a brief description
-- Commit messages: `V{major}.{minor}: {imperative verb} {what changed}`
-- **README describes behavior, never tunable numbers** (#124): current values
-  live in `src/config/`. PROJECT-PLAN and OPERATOR-GUIDE are technical
-  references — numbers are allowed there but must match `src/config/` (drift is
-  a doc bug)
+- **Architecture**: production sketch only — layers per the table above;
+  one file = one concept (150/250); structs shared with the `.ino` in
+  `types.h` (interim bridge); tunables in `src/config/` (adapter-owned stay
+  single-homed in `src/infrastructure/`)
+- **Testing (#47, `docs/TESTING.md`)**: host suite is the behavior-parity
+  gate; commits hard-blocked by `.githooks/pre-commit` (+ PreToolUse
+  test-gate, #193); a changed test EXPECTATION is a behavior change — own
+  issue + operator sign-off; new mutable global ⇒ `resetFirmwareState()`
+- **Real-time**: no blocking calls in `loop()`; `micros()` fresh at point of
+  use; ISRs < 10 µs; `constrain()` at every servo boundary
+- **Style**: `float` with `f` suffix (`double` is software-emulated);
+  commit messages `V{major}.{minor}: {imperative} {what}`; README describes
+  behavior, never tunable numbers (#124)
 
 ### ESC / motor configuration changes
 
@@ -434,12 +193,10 @@ Read-only reviewer subagents live in `.claude/agents/`:
 ## Build & Upload
 
 - First checkout: `cp sketches/dual_track_control/arduino_secrets.h.example
-  sketches/dual_track_control/arduino_secrets.h` and fill in the real Wi-Fi credentials
-  (gitignored, #125). CI copies the template automatically.
-- Board: Arduino UNO R4 WiFi
-- FQBN: `arduino:renesas_uno:unor4wifi`
-- Board package: `arduino:renesas_uno`
-- Port: COM7
-- Serial: 115200 baud
-- VS Code: Ctrl+Shift+B → "Live Plot" for real-time monitoring
+  sketches/dual_track_control/arduino_secrets.h` and fill in the real Wi-Fi
+  credentials (gitignored, #125). CI copies the template automatically.
+- Board: Arduino UNO R4 WiFi · FQBN `arduino:renesas_uno:unor4wifi` ·
+  Port COM7 · Serial 115200 baud
 - Upload: `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control && arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control`
+  (then log it — `flash-and-log` skill)
+- VS Code: Ctrl+Shift+B → "Live Plot" for real-time monitoring

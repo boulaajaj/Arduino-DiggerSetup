@@ -5,6 +5,19 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-16 — CLAUDE.md trimmed to <200 lines (#197)
+
+- Root CLAUDE.md 445 → ~200 lines. Facts kept (purpose, covenant + gate,
+  safety invariants, architecture boundaries, build commands, workflow
+  pointers); detail moved to single homes: full file map →
+  `docs/architecture/FILE-MAP.md` (verbatim; doc-sync hook message updated
+  to point there); pins/UART detail → WIRING-GUIDE-V8 (already canonical
+  there); X.BUS detail → XBUS-PROTOCOL; Implementation Status section
+  DELETED (board is SSOT) — its one untracked TODO became issue #208
+  (track-speed asymmetry; its "#54 pending" line was stale, #54 closed).
+- WIRING-GUIDE drift fixed while consolidating: D8 listed as free but the
+  active piezo shipped on D8 in V7.11.
+
 ## 2026-07-15 — Phase E: project skills + read-only reviewer subagents (#127)
 
 - Six project skills created under `.claude/skills/` (safety-review,

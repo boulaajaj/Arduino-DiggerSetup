@@ -39,7 +39,7 @@ PROMPT = (
     "still matches the code and update it in the SAME PR wherever it does "
     "not: docs/wiki/ notes covering the changed area (same-PR rule, "
     "docs/wiki/README.md), docs/architecture/ARCHITECTURE-TARGET.md, the "
-    "CLAUDE.md file map, docs/TESTING.md, docs/SAFETY.md, and "
+    "docs/architecture/FILE-MAP.md, docs/TESTING.md, docs/SAFETY.md, and "
     "OPERATOR-GUIDE.md for operator-facing behavior. Tunable values stay "
     "canonical in [CONFIG] — docs describe behavior, never live numbers "
     "(#124). If everything already matches, say so briefly and move on."

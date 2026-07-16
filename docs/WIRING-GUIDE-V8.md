@@ -67,7 +67,8 @@
 
 | Pin | Notes |
 |-----|-------|
-| D2, D3, D4, D5, D6, D7, D8 | Free digital I/O |
+| D2, D3, D4, D5, D6, D7 | Free digital I/O |
+| D8 | Active piezo beeper (battery/inactivity alarms + horn, V7.11) |
 | D11 | SCI0 TX (reserved — paired with D12 S.BUS UART) |
 | D13 | Free (LED_BUILTIN) |
 | A2, A3 | Free analog inputs |
