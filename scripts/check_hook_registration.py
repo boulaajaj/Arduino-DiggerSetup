@@ -37,8 +37,14 @@ def registered_commands():
 def gate_exit_code(command, working_dir):
     """Run test-gate.sh with a PreToolUse-style JSON payload on stdin."""
     payload = json.dumps({"tool_input": {"command": command}})
+    environment = dict(os.environ)
+    # Isolate git config: a developer's global/system core.hooksPath must not
+    # leak into the temp-repo assertions (the gate reads effective config).
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_CONFIG_SYSTEM"] = os.devnull
     result = subprocess.run(["sh", TEST_GATE], input=payload,
-                            capture_output=True, text=True, cwd=working_dir)
+                            capture_output=True, text=True,
+                            cwd=working_dir, env=environment)
     return result.returncode
 
 
