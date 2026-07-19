@@ -12,6 +12,7 @@ Run in CI (hooks-selftest.yml) and locally:
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -159,6 +160,14 @@ def main():
                   gate_exit_code("cd .\ngit commit -n", temp_dir) == 2)
             check("line-continuation bypass is blocked (backslash-newline)",
                   gate_exit_code("git commit \\\n-n", temp_dir) == 2)
+            check("unclosed quote cannot hide a later-line bypass",
+                  gate_exit_code('echo "unclosed\ngit commit -n',
+                                 temp_dir) == 2)
+            deep = "git commit -n"
+            for _ in range(6):
+                deep = "sh -c " + shlex.quote(deep)
+            check("adversarially deep sh -c nesting fails CLOSED",
+                  gate_exit_code(deep, temp_dir) == 2)
             check("nested shell -c bypass is blocked",
                   gate_exit_code("sh -c 'git commit -n'", temp_dir) == 2)
             check("bundled shell shorts (-lc) bypass is blocked",

@@ -153,15 +153,15 @@ Three layers, per issue #47:
    Registration itself is CI-checked: `scripts/check_hook_registration.py`
    (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
    not referenced by any registered hook, and functionally exercises the
-   gate (39 cases: bypass flags blocked in every spelling — exact, bundled
-   short options (`-anm`), abbreviated long options (`--no-verif`),
-   glued separators (`true;git commit -n`), wrapper/environment prefixes
-   (`FOO=1 git`, `env git`, `sudo -u user git`), compound, multi-line,
-   redirection-interleaved (`git 2>/dev/null commit -n`), and `git -C`
-   forms; inactive `core.hooksPath` blocked in the repo the commit
-   TARGETS; benign flags, quoted prose, short-option values, post-`--`
-   pathspecs, heredoc commit messages, and `git` as another command's data
-   (`echo git commit -n`, even behind a wrapper: `env echo git ...`) pass).
+   gate across every spelling (the checker's case list is the canonical
+   inventory): bypass flags blocked in exact, bundled (`-anm`), abbreviated
+   (`--no-verif`), glued-separator, wrapper/environment-prefixed,
+   multi-line, line-continuation, redirection-interleaved, nested-shell
+   (`sh -c`), and `git -C`/`--git-dir=` forms — failing CLOSED on
+   malformed or adversarially deep input; inactive `core.hooksPath`
+   blocked in the repo the commit TARGETS; benign flags, quoted prose,
+   short-option values, post-`--` pathspecs, heredoc commit messages, and
+   `git` as another command's data all pass.
 
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.

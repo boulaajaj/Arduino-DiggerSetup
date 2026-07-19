@@ -43,8 +43,10 @@ Updated by session hooks — only technical content, no personal info.
   Equals-form repo targeting (`--git-dir=`/`--work-tree=`) is honored,
   and a shell must itself sit in command position (`echo sh -c ...` is
   data). A wrapper option-value literally named `git` (env -u git git commit)
-  is disambiguated by lookahead. `check_hook_registration.py` grew to
-  39 cases;
+  is disambiguated by lookahead. Malformed and depth-capped input fails
+  CLOSED (all-lines token check; the nested depth cap returns the
+  conservative check, never a pass). `check_hook_registration.py` carries
+  the canonical case inventory (41 at merge time);
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

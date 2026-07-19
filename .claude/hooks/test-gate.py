@@ -208,10 +208,20 @@ def commit_invocation_from(tokens, start_index):
     return None
 
 
-def fallback_invocation(text):
-    """First-line token check for text that cannot be tokenized."""
-    first_line = text.splitlines()[0] if text else ""
-    return {"arguments": first_line.split(), "repo_options": []}
+def fallback_invocations(text):
+    """Whitespace-token check for text that cannot be tokenized (fail-close).
+
+    Every line naming both `git` and `commit` is treated as a potential
+    invocation, so an unclosed quote cannot smuggle a bypass onto a later
+    line. If no single line names both, all tokens are checked together.
+    """
+    lines = [line.split() for line in text.splitlines()]
+    suspicious = [tokens for tokens in lines
+                  if "git" in tokens and "commit" in tokens]
+    if not suspicious:
+        suspicious = [text.split()]
+    return [{"arguments": tokens, "repo_options": []}
+            for tokens in suspicious]
 
 
 def nested_shell_invocations(tokens, depth):
@@ -220,8 +230,6 @@ def nested_shell_invocations(tokens, depth):
     The shell itself must sit in command position — `echo sh -c '...'` is
     echo's data, not an executed shell.
     """
-    if depth >= MAXIMUM_NESTING:
-        return []
     index = command_position_index(tokens, SHELL_COMMANDS)
     if index is None:
         return []
@@ -231,10 +239,14 @@ def nested_shell_invocations(tokens, depth):
         if (argument.startswith("-") and not argument.startswith("--")
                 and "c" in argument):
             nested_text = tokens[argument_index + 1]
+            if depth + 1 >= MAXIMUM_NESTING:
+                # Fail CLOSE at the depth cap: adversarially deep nesting
+                # gets the conservative token check, never a free pass.
+                return fallback_invocations(nested_text)
             nested = commit_invocations(nested_text, depth + 1)
             if nested is None:
                 if "git" in nested_text and "commit" in nested_text:
-                    return [fallback_invocation(nested_text)]
+                    return fallback_invocations(nested_text)
                 return []
             return nested
     return []
@@ -286,10 +298,9 @@ def main():
 
     invocations = commit_invocations(command_text)
     if invocations is None:
-        # Malformed input even as whole-text: token check on the FIRST line
-        # only (real invocations start there; heredoc prose does not), then
-        # the hooksPath check below still applies.
-        invocations = [fallback_invocation(command_text)]
+        # Malformed input even as whole-text: fail-close token check over
+        # every line naming git+commit; the hooksPath check still applies.
+        invocations = fallback_invocations(command_text)
 
     if not invocations:
         return 0  # "git ... commit" appeared only as prose/quoted text
