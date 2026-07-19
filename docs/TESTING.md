@@ -153,11 +153,12 @@ Three layers, per issue #47:
    Registration itself is CI-checked: `scripts/check_hook_registration.py`
    (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
    not referenced by any registered hook, and functionally exercises the
-   gate (27 cases: bypass flags blocked in every spelling — exact, bundled
+   gate (29 cases: bypass flags blocked in every spelling — exact, bundled
    short options (`-anm`), abbreviated long options (`--no-verif`),
    glued separators (`true;git commit -n`), wrapper/environment prefixes
-   (`FOO=1 git`, `env git`, `sudo -u user git`), compound, multi-line, and
-   `git -C` forms; inactive `core.hooksPath` blocked in the repo the commit
+   (`FOO=1 git`, `env git`, `sudo -u user git`), compound, multi-line,
+   redirection-interleaved (`git 2>/dev/null commit -n`), and `git -C`
+   forms; inactive `core.hooksPath` blocked in the repo the commit
    TARGETS; benign flags, quoted prose, short-option values, post-`--`
    pathspecs, heredoc commit messages, and `git` as another command's data
    (`echo git commit -n`, even behind a wrapper: `env echo git ...`) pass).

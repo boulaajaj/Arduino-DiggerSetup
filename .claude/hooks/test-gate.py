@@ -22,12 +22,20 @@ import subprocess
 import sys
 
 # shlex punctuation characters — any token made solely of these is a command
-# separator (covers &&, ||, ;, |, &, and subshell parens in any run length).
+# separator (covers &&, ||, ;, |, &, and subshell parens in any run length)
+# EXCEPT redirection operators (>, <, >>, 2>&1 …), which stay part of the
+# same simple command.
 PUNCTUATION_CHARACTERS = set("();<>|&")
 
 
+def is_redirection(token):
+    return (bool(token) and set(token) <= set("<>&")
+            and any(character in "<>" for character in token))
+
+
 def is_separator(token):
-    return bool(token) and set(token) <= PUNCTUATION_CHARACTERS
+    return (bool(token) and set(token) <= PUNCTUATION_CHARACTERS
+            and not is_redirection(token))
 
 
 def tokenize(text):
@@ -153,6 +161,13 @@ def commit_invocation_from(tokens, start_index):
     repo_options = []
     while index < len(tokens) and not is_separator(tokens[index]):
         token = tokens[index]
+        if is_redirection(token):
+            index += 2  # the operator and its target
+            continue
+        if (token.isdigit() and index + 1 < len(tokens)
+                and is_redirection(tokens[index + 1])):
+            index += 1  # file-descriptor prefix split off by the lexer (2>…)
+            continue
         if token in GIT_VALUE_OPTIONS:
             if token in REPO_TARGET_OPTIONS and index + 1 < len(tokens):
                 repo_options.extend(tokens[index:index + 2])

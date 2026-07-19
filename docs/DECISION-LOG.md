@@ -32,7 +32,9 @@ Updated by session hooks — only technical content, no personal info.
   `git` as another command's data, e.g. `echo git commit -n`, does not
   block, even behind a wrapper: `env echo git commit -n`; duration
   positionals like `timeout 30 git ...` stay caught).
-  `check_hook_registration.py` grew to 27 cases;
+  Redirections are not command separators: `git 2>/dev/null commit -n`
+  stays a caught invocation, trailing `> /dev/null 2>&1` on a clean
+  commit passes. `check_hook_registration.py` grew to 29 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

@@ -106,6 +106,8 @@ def main():
                   gate_exit_code("env echo git commit -n", temp_dir) == 0)
             check("duration-argument wrapper cannot hide it (timeout 30 git)",
                   gate_exit_code("timeout 30 git commit -n", temp_dir) == 2)
+            check("redirection cannot hide the invocation (git 2>/dev/null)",
+                  gate_exit_code("git 2>/dev/null commit -n", temp_dir) == 2)
             check("glued separator after the flag is still blocked",
                   gate_exit_code("git commit --no-verify&&git push",
                                  temp_dir) == 2)
@@ -131,6 +133,9 @@ def main():
                   gate_exit_code("git commit -mnope", temp_dir) == 0)
             check("pathspec after -- is not an option (file named -n)",
                   gate_exit_code("git commit -am x -- -n", temp_dir) == 0)
+            check("trailing redirection on a clean commit passes",
+                  gate_exit_code("git commit -m x > /dev/null 2>&1",
+                                 temp_dir) == 0)
             check("bypass flag still blocked inside a compound command",
                   gate_exit_code(
                       "git add . && git commit -n -m x && git push",
