@@ -134,6 +134,10 @@ def main():
                   gate_exit_code("sudo 30 echo git commit -n", temp_dir) == 0)
             check("redirection cannot hide the invocation (git 2>/dev/null)",
                   gate_exit_code("git 2>/dev/null commit -n", temp_dir) == 2)
+            check("leading redirection cannot hide the invocation",
+                  gate_exit_code(">/dev/null git commit -n", temp_dir) == 2)
+            check("leading fd redirection cannot hide the invocation",
+                  gate_exit_code("2>/dev/null git commit -n", temp_dir) == 2)
             check("glued separator after the flag is still blocked",
                   gate_exit_code("git commit --no-verify&&git push",
                                  temp_dir) == 2)

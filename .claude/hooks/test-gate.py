@@ -156,7 +156,19 @@ def command_position_index(tokens, target_names):
     """
     current_wrapper = None
     previous_was_option = False
+    skip_redirection_target = False
     for index, token in enumerate(tokens):
+        if skip_redirection_target:
+            skip_redirection_target = False
+            continue
+        if is_redirection(token):
+            # POSIX allows redirections BEFORE the command word:
+            # >/dev/null git commit … is still a git invocation.
+            skip_redirection_target = True
+            continue
+        if (token.isdigit() and index + 1 < len(tokens)
+                and is_redirection(tokens[index + 1])):
+            continue  # fd prefix split off by the lexer (2 > file)
         name = base_name(token)
         if name in target_names:
             if (previous_was_option
