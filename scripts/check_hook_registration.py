@@ -103,6 +103,12 @@ def main():
                                  temp_dir) == 2)
             check("wrapper option-value named git cannot hide it",
                   gate_exit_code("env -u git git commit -n", temp_dir) == 2)
+            check("long-form wrapper option with separate value is caught",
+                  gate_exit_code("sudo --user operator git commit -n",
+                                 temp_dir) == 2)
+            check("equals-joined long wrapper option is self-contained",
+                  gate_exit_code("sudo --user=operator git commit -n",
+                                 temp_dir) == 2)
             check("valueless wrapper option before git is still caught",
                   gate_exit_code("env -i git commit -n", temp_dir) == 2)
             check("valueless wrapper flag does not eat the wrapped command",

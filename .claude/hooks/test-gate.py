@@ -111,20 +111,24 @@ REPO_TARGET_OPTIONS = {"-C", "--git-dir", "--work-tree"}
 
 # Commands that EXECUTE what follows them — `git` after one of these is a
 # real invocation; `git` after anything else (echo, grep, ...) is data.
-# The per-wrapper sets are the SHORT options that consume a value (so
-# `sudo -u user git` skips `user`, while valueless `env -i` does NOT eat
-# the wrapped command). Long options are self-contained or =-joined.
+# The per-wrapper sets are the options that consume a SEPARATE value (so
+# `sudo -u user git` / `sudo --user user git` skip `user`, while valueless
+# `env -i` does NOT eat the wrapped command). An `=`-joined long option is
+# always self-contained.
 WRAPPER_COMMANDS = {
-    "env": {"-u", "-C", "-S"},
-    "sudo": {"-u", "-g", "-h", "-p", "-U", "-R", "-T", "-C", "-D"},
+    "env": {"-u", "-C", "-S", "--unset", "--chdir", "--split-string"},
+    "sudo": {"-u", "-g", "-h", "-p", "-U", "-R", "-T", "-C", "-D",
+             "--user", "--group", "--host", "--prompt", "--other-user",
+             "--role", "--type", "--close-from", "--chdir"},
     "command": set(),
-    "nice": {"-n"},
+    "nice": {"-n", "--adjustment"},
     "nohup": set(),
-    "time": set(),
-    "stdbuf": {"-i", "-o", "-e"},
-    "timeout": {"-k", "-s"},
+    "time": {"-f", "-o", "--format", "--output"},
+    "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+    "timeout": {"-k", "-s", "--kill-after", "--signal"},
     "xargs": {"-a", "-d", "-E", "-e", "-I", "-i", "-L", "-l", "-n", "-P",
-              "-s"},
+              "-s", "--arg-file", "--delimiter", "--eof", "--replace",
+              "--max-lines", "--max-args", "--max-procs", "--max-chars"},
 }
 
 
@@ -172,9 +176,12 @@ def command_position_index(tokens, target_names):
             previous_was_option = False
             continue
         if current_wrapper is not None and token.startswith("-"):
-            # Only options KNOWN to take a value consume the next token —
-            # valueless flags (env -i) must not eat the wrapped command.
-            previous_was_option = token in WRAPPER_COMMANDS[current_wrapper]
+            # Only options KNOWN to take a separate value consume the next
+            # token — valueless flags (env -i) must not eat the wrapped
+            # command, and =-joined long options are self-contained.
+            previous_was_option = ("=" not in token
+                                   and token in
+                                   WRAPPER_COMMANDS[current_wrapper])
             continue
         if current_wrapper is not None and previous_was_option:
             previous_was_option = False
