@@ -102,6 +102,10 @@ def main():
                                  temp_dir) == 2)
             check("git as data of another command is not an invocation",
                   gate_exit_code("echo git commit -n", temp_dir) == 0)
+            check("git as data stays data behind a wrapper (env echo git)",
+                  gate_exit_code("env echo git commit -n", temp_dir) == 0)
+            check("duration-argument wrapper cannot hide it (timeout 30 git)",
+                  gate_exit_code("timeout 30 git commit -n", temp_dir) == 2)
             check("glued separator after the flag is still blocked",
                   gate_exit_code("git commit --no-verify&&git push",
                                  temp_dir) == 2)

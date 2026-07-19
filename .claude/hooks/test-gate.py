@@ -105,25 +105,38 @@ WRAPPER_COMMANDS = {"env", "sudo", "command", "nice", "nohup", "time",
 ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
+DURATION_PATTERN = re.compile(r"[0-9.]+[smhd]?$")
+
+
 def command_position_git_index(tokens):
     """Index of `git` when it sits in command position, else None.
 
     Leading environment assignments (`FOO=1`) and executing wrappers
-    (`env`, `sudo`, ...) keep the position open — including their own
-    option/value tokens once a wrapper was seen (`sudo -u user git`).
-    Any other command owner (echo, grep, ...) means `git` is mere data.
+    (`env`, `sudo`, ...) keep the position open, including a wrapper's
+    option/value pairs (`sudo -u user git`) and duration arguments
+    (`timeout 30 git`). The first other bare token is the wrapped command
+    itself — so `env echo git commit -n` is echo's data, not an invocation.
     """
     wrapper_seen = False
+    previous_was_option = False
     for index, token in enumerate(tokens):
         if token == "git":
             return index
         if ASSIGNMENT_PATTERN.match(token):
+            previous_was_option = False
             continue
         if token in WRAPPER_COMMANDS:
             wrapper_seen = True
+            previous_was_option = False
             continue
-        if wrapper_seen:
-            continue  # a wrapper's own options/values, e.g. sudo -u user
+        if wrapper_seen and token.startswith("-"):
+            previous_was_option = True
+            continue
+        if wrapper_seen and previous_was_option:
+            previous_was_option = False
+            continue  # the option's value, e.g. sudo -u USER
+        if wrapper_seen and DURATION_PATTERN.match(token):
+            continue  # positional duration, e.g. timeout 30 git ...
         return None
     return None
 

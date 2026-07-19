@@ -30,7 +30,9 @@ Updated by session hooks — only technical content, no personal info.
   git`) cannot hide the invocation — `git` is recognized in command
   position (leading assignments and executing wrappers keep it open;
   `git` as another command's data, e.g. `echo git commit -n`, does not
-  block). `check_hook_registration.py` grew to 25 cases;
+  block, even behind a wrapper: `env echo git commit -n`; duration
+  positionals like `timeout 30 git ...` stay caught).
+  `check_hook_registration.py` grew to 27 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).
