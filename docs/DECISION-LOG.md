@@ -36,7 +36,9 @@ Updated by session hooks — only technical content, no personal info.
   stays a caught invocation, trailing `> /dev/null 2>&1` on a clean
   commit passes. Both parse paths use the same command-position logic (git as data
   after a line-spanning quote stays data; a real bypass after one still
-  blocks). `check_hook_registration.py` grew to 31 cases;
+  blocks). Shell line continuations are joined first (backslash-newline), so a
+  continuation-split `-n` is still caught.
+  `check_hook_registration.py` grew to 32 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

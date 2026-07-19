@@ -198,6 +198,9 @@ def commit_invocations(command_text):
     parses the whole text at once, where such strings collapse to single
     tokens and prose inside them can never look like arguments.
     """
+    # Shell line continuations join lines: `git commit \` + newline + `-n`
+    # is ONE invocation. Applied before line splitting so attempt A sees it.
+    command_text = command_text.replace("\\\n", " ")
     try:
         commands = []
         for line in command_text.splitlines():

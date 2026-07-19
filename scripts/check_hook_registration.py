@@ -153,6 +153,8 @@ def main():
                       'EOF\n)"', temp_dir) == 0)
             check("multi-line real bypass is still blocked",
                   gate_exit_code("cd .\ngit commit -n", temp_dir) == 2)
+            check("line-continuation bypass is blocked (backslash-newline)",
+                  gate_exit_code("git commit \\\n-n", temp_dir) == 2)
             # -C targeting: hooksPath is checked in the repo the commit
             # TARGETS, not the hook's working directory.
             with tempfile.TemporaryDirectory() as other_repo:
