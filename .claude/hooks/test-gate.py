@@ -111,8 +111,27 @@ REPO_TARGET_OPTIONS = {"-C", "--git-dir", "--work-tree"}
 
 # Commands that EXECUTE what follows them — `git` after one of these is a
 # real invocation; `git` after anything else (echo, grep, ...) is data.
-WRAPPER_COMMANDS = {"env", "sudo", "command", "nice", "nohup", "time",
-                    "stdbuf", "timeout", "xargs"}
+# The per-wrapper sets are the SHORT options that consume a value (so
+# `sudo -u user git` skips `user`, while valueless `env -i` does NOT eat
+# the wrapped command). Long options are self-contained or =-joined.
+WRAPPER_COMMANDS = {
+    "env": {"-u", "-C", "-S"},
+    "sudo": {"-u", "-g", "-h", "-p", "-U", "-R", "-T", "-C", "-D"},
+    "command": set(),
+    "nice": {"-n"},
+    "nohup": set(),
+    "time": set(),
+    "stdbuf": {"-i", "-o", "-e"},
+    "timeout": {"-k", "-s"},
+    "xargs": {"-a", "-d", "-E", "-e", "-I", "-i", "-L", "-l", "-n", "-P",
+              "-s"},
+}
+
+
+def base_name(token):
+    """Command basename: path prefixes and .exe stripped (/usr/bin/git)."""
+    base = token.replace("\\", "/").rsplit("/", 1)[-1]
+    return base[:-4] if base.endswith(".exe") else base
 # Shells whose -c argument is a NESTED command string to parse recursively.
 SHELL_COMMANDS = {"sh", "bash", "zsh", "dash", "ksh"}
 MAXIMUM_NESTING = 5
@@ -131,33 +150,36 @@ def command_position_index(tokens, target_names):
     (`timeout 30 git`). The first other bare token is the wrapped command
     itself — so `env echo git commit -n` is echo's data, not an invocation.
     """
-    wrapper_seen = False
+    current_wrapper = None
     previous_was_option = False
     for index, token in enumerate(tokens):
-        if token in target_names:
-            if (wrapper_seen and previous_was_option
-                    and token in tokens[index + 1:]):
+        name = base_name(token)
+        if name in target_names:
+            if (previous_was_option
+                    and any(base_name(later) in target_names
+                            for later in tokens[index + 1:])):
                 # Ambiguous: this occurrence is a wrapper option's VALUE
                 # (env -u git git commit …) — a later occurrence is the
-                # command. Without a later one, this IS the command
-                # (env -i git commit …, -i takes no value).
+                # command. Without a later one, this IS the command.
                 previous_was_option = False
                 continue
             return index
         if ASSIGNMENT_PATTERN.match(token):
             previous_was_option = False
             continue
-        if token in WRAPPER_COMMANDS:
-            wrapper_seen = True
+        if name in WRAPPER_COMMANDS:
+            current_wrapper = name
             previous_was_option = False
             continue
-        if wrapper_seen and token.startswith("-"):
-            previous_was_option = True
+        if current_wrapper is not None and token.startswith("-"):
+            # Only options KNOWN to take a value consume the next token —
+            # valueless flags (env -i) must not eat the wrapped command.
+            previous_was_option = token in WRAPPER_COMMANDS[current_wrapper]
             continue
-        if wrapper_seen and previous_was_option:
+        if current_wrapper is not None and previous_was_option:
             previous_was_option = False
             continue  # the option's value, e.g. sudo -u USER
-        if wrapper_seen and DURATION_PATTERN.match(token):
+        if current_wrapper is not None and DURATION_PATTERN.match(token):
             continue  # positional duration, e.g. timeout 30 git ...
         return None
     return None

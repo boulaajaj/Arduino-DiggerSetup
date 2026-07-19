@@ -105,6 +105,12 @@ def main():
                   gate_exit_code("env -u git git commit -n", temp_dir) == 2)
             check("valueless wrapper option before git is still caught",
                   gate_exit_code("env -i git commit -n", temp_dir) == 2)
+            check("valueless wrapper flag does not eat the wrapped command",
+                  gate_exit_code("env -i echo git commit -n", temp_dir) == 0)
+            check("absolute-path git is still a commit invocation",
+                  gate_exit_code("/usr/bin/git commit -n", temp_dir) == 2)
+            check("relative-path git is still a commit invocation",
+                  gate_exit_code("./git commit -n", temp_dir) == 2)
             check("git as data of another command is not an invocation",
                   gate_exit_code("echo git commit -n", temp_dir) == 0)
             check("git as data stays data behind a wrapper (env echo git)",

@@ -46,8 +46,11 @@ Updated by session hooks — only technical content, no personal info.
   data). A wrapper option-value literally named `git` (env -u git git commit)
   is disambiguated by lookahead. Malformed and depth-capped input fails
   CLOSED (all-lines token check; the nested depth cap returns the
-  conservative check, never a pass). `check_hook_registration.py` carries
-  the canonical case inventory (41 at merge time);
+  conservative check, never a pass). Path-invoked git (`/usr/bin/git`, `./git`, `git.exe`) matches by
+  basename; wrapper options consume a value only when the per-wrapper
+  table says so (env -i does not eat the wrapped command).
+  `check_hook_registration.py` carries the canonical case inventory
+  (44 at merge time);
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).
