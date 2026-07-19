@@ -121,8 +121,8 @@ ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 DURATION_PATTERN = re.compile(r"[0-9.]+[smhd]?$")
 
 
-def command_position_git_index(tokens):
-    """Index of `git` when it sits in command position, else None.
+def command_position_index(tokens, target_names):
+    """Index of a target command when it sits in command position, else None.
 
     Leading environment assignments (`FOO=1`) and executing wrappers
     (`env`, `sudo`, ...) keep the position open, including a wrapper's
@@ -133,7 +133,7 @@ def command_position_git_index(tokens):
     wrapper_seen = False
     previous_was_option = False
     for index, token in enumerate(tokens):
-        if token == "git":
+        if token in target_names:
             return index
         if ASSIGNMENT_PATTERN.match(token):
             previous_was_option = False
@@ -152,6 +152,10 @@ def command_position_git_index(tokens):
             continue  # positional duration, e.g. timeout 30 git ...
         return None
     return None
+
+
+def command_position_git_index(tokens):
+    return command_position_index(tokens, {"git"})
 
 
 def commit_invocation_from(tokens, start_index):
@@ -178,6 +182,10 @@ def commit_invocation_from(tokens, start_index):
                 repo_options.extend(tokens[index:index + 2])
             index += 2
             continue
+        if token.startswith(("--git-dir=", "--work-tree=")):
+            repo_options.append(token)  # equals form targets the repo too
+            index += 1
+            continue
         if token.startswith("-"):
             index += 1
             continue
@@ -199,24 +207,28 @@ def fallback_invocation(text):
 
 
 def nested_shell_invocations(tokens, depth):
-    """Invocations inside a shell -c string (`sh -c 'git commit -n'`)."""
+    """Invocations inside a shell -c string (`sh -c 'git commit -n'`).
+
+    The shell itself must sit in command position — `echo sh -c '...'` is
+    echo's data, not an executed shell.
+    """
     if depth >= MAXIMUM_NESTING:
         return []
-    for index, token in enumerate(tokens):
-        if token in SHELL_COMMANDS:
-            for argument_index in range(index + 1, len(tokens) - 1):
-                argument = tokens[argument_index]
-                # -c may be bundled with other shell shorts (-lc, -ec).
-                if (argument.startswith("-") and not argument.startswith("--")
-                        and "c" in argument):
-                    nested_text = tokens[argument_index + 1]
-                    nested = commit_invocations(nested_text, depth + 1)
-                    if nested is None:
-                        if "git" in nested_text and "commit" in nested_text:
-                            return [fallback_invocation(nested_text)]
-                        return []
-                    return nested
-            return []
+    index = command_position_index(tokens, SHELL_COMMANDS)
+    if index is None:
+        return []
+    for argument_index in range(index + 1, len(tokens) - 1):
+        argument = tokens[argument_index]
+        # -c may be bundled with other shell shorts (-lc, -ec).
+        if (argument.startswith("-") and not argument.startswith("--")
+                and "c" in argument):
+            nested_text = tokens[argument_index + 1]
+            nested = commit_invocations(nested_text, depth + 1)
+            if nested is None:
+                if "git" in nested_text and "commit" in nested_text:
+                    return [fallback_invocation(nested_text)]
+                return []
+            return nested
     return []
 
 

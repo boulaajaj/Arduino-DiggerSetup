@@ -40,7 +40,9 @@ Updated by session hooks — only technical content, no personal info.
   continuation-split `-n` is still caught.
   Shell -c strings (`sh -c 'git commit -n'`, incl. bundled `-lc`) are
   parsed recursively (bounded depth 5).
-  `check_hook_registration.py` grew to 35 cases;
+  Equals-form repo targeting (`--git-dir=`/`--work-tree=`) is honored,
+  and a shell must itself sit in command position (`echo sh -c ...` is
+  data). `check_hook_registration.py` grew to 37 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

@@ -162,6 +162,8 @@ def main():
                                  temp_dir) == 2)
             check("nested shell with git as data passes",
                   gate_exit_code("sh -c 'echo git commit -n'", temp_dir) == 0)
+            check("shell -c as data of another command passes",
+                  gate_exit_code("echo sh -c 'git commit -n'", temp_dir) == 0)
             # -C targeting: hooksPath is checked in the repo the commit
             # TARGETS, not the hook's working directory.
             with tempfile.TemporaryDirectory() as other_repo:
@@ -170,6 +172,10 @@ def main():
                       "active clone",
                       gate_exit_code(f'git -C "{other_repo}" commit -m x',
                                      temp_dir) == 2)
+                check("equals-form --git-dir targeting is honored",
+                      gate_exit_code(
+                          f'git --git-dir="{other_repo}/.git" commit -m x',
+                          temp_dir) == 2)
 
     for name in failures:
         print(f"FAIL: {name}")
