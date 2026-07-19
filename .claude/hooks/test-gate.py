@@ -13,8 +13,9 @@ the actual command: only arguments belonging to a real `git commit`
 invocation are inspected, so `grep -n` in a compound command or prose
 inside a quoted issue/PR body never triggers the block. Residual
 conservatism: when the COMMAND TEXT cannot be tokenized even as a whole
-(unclosed quotes), a first-line token check applies; a payload that is not
-valid JSON at all is passed through (nothing to inspect).
+(unclosed quotes), a fail-close token check applies over every line naming
+git+commit (all tokens together when no single line does); a payload that
+is not valid JSON at all is passed through (nothing to inspect).
 """
 
 import json

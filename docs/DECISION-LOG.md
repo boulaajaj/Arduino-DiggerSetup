@@ -16,8 +16,9 @@ Updated by session hooks — only technical content, no personal info.
   Two-attempt parse: line-oriented (newline = separator, catches multi-line
   bypasses) then whole-text (quoted heredoc commit messages legally span
   lines — the exact case the first cut blocked LIVE on its own commit);
-  malformed input falls back to a first-line TOKEN check (whitespace
-  split, same argument analysis). Bypass detection covers every git
+  malformed input falls back to a fail-close TOKEN check over every line
+  naming git+commit (whitespace split, same argument analysis). Bypass
+  detection covers every git
   spelling: exact flags, bundled short options (`-anm` carries `-n`;
   value-taking shorts `m c C F t S` end the scan so `-mnope` passes),
   parse-options long abbreviation (`--no-v` prefix), and `--` ends option
