@@ -16,11 +16,15 @@ Updated by session hooks — only technical content, no personal info.
   Two-attempt parse: line-oriented (newline = separator, catches multi-line
   bypasses) then whole-text (quoted heredoc commit messages legally span
   lines — the exact case the first cut blocked LIVE on its own commit);
-  malformed input falls back to a first-line substring check. The
-  hooksPath check targets the commit's OWN repo (honors `git -C` /
-  `--git-dir`). `check_hook_registration.py` grew to 15 cases;
-  structure-check allows `.py` under `.claude/hooks/` (hook scripts live
-  with the config that registers them).
+  malformed input falls back to a first-line TOKEN check (whitespace
+  split, same argument analysis). Bypass detection covers every git
+  spelling: exact flags, bundled short options (`-anm` carries `-n`;
+  value-taking shorts `m c C F t S` end the scan so `-mnope` passes),
+  parse-options long abbreviation (`--no-v` prefix), and `--` ends option
+  scanning (pathspecs). The hooksPath check targets the commit's OWN repo
+  (honors `git -C` / `--git-dir`). `check_hook_registration.py` grew to
+  19 cases; structure-check allows `.py` under `.claude/hooks/` (hook
+  scripts live with the config that registers them).
 
 ## 2026-07-16 — CLAUDE.md trimmed to ~200 lines (#197)
 

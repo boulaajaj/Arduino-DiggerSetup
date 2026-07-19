@@ -87,6 +87,10 @@ def main():
                   gate_exit_code("git commit -n", temp_dir) == 2)
             check("git -C <path> commit -n is blocked",
                   gate_exit_code("git -C /tmp commit -n", temp_dir) == 2)
+            check("bundled short options carrying -n are blocked (-anm)",
+                  gate_exit_code("git commit -anm x", temp_dir) == 2)
+            check("abbreviated long option is blocked (--no-verif)",
+                  gate_exit_code("git commit --no-verif -m x", temp_dir) == 2)
             check("commit is blocked while core.hooksPath is not .githooks",
                   gate_exit_code("git commit -m x", temp_dir) == 2)
             # #206 false-positive regressions: benign flags and quoted prose
@@ -105,6 +109,10 @@ def main():
                   gate_exit_code(
                       'git commit -m fix && git push && gh pr create '
                       '--body "checked with grep -n"', temp_dir) == 0)
+            check("short-option value containing n passes (-mnope)",
+                  gate_exit_code("git commit -mnope", temp_dir) == 0)
+            check("pathspec after -- is not an option (file named -n)",
+                  gate_exit_code("git commit -am x -- -n", temp_dir) == 0)
             check("bypass flag still blocked inside a compound command",
                   gate_exit_code(
                       "git add . && git commit -n -m x && git push",

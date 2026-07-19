@@ -23,6 +23,38 @@ import sys
 SEPARATORS = {"&&", "||", ";", "|", "&"}
 GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
                      "--exec-path"}
+# git commit short options that consume a value: in a short-option bundle the
+# first of these swallows the rest of the cluster (so letters after it are a
+# VALUE, not options — e.g. -mnope is -m "nope").
+COMMIT_VALUE_SHORTS = "mcCFtS"
+# Shortest unambiguous parse-options abbreviation of --no-verify among
+# git-commit's --no-* long options (--no-edit, --no-gpg-sign, ...).
+NO_VERIFY_PREFIX = "--no-v"
+
+
+def bypasses_verification(arguments):
+    """True when a commit argument list carries --no-verify in ANY spelling.
+
+    Handles exact flags, parse-options long-option abbreviation
+    (--no-v[erify]), and short-option bundling (-anm carries -n). Scanning
+    stops at "--": everything after it is pathspecs.
+    """
+    for argument in arguments:
+        if argument == "--":
+            return False
+        if argument.startswith("--"):
+            if argument == "--no-verify" or (
+                    argument.startswith(NO_VERIFY_PREFIX) and
+                    "--no-verify".startswith(argument)):
+                return True
+            continue
+        if argument.startswith("-") and len(argument) > 1:
+            for letter in argument[1:]:
+                if letter == "n":
+                    return True
+                if letter in COMMIT_VALUE_SHORTS:
+                    break  # rest of the cluster is this option's value
+    return False
 
 
 def block(*lines):
@@ -135,8 +167,7 @@ def main():
         return 0  # "git ... commit" appeared only as prose/quoted text
 
     for invocation in invocations:
-        arguments = invocation["arguments"]
-        if "--no-verify" in arguments or "-n" in arguments:
+        if bypasses_verification(invocation["arguments"]):
             block("Blocked (#47 gate): --no-verify is not available to agents.",
                   "Fix the failing tests (or the missing test update) instead.")
 
