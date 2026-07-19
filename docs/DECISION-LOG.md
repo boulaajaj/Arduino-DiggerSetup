@@ -38,7 +38,9 @@ Updated by session hooks — only technical content, no personal info.
   after a line-spanning quote stays data; a real bypass after one still
   blocks). Shell line continuations are joined first (backslash-newline), so a
   continuation-split `-n` is still caught.
-  `check_hook_registration.py` grew to 32 cases;
+  Shell -c strings (`sh -c 'git commit -n'`, incl. bundled `-lc`) are
+  parsed recursively (bounded depth 5).
+  `check_hook_registration.py` grew to 35 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

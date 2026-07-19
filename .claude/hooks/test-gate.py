@@ -112,6 +112,9 @@ REPO_TARGET_OPTIONS = {"-C", "--git-dir", "--work-tree"}
 # real invocation; `git` after anything else (echo, grep, ...) is data.
 WRAPPER_COMMANDS = {"env", "sudo", "command", "nice", "nohup", "time",
                     "stdbuf", "timeout", "xargs"}
+# Shells whose -c argument is a NESTED command string to parse recursively.
+SHELL_COMMANDS = {"sh", "bash", "zsh", "dash", "ksh"}
+MAXIMUM_NESTING = 5
 ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
@@ -189,7 +192,35 @@ def commit_invocation_from(tokens, start_index):
     return None
 
 
-def commit_invocations(command_text):
+def fallback_invocation(text):
+    """First-line token check for text that cannot be tokenized."""
+    first_line = text.splitlines()[0] if text else ""
+    return {"arguments": first_line.split(), "repo_options": []}
+
+
+def nested_shell_invocations(tokens, depth):
+    """Invocations inside a shell -c string (`sh -c 'git commit -n'`)."""
+    if depth >= MAXIMUM_NESTING:
+        return []
+    for index, token in enumerate(tokens):
+        if token in SHELL_COMMANDS:
+            for argument_index in range(index + 1, len(tokens) - 1):
+                argument = tokens[argument_index]
+                # -c may be bundled with other shell shorts (-lc, -ec).
+                if (argument.startswith("-") and not argument.startswith("--")
+                        and "c" in argument):
+                    nested_text = tokens[argument_index + 1]
+                    nested = commit_invocations(nested_text, depth + 1)
+                    if nested is None:
+                        if "git" in nested_text and "commit" in nested_text:
+                            return [fallback_invocation(nested_text)]
+                        return []
+                    return nested
+            return []
+    return []
+
+
+def commit_invocations(command_text, depth=0):
     """Every real `git commit` invocation in the command, or None.
 
     Attempt A parses line by line (newlines separate commands, so a
@@ -218,6 +249,7 @@ def commit_invocations(command_text):
             invocation = commit_invocation_from(tokens, index)
             if invocation is not None:
                 invocations.append(invocation)
+        invocations.extend(nested_shell_invocations(tokens, depth))
     return invocations
 
 
@@ -234,11 +266,10 @@ def main():
 
     invocations = commit_invocations(command_text)
     if invocations is None:
-        # Malformed input even as whole-text: substring check on the FIRST
-        # line only (real invocations start there; heredoc prose does not),
-        # then the hooksPath check below still applies.
-        first_line = command_text.splitlines()[0] if command_text else ""
-        invocations = [{"arguments": first_line.split(), "repo_options": []}]
+        # Malformed input even as whole-text: token check on the FIRST line
+        # only (real invocations start there; heredoc prose does not), then
+        # the hooksPath check below still applies.
+        invocations = [fallback_invocation(command_text)]
 
     if not invocations:
         return 0  # "git ... commit" appeared only as prose/quoted text
