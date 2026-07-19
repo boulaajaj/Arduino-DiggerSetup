@@ -93,6 +93,10 @@ def main():
                   gate_exit_code("git commit --no-verif -m x", temp_dir) == 2)
             check("glued separator cannot hide the invocation (true;git)",
                   gate_exit_code("true;git commit -n", temp_dir) == 2)
+            check("environment-assignment prefix cannot hide the invocation",
+                  gate_exit_code("FOO=1 git commit -n", temp_dir) == 2)
+            check("env wrapper cannot hide the invocation",
+                  gate_exit_code("env git commit --no-verify", temp_dir) == 2)
             check("glued separator after the flag is still blocked",
                   gate_exit_code("git commit --no-verify&&git push",
                                  temp_dir) == 2)

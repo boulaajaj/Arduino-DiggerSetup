@@ -26,7 +26,9 @@ Updated by session hooks — only technical content, no personal info.
   `git commit --no-verify&&git push` were live bypasses of the exact-match
   cut — both reproduced, then sealed). The hooksPath check targets the
   commit's OWN repo (honors `git -C` / `--git-dir`).
-  `check_hook_registration.py` grew to 21 cases; structure-check allows
+  Wrapper/environment prefixes (`FOO=1 git`, `env git`, `sudo git`) cannot
+  hide the invocation — the scan finds `git` anywhere in a simple command.
+  `check_hook_registration.py` grew to 23 cases; structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).
 

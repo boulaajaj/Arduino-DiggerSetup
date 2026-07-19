@@ -157,10 +157,15 @@ def commit_invocations(command_text):
 
     invocations = []
     for tokens in lines_parse:
-        if tokens[0] == "git":
-            invocation = commit_invocation_from(tokens, 0)
-            if invocation is not None:
-                invocations.append(invocation)
+        # Scan for `git` anywhere in the simple command, not just position 0:
+        # wrappers and environment assignments (`FOO=1 git commit`,
+        # `env git commit`, `sudo git commit`) must not hide the invocation.
+        for index, token in enumerate(tokens):
+            if token == "git":
+                invocation = commit_invocation_from(tokens, index)
+                if invocation is not None:
+                    invocations.append(invocation)
+                break
     return invocations
 
 
@@ -188,7 +193,8 @@ def main():
 
     for invocation in invocations:
         if bypasses_verification(invocation["arguments"]):
-            block("Blocked (#47 gate): --no-verify is not available to agents.",
+            block("Blocked (#47 gate): --no-verify / -n is not available "
+                  "to agents.",
                   "Fix the failing tests (or the missing test update) instead.")
 
     for invocation in invocations:
