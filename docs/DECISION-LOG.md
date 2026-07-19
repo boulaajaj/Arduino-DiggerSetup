@@ -5,6 +5,20 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — test-gate rewritten with real command parsing (#206)
+
+- `.claude/hooks/test-gate.sh` (shell globs over the whole JSON payload) →
+  `.claude/hooks/test-gate.py`: JSON + `shlex` parsing; bypass flags are
+  checked ONLY among a real `git commit` invocation's own arguments.
+  Fixes the observed false positives (benign `grep -n` in compound
+  commands; issue/PR body prose quoting the flag names) and catches
+  `git -C <path> commit -n`, which the old `"git commit"` glob missed.
+  Two-attempt parse: line-oriented (newline = separator, catches multi-line
+  bypasses) then whole-text (quoted heredoc commit messages legally span
+  lines — the exact case the first cut blocked LIVE on its own commit);
+  malformed input falls back to a first-line substring check.
+  `check_hook_registration.py` grew to 14 cases.
+
 ## 2026-07-16 — CLAUDE.md trimmed to ~200 lines (#197)
 
 - Root CLAUDE.md 445 → 203 lines. Facts kept (purpose, covenant + gate,

@@ -131,17 +131,20 @@ Three layers, per issue #47:
    files are staged, plus the firmware-without-tests guard below. Activate
    once per clone: `git config core.hooksPath .githooks`.
    Emergency human bypass: `git commit --no-verify` (document why in the PR).
-2. **`.claude/hooks/test-gate.sh`** — Claude Code `PreToolUse[Bash]` hook
-   that makes layer 1 agent-proof: it refuses `--no-verify` outright and
-   blocks commits in a clone where `core.hooksPath` was never activated.
-   Wired in `.claude/settings.json` (#193):
+2. **`.claude/hooks/test-gate.py`** — Claude Code `PreToolUse[Bash]` hook
+   that makes layer 1 agent-proof: it refuses `--no-verify`/`-n` on real
+   `git commit` invocations and blocks commits in a clone where
+   `core.hooksPath` was never activated. It parses the command (JSON +
+   `shlex`, #206) so benign flags in compound commands (`grep -n`) or prose
+   inside quoted bodies never false-positive; `git -C <path> commit` is
+   still caught. Wired in `.claude/settings.json` (#193):
 
    ```json
    "PreToolUse": [
      {
        "matcher": "Bash",
        "hooks": [
-         { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.sh\"", "timeout": 30000 }
+         { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py\"", "timeout": 30000 }
        ]
      }
    ]
@@ -150,7 +153,9 @@ Three layers, per issue #47:
    Registration itself is CI-checked: `scripts/check_hook_registration.py`
    (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
    not referenced by any registered hook, and functionally exercises the
-   gate (blocks `--no-verify`/`-n`, blocks inactive `core.hooksPath`).
+   gate (14 cases: bypass flags blocked incl. compound, multi-line, and
+   `git -C` forms; inactive `core.hooksPath` blocked; benign flags, quoted
+   prose, and heredoc commit messages pass).
 
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.

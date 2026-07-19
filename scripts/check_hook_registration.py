@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Hook-registration check (#193) — proves every script in .claude/hooks/ is
 actually wired into .claude/settings.json (a present-but-unregistered hook
-script is dead code), then functionally exercises test-gate.sh: it must block
-agent commits using --no-verify/-n, block commits in a clone where the #47
-pre-commit gate was never activated, and stay out of the way otherwise.
+script is dead code), then functionally exercises test-gate.py (#206): it
+must block agent commits using --no-verify/-n, block commits in a clone
+where the #47 pre-commit gate was never activated, stay out of the way
+otherwise, and NOT false-positive on benign flags in compound commands or
+on prose inside quoted arguments.
 Run in CI (hooks-selftest.yml) and locally:
     python scripts/check_hook_registration.py
 """
@@ -18,7 +20,7 @@ import tempfile
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS = os.path.join(REPO_ROOT, ".claude", "settings.json")
 HOOKS_DIR = os.path.join(REPO_ROOT, ".claude", "hooks")
-TEST_GATE = os.path.join(HOOKS_DIR, "test-gate.sh")
+TEST_GATE = os.path.join(HOOKS_DIR, "test-gate.py")
 
 
 def registered_commands():
@@ -35,14 +37,14 @@ def registered_commands():
 
 
 def gate_exit_code(command, working_dir):
-    """Run test-gate.sh with a PreToolUse-style JSON payload on stdin."""
+    """Run test-gate.py with a PreToolUse-style JSON payload on stdin."""
     payload = json.dumps({"tool_input": {"command": command}})
     environment = dict(os.environ)
     # Isolate git config: a developer's global/system core.hooksPath must not
     # leak into the temp-repo assertions (the gate reads effective config).
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
-    result = subprocess.run(["bash", TEST_GATE], input=payload,
+    result = subprocess.run([sys.executable, TEST_GATE], input=payload,
                             capture_output=True, text=True,
                             cwd=working_dir, env=environment)
     return result.returncode
@@ -71,8 +73,8 @@ def main():
 
     # 2. Behavior — exercise the gate in a temp repo where core.hooksPath is
     #    controlled (exit 2 = blocked, exit 0 = allowed through).
-    if shutil.which("bash") is None or shutil.which("git") is None:
-        print("check-hook-registration: bash/git unavailable — "
+    if shutil.which("git") is None:
+        print("check-hook-registration: git unavailable — "
               "functional checks skipped (registration checks still ran)")
     else:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -83,12 +85,37 @@ def main():
                   gate_exit_code("git commit --no-verify -m x", temp_dir) == 2)
             check("git commit -n is blocked",
                   gate_exit_code("git commit -n", temp_dir) == 2)
+            check("git -C <path> commit -n is blocked",
+                  gate_exit_code("git -C /tmp commit -n", temp_dir) == 2)
             check("commit is blocked while core.hooksPath is not .githooks",
                   gate_exit_code("git commit -m x", temp_dir) == 2)
+            # #206 false-positive regressions: benign flags and quoted prose
+            # must not trip the bypass block.
+            check("prose in a quoted body is not a commit",
+                  gate_exit_code(
+                      'gh issue create --body "never use git commit '
+                      '--no-verify or -n here"', temp_dir) == 0)
+            check("git log --grep commit -n 5 is not a commit",
+                  gate_exit_code("git log --grep commit -n 5", temp_dir) == 0)
             subprocess.run(["git", "-C", temp_dir, "config",
                             "core.hooksPath", ".githooks"], check=True)
             check("commit passes once the #47 gate is active",
                   gate_exit_code("git commit -m x", temp_dir) == 0)
+            check("compound command with grep -n passes",
+                  gate_exit_code(
+                      'git commit -m fix && git push && gh pr create '
+                      '--body "checked with grep -n"', temp_dir) == 0)
+            check("bypass flag still blocked inside a compound command",
+                  gate_exit_code(
+                      "git add . && git commit -n -m x && git push",
+                      temp_dir) == 2)
+            check("heredoc commit message mentioning flags passes",
+                  gate_exit_code(
+                      'git commit -m "$(cat <<\'EOF\'\n'
+                      "fixes the grep -n and --no-verify prose case\n"
+                      'EOF\n)"', temp_dir) == 0)
+            check("multi-line real bypass is still blocked",
+                  gate_exit_code("cd .\ngit commit -n", temp_dir) == 2)
 
     for name in failures:
         print(f"FAIL: {name}")
