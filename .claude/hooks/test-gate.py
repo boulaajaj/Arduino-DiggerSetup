@@ -179,8 +179,8 @@ def command_position_index(tokens, target_names):
         if current_wrapper is not None and previous_was_option:
             previous_was_option = False
             continue  # the option's value, e.g. sudo -u USER
-        if current_wrapper is not None and DURATION_PATTERN.match(token):
-            continue  # positional duration, e.g. timeout 30 git ...
+        if current_wrapper == "timeout" and DURATION_PATTERN.match(token):
+            continue  # timeout's positional duration: timeout 30 git ...
         return None
     return None
 

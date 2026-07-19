@@ -123,6 +123,9 @@ def main():
                                  temp_dir) == 2)
             check("duration-argument wrapper cannot hide it (timeout 30 git)",
                   gate_exit_code("timeout 30 git commit -n", temp_dir) == 2)
+            check("numeric token after other wrappers is a command, not a "
+                  "duration",
+                  gate_exit_code("sudo 30 echo git commit -n", temp_dir) == 0)
             check("redirection cannot hide the invocation (git 2>/dev/null)",
                   gate_exit_code("git 2>/dev/null commit -n", temp_dir) == 2)
             check("glued separator after the flag is still blocked",
