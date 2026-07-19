@@ -58,11 +58,13 @@ jobs:
             done
           fi
 
-          # Check: .py files only in root or scripts/
+          # Check: .py files only in root, scripts/, or .claude/hooks/
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
-            if [ "$dir" != "." ] && [ "$dir" != "scripts" ]; then
+            # .claude/hooks holds Claude Code hook scripts (#206) — they live
+            # with the hook config that registers them, like .claude/ .md files
+            if [ "$dir" != "." ] && [ "$dir" != "scripts" ] && [ "$dir" != ".claude/hooks" ]; then
               echo "ERROR: Python file in unexpected location: $f"
               errors=$((errors + 1))
             fi

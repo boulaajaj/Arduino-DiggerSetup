@@ -3,7 +3,7 @@
 # 2026-06-01 decision on issue #47. Activate once per clone:
 #     git config core.hooksPath .githooks
 # Human emergency bypass: git commit --no-verify (explain why in the PR).
-# Agents cannot bypass: .claude/hooks/test-gate.py refuses --no-verify.
+# Agents cannot bypass: .claude/hooks/test-gate.py refuses --no-verify / -n.
 
 staged=$(git diff --cached --name-only)
 

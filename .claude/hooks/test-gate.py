@@ -43,17 +43,24 @@ def split_on_separators(tokens):
     return [command for command in commands if command]
 
 
-def commit_arguments_from(tokens, start_index):
-    """Arguments of a `git ...` invocation at start_index, if it is a commit.
+REPO_TARGET_OPTIONS = {"-C", "--git-dir", "--work-tree"}
 
-    Walks git's global options to find the subcommand; returns the argument
-    list (up to the next separator) when the subcommand is `commit`, else
-    None.
+
+def commit_invocation_from(tokens, start_index):
+    """The `git commit` invocation at start_index, if that is what it is.
+
+    Walks git's global options to find the subcommand; returns
+    {"arguments": [...], "repo_options": [...]} when the subcommand is
+    `commit` (repo_options carries the -C/--git-dir/--work-tree pairs so the
+    hooksPath check can target the same repository), else None.
     """
     index = start_index + 1
+    repo_options = []
     while index < len(tokens) and tokens[index] not in SEPARATORS:
         token = tokens[index]
         if token in GIT_VALUE_OPTIONS:
+            if token in REPO_TARGET_OPTIONS and index + 1 < len(tokens):
+                repo_options.extend(tokens[index:index + 2])
             index += 2
             continue
         if token.startswith("-"):
@@ -65,13 +72,13 @@ def commit_arguments_from(tokens, start_index):
                 if argument in SEPARATORS:
                     break
                 arguments.append(argument)
-            return arguments
+            return {"arguments": arguments, "repo_options": repo_options}
         return None  # some other git subcommand
     return None
 
 
-def commit_argument_lists(command_text):
-    """Argument lists of every real `git commit` invocation, or None.
+def commit_invocations(command_text):
+    """Every real `git commit` invocation in the command, or None.
 
     Attempt A parses line by line (newlines separate commands, so a
     multi-line `git commit -n` is caught). When a quoted string legally
@@ -88,21 +95,21 @@ def commit_argument_lists(command_text):
             tokens = shlex.split(command_text)
         except ValueError:
             return None  # malformed even as a whole — caller falls back
-        argument_lists = []
+        invocations = []
         for index, token in enumerate(tokens):
             if token == "git":
-                arguments = commit_arguments_from(tokens, index)
-                if arguments is not None:
-                    argument_lists.append(arguments)
-        return argument_lists
+                invocation = commit_invocation_from(tokens, index)
+                if invocation is not None:
+                    invocations.append(invocation)
+        return invocations
 
-    argument_lists = []
+    invocations = []
     for tokens in lines_parse:
         if tokens[0] == "git":
-            arguments = commit_arguments_from(tokens, 0)
-            if arguments is not None:
-                argument_lists.append(arguments)
-    return argument_lists
+            invocation = commit_invocation_from(tokens, 0)
+            if invocation is not None:
+                invocations.append(invocation)
+    return invocations
 
 
 def main():
@@ -116,30 +123,33 @@ def main():
     if "git" not in command_text or "commit" not in command_text:
         return 0
 
-    commit_arguments = commit_argument_lists(command_text)
-    if commit_arguments is None:
+    invocations = commit_invocations(command_text)
+    if invocations is None:
         # Malformed input even as whole-text: substring check on the FIRST
         # line only (real invocations start there; heredoc prose does not),
         # then the hooksPath check below still applies.
         first_line = command_text.splitlines()[0] if command_text else ""
-        commit_arguments = [first_line.split()]
+        invocations = [{"arguments": first_line.split(), "repo_options": []}]
 
-    if not commit_arguments:
+    if not invocations:
         return 0  # "git ... commit" appeared only as prose/quoted text
 
-    for arguments in commit_arguments:
+    for invocation in invocations:
+        arguments = invocation["arguments"]
         if "--no-verify" in arguments or "-n" in arguments:
             block("Blocked (#47 gate): --no-verify is not available to agents.",
                   "Fix the failing tests (or the missing test update) instead.")
 
-    hooks_path = subprocess.run(
-        ["git", "config", "core.hooksPath"],
-        capture_output=True, text=True).stdout.strip()
-    if hooks_path != ".githooks":
-        block("Blocked (#47 gate): the commit-time test gate is not active "
-              "in this clone.",
-              "Run once:  git config core.hooksPath .githooks   — then retry "
-              "the commit.")
+    for invocation in invocations:
+        # Query the SAME repository the commit targets (git -C / --git-dir).
+        hooks_path = subprocess.run(
+            ["git"] + invocation["repo_options"] + ["config", "core.hooksPath"],
+            capture_output=True, text=True).stdout.strip()
+        if hooks_path != ".githooks":
+            block("Blocked (#47 gate): the commit-time test gate is not "
+                  "active in this clone.",
+                  "Run once:  git config core.hooksPath .githooks   — then "
+                  "retry the commit.")
     return 0
 
 

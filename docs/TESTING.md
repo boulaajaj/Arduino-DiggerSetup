@@ -153,9 +153,9 @@ Three layers, per issue #47:
    Registration itself is CI-checked: `scripts/check_hook_registration.py`
    (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
    not referenced by any registered hook, and functionally exercises the
-   gate (14 cases: bypass flags blocked incl. compound, multi-line, and
-   `git -C` forms; inactive `core.hooksPath` blocked; benign flags, quoted
-   prose, and heredoc commit messages pass).
+   gate (15 cases: bypass flags blocked incl. compound, multi-line, and
+   `git -C` forms; inactive `core.hooksPath` blocked in the repo the commit
+   TARGETS; benign flags, quoted prose, and heredoc commit messages pass).
 
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.

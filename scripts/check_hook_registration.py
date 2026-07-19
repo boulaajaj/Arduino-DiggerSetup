@@ -116,6 +116,14 @@ def main():
                       'EOF\n)"', temp_dir) == 0)
             check("multi-line real bypass is still blocked",
                   gate_exit_code("cd .\ngit commit -n", temp_dir) == 2)
+            # -C targeting: hooksPath is checked in the repo the commit
+            # TARGETS, not the hook's working directory.
+            with tempfile.TemporaryDirectory() as other_repo:
+                subprocess.run(["git", "init", "-q", other_repo], check=True)
+                check("git -C into a gate-less repo is blocked even from an "
+                      "active clone",
+                      gate_exit_code(f'git -C "{other_repo}" commit -m x',
+                                     temp_dir) == 2)
 
     for name in failures:
         print(f"FAIL: {name}")
