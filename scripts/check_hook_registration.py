@@ -103,6 +103,8 @@ def main():
                                  temp_dir) == 2)
             check("wrapper option-value named git cannot hide it",
                   gate_exit_code("env -u git git commit -n", temp_dir) == 2)
+            check("git as a wrapper option's value is not an invocation",
+                  gate_exit_code("env -u git commit -n", temp_dir) == 0)
             check("long-form wrapper option with separate value is caught",
                   gate_exit_code("sudo --user operator git commit -n",
                                  temp_dir) == 2)

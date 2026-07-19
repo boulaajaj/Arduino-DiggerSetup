@@ -169,23 +169,19 @@ def command_position_index(tokens, target_names):
         if (token.isdigit() and index + 1 < len(tokens)
                 and is_redirection(tokens[index + 1])):
             continue  # fd prefix split off by the lexer (2 > file)
+        if previous_was_option:
+            # A table-listed wrapper option DEFINITELY takes a value — this
+            # token is that value, whatever it is named (env -u git commit
+            # runs `commit`, not git).
+            previous_was_option = False
+            continue
         name = base_name(token)
         if name in target_names:
-            if (previous_was_option
-                    and any(base_name(later) in target_names
-                            for later in tokens[index + 1:])):
-                # Ambiguous: this occurrence is a wrapper option's VALUE
-                # (env -u git git commit …) — a later occurrence is the
-                # command. Without a later one, this IS the command.
-                previous_was_option = False
-                continue
             return index
         if ASSIGNMENT_PATTERN.match(token):
-            previous_was_option = False
             continue
         if name in WRAPPER_COMMANDS:
             current_wrapper = name
-            previous_was_option = False
             continue
         if current_wrapper is not None and token.startswith("-"):
             # Only options KNOWN to take a separate value consume the next
@@ -195,9 +191,6 @@ def command_position_index(tokens, target_names):
                                    and token in
                                    WRAPPER_COMMANDS[current_wrapper])
             continue
-        if current_wrapper is not None and previous_was_option:
-            previous_was_option = False
-            continue  # the option's value, e.g. sudo -u USER
         if current_wrapper == "timeout" and DURATION_PATTERN.match(token):
             continue  # timeout's positional duration: timeout 30 git ...
         return None
