@@ -42,7 +42,9 @@ Updated by session hooks — only technical content, no personal info.
   parsed recursively (bounded depth 5).
   Equals-form repo targeting (`--git-dir=`/`--work-tree=`) is honored,
   and a shell must itself sit in command position (`echo sh -c ...` is
-  data). `check_hook_registration.py` grew to 37 cases;
+  data). A wrapper option-value literally named `git` (env -u git git commit)
+  is disambiguated by lookahead. `check_hook_registration.py` grew to
+  39 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

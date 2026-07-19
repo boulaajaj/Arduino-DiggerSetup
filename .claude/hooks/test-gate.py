@@ -134,6 +134,14 @@ def command_position_index(tokens, target_names):
     previous_was_option = False
     for index, token in enumerate(tokens):
         if token in target_names:
+            if (wrapper_seen and previous_was_option
+                    and token in tokens[index + 1:]):
+                # Ambiguous: this occurrence is a wrapper option's VALUE
+                # (env -u git git commit …) — a later occurrence is the
+                # command. Without a later one, this IS the command
+                # (env -i git commit …, -i takes no value).
+                previous_was_option = False
+                continue
             return index
         if ASSIGNMENT_PATTERN.match(token):
             previous_was_option = False

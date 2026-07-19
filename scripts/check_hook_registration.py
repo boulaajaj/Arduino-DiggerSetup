@@ -100,6 +100,10 @@ def main():
             check("wrapper with its own option-value cannot hide it",
                   gate_exit_code("sudo -u operator git commit -n",
                                  temp_dir) == 2)
+            check("wrapper option-value named git cannot hide it",
+                  gate_exit_code("env -u git git commit -n", temp_dir) == 2)
+            check("valueless wrapper option before git is still caught",
+                  gate_exit_code("env -i git commit -n", temp_dir) == 2)
             check("git as data of another command is not an invocation",
                   gate_exit_code("echo git commit -n", temp_dir) == 0)
             check("git as data stays data behind a wrapper (env echo git)",
