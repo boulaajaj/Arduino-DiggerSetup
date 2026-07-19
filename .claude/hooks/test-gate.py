@@ -16,6 +16,7 @@ conservatism: on unparseable input, plain substring checks apply.
 """
 
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -97,6 +98,35 @@ def split_on_separators(tokens):
 
 REPO_TARGET_OPTIONS = {"-C", "--git-dir", "--work-tree"}
 
+# Commands that EXECUTE what follows them — `git` after one of these is a
+# real invocation; `git` after anything else (echo, grep, ...) is data.
+WRAPPER_COMMANDS = {"env", "sudo", "command", "nice", "nohup", "time",
+                    "stdbuf", "timeout", "xargs"}
+ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def command_position_git_index(tokens):
+    """Index of `git` when it sits in command position, else None.
+
+    Leading environment assignments (`FOO=1`) and executing wrappers
+    (`env`, `sudo`, ...) keep the position open — including their own
+    option/value tokens once a wrapper was seen (`sudo -u user git`).
+    Any other command owner (echo, grep, ...) means `git` is mere data.
+    """
+    wrapper_seen = False
+    for index, token in enumerate(tokens):
+        if token == "git":
+            return index
+        if ASSIGNMENT_PATTERN.match(token):
+            continue
+        if token in WRAPPER_COMMANDS:
+            wrapper_seen = True
+            continue
+        if wrapper_seen:
+            continue  # a wrapper's own options/values, e.g. sudo -u user
+        return None
+    return None
+
 
 def commit_invocation_from(tokens, start_index):
     """The `git commit` invocation at start_index, if that is what it is.
@@ -157,15 +187,11 @@ def commit_invocations(command_text):
 
     invocations = []
     for tokens in lines_parse:
-        # Scan for `git` anywhere in the simple command, not just position 0:
-        # wrappers and environment assignments (`FOO=1 git commit`,
-        # `env git commit`, `sudo git commit`) must not hide the invocation.
-        for index, token in enumerate(tokens):
-            if token == "git":
-                invocation = commit_invocation_from(tokens, index)
-                if invocation is not None:
-                    invocations.append(invocation)
-                break
+        index = command_position_git_index(tokens)
+        if index is not None:
+            invocation = commit_invocation_from(tokens, index)
+            if invocation is not None:
+                invocations.append(invocation)
     return invocations
 
 

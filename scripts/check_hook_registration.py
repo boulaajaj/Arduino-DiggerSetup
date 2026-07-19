@@ -97,6 +97,11 @@ def main():
                   gate_exit_code("FOO=1 git commit -n", temp_dir) == 2)
             check("env wrapper cannot hide the invocation",
                   gate_exit_code("env git commit --no-verify", temp_dir) == 2)
+            check("wrapper with its own option-value cannot hide it",
+                  gate_exit_code("sudo -u operator git commit -n",
+                                 temp_dir) == 2)
+            check("git as data of another command is not an invocation",
+                  gate_exit_code("echo git commit -n", temp_dir) == 0)
             check("glued separator after the flag is still blocked",
                   gate_exit_code("git commit --no-verify&&git push",
                                  temp_dir) == 2)
