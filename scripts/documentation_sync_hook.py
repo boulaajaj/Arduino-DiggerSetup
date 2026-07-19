@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""PostToolUse hook (#156): documentation-sync prompt on production-code edits.
+"""PostToolUse hook (#156): documentation-sync prompt on watched-path edits.
 
 Claude Code pipes the tool payload to stdin after every Edit/Write. When the
-edited file is production code (not generated, not a secret), this emits the
+edited file is on a watched path (sketches, dashboard source, scripts,
+workflows, tests — not generated files, not secrets), this emits the
 JSON `additionalContext` form — the only PostToolUse output that reaches the
 model (plain stdout is transcript-only) — telling the agent to verify the
 architecture docs and docs/wiki against the change in the same PR.
@@ -34,14 +35,18 @@ EXCLUDED = (
 )
 
 PROMPT = (
-    "[DOCUMENTATION-SYNC HOOK #156] Production code changed this session "
+    "[DOCUMENTATION-SYNC HOOK #156] Watched code changed this session "
     "(first hit: {path}). Before this task ends, verify the documentation "
     "still matches the code and update it in the SAME PR wherever it does "
     "not: docs/wiki/ notes covering the changed area (same-PR rule, "
-    "docs/wiki/README.md), docs/architecture/ARCHITECTURE-TARGET.md, the "
-    "CLAUDE.md file map, docs/TESTING.md, docs/SAFETY.md, and "
-    "OPERATOR-GUIDE.md for operator-facing behavior. Tunable values stay "
-    "canonical in [CONFIG] — docs describe behavior, never live numbers "
+    "docs/wiki/README.md), docs/architecture/ARCHITECTURE-TARGET.md, "
+    "docs/architecture/FILE-MAP.md, docs/TESTING.md, docs/SAFETY.md, "
+    "docs/WIRING-GUIDE-V8.md for pin/UART changes, docs/XBUS-PROTOCOL.md "
+    "for X.BUS changes, and "
+    "OPERATOR-GUIDE.md for operator-facing behavior. Production-sketch "
+    "tunables stay canonical in sketches/dual_track_control/src/config/ "
+    "(bench sketches keep constants local) — docs describe "
+    "behavior, never live numbers "
     "(#124). If everything already matches, say so briefly and move on."
 )
 

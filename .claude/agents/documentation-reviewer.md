@@ -17,10 +17,10 @@ Read/Grep/Glob. Check, using the mapping in the `wiki-impact-review` skill
   carry a documentation receipt in its body.
 - **Wiki hygiene**: notes stay links-only — no tunable values copied in;
   `python scripts/check_wiki.py` is green on the branch.
-- **Instruction surfaces agree with code**: CLAUDE.md file map lists
+- **Instruction surfaces agree with code**: `docs/architecture/FILE-MAP.md` lists
   new/moved/deleted files; `docs/TESTING.md`, `docs/SAFETY.md`,
   `OPERATOR-GUIDE.md` match observable behavior; numbers quoted in
-  PROJECT-PLAN/OPERATOR-GUIDE match `src/config/`.
+  PROJECT-PLAN/OPERATOR-GUIDE match `sketches/dual_track_control/src/config/`.
 - **No stale framing reintroduced**: nothing describes retired structures as
   current (e.g. `[MODULE]`-sections-in-the-.ino, pre-#185 config homes) —
   historical references in dated logs are fine.

@@ -8,7 +8,8 @@ drive exactly as before.
 - **Target architecture** —
   [ARCHITECTURE-TARGET](../architecture/ARCHITECTURE-TARGET.md): layers
   (`application` / `domain` / `ports` / `infrastructure`), dependency rules,
-  migration order
+  migration order; annotated file inventory in
+  [FILE-MAP](../architecture/FILE-MAP.md) (#197)
 - **Founding ADR** —
   [0001-domain-oriented-firmware-architecture](../architecture/adr/0001-domain-oriented-firmware-architecture.md)
 - **Phases** — A Define → B Protect ([testing](testing.md) suites, done) →
