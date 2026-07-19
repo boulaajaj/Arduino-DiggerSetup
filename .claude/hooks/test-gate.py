@@ -341,9 +341,9 @@ def main():
             capture_output=True, text=True).stdout.strip()
         if hooks_path != ".githooks":
             block("Blocked (#47 gate): the commit-time test gate is not "
-                  "active in this clone.",
-                  "Run once:  git config core.hooksPath .githooks   — then "
-                  "retry the commit.")
+                  "active in the repository this commit targets.",
+                  "Run once there:  git config core.hooksPath .githooks   — "
+                  "then retry the commit.")
     return 0
 
 
