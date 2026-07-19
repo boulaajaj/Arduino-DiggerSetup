@@ -21,10 +21,14 @@ Updated by session hooks — only technical content, no personal info.
   spelling: exact flags, bundled short options (`-anm` carries `-n`;
   value-taking shorts `m c C F t S` end the scan so `-mnope` passes),
   parse-options long abbreviation (`--no-v` prefix), and `--` ends option
-  scanning (pathspecs). The hooksPath check targets the commit's OWN repo
-  (honors `git -C` / `--git-dir`). `check_hook_registration.py` grew to
-  19 cases; structure-check allows `.py` under `.claude/hooks/` (hook
-  scripts live with the config that registers them).
+  scanning (pathspecs). Tokenizing uses `shlex` punctuation_chars so glued
+  separators cannot hide an invocation (`true;git commit -n` and
+  `git commit --no-verify&&git push` were live bypasses of the exact-match
+  cut — both reproduced, then sealed). The hooksPath check targets the
+  commit's OWN repo (honors `git -C` / `--git-dir`).
+  `check_hook_registration.py` grew to 21 cases; structure-check allows
+  `.py` under `.claude/hooks/` (hook scripts live with the config that
+  registers them).
 
 ## 2026-07-16 — CLAUDE.md trimmed to ~200 lines (#197)
 

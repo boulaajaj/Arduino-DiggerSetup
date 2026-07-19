@@ -20,7 +20,27 @@ import shlex
 import subprocess
 import sys
 
-SEPARATORS = {"&&", "||", ";", "|", "&"}
+# shlex punctuation characters — any token made solely of these is a command
+# separator (covers &&, ||, ;, |, &, and subshell parens in any run length).
+PUNCTUATION_CHARACTERS = set("();<>|&")
+
+
+def is_separator(token):
+    return bool(token) and set(token) <= PUNCTUATION_CHARACTERS
+
+
+def tokenize(text):
+    """shlex tokens with operators split out even when glued to words.
+
+    punctuation_chars makes `true;git commit -n` tokenize as
+    ['true', ';', 'git', ...] instead of hiding the invocation inside a
+    'true;git' word. Raises ValueError on unclosed quotes (caller decides).
+    """
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    return list(lexer)
+
+
 GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
                      "--exec-path"}
 # git commit short options that consume a value: in a short-option bundle the
@@ -66,7 +86,7 @@ def block(*lines):
 def split_on_separators(tokens):
     commands, current = [], []
     for token in tokens:
-        if token in SEPARATORS:
+        if is_separator(token):
             commands.append(current)
             current = []
         else:
@@ -88,7 +108,7 @@ def commit_invocation_from(tokens, start_index):
     """
     index = start_index + 1
     repo_options = []
-    while index < len(tokens) and tokens[index] not in SEPARATORS:
+    while index < len(tokens) and not is_separator(tokens[index]):
         token = tokens[index]
         if token in GIT_VALUE_OPTIONS:
             if token in REPO_TARGET_OPTIONS and index + 1 < len(tokens):
@@ -101,7 +121,7 @@ def commit_invocation_from(tokens, start_index):
         if token == "commit":
             arguments = []
             for argument in tokens[index + 1:]:
-                if argument in SEPARATORS:
+                if is_separator(argument):
                     break
                 arguments.append(argument)
             return {"arguments": arguments, "repo_options": repo_options}
@@ -121,10 +141,10 @@ def commit_invocations(command_text):
     lines_parse = []
     try:
         for line in command_text.splitlines():
-            lines_parse.extend(split_on_separators(shlex.split(line)))
+            lines_parse.extend(split_on_separators(tokenize(line)))
     except ValueError:
         try:
-            tokens = shlex.split(command_text)
+            tokens = tokenize(command_text)
         except ValueError:
             return None  # malformed even as a whole — caller falls back
         invocations = []
