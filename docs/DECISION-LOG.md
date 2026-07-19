@@ -34,7 +34,9 @@ Updated by session hooks — only technical content, no personal info.
   positionals like `timeout 30 git ...` stay caught).
   Redirections are not command separators: `git 2>/dev/null commit -n`
   stays a caught invocation, trailing `> /dev/null 2>&1` on a clean
-  commit passes. `check_hook_registration.py` grew to 29 cases;
+  commit passes. Both parse paths use the same command-position logic (git as data
+  after a line-spanning quote stays data; a real bypass after one still
+  blocks). `check_hook_registration.py` grew to 31 cases;
   structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).

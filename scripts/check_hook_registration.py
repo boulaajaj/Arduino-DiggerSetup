@@ -104,6 +104,12 @@ def main():
                   gate_exit_code("echo git commit -n", temp_dir) == 0)
             check("git as data stays data behind a wrapper (env echo git)",
                   gate_exit_code("env echo git commit -n", temp_dir) == 0)
+            check("git as data after a line-spanning quote stays data",
+                  gate_exit_code('echo "first\nsecond" && echo git commit -n',
+                                 temp_dir) == 0)
+            check("real bypass after a line-spanning quote is blocked",
+                  gate_exit_code('echo "first\nsecond" && git commit -n',
+                                 temp_dir) == 2)
             check("duration-argument wrapper cannot hide it (timeout 30 git)",
                   gate_exit_code("timeout 30 git commit -n", temp_dir) == 2)
             check("redirection cannot hide the invocation (git 2>/dev/null)",

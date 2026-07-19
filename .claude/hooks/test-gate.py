@@ -198,25 +198,18 @@ def commit_invocations(command_text):
     parses the whole text at once, where such strings collapse to single
     tokens and prose inside them can never look like arguments.
     """
-    lines_parse = []
     try:
+        commands = []
         for line in command_text.splitlines():
-            lines_parse.extend(split_on_separators(tokenize(line)))
+            commands.extend(split_on_separators(tokenize(line)))
     except ValueError:
         try:
-            tokens = tokenize(command_text)
+            commands = split_on_separators(tokenize(command_text))
         except ValueError:
             return None  # malformed even as a whole — caller falls back
-        invocations = []
-        for index, token in enumerate(tokens):
-            if token == "git":
-                invocation = commit_invocation_from(tokens, index)
-                if invocation is not None:
-                    invocations.append(invocation)
-        return invocations
 
     invocations = []
-    for tokens in lines_parse:
+    for tokens in commands:
         index = command_position_git_index(tokens)
         if index is not None:
             invocation = commit_invocation_from(tokens, index)
