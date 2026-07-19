@@ -49,9 +49,8 @@ Updated by session hooks — only technical content, no personal info.
   conservative check, never a pass). Path-invoked git (`/usr/bin/git`, `./git`, `git.exe`) matches by
   basename; wrapper options consume a value only when the per-wrapper
   table says so (env -i does not eat the wrapped command).
-  `check_hook_registration.py` carries the canonical case inventory
-  (44 at merge time);
-  structure-check allows
+  `check_hook_registration.py` carries the canonical case inventory (no
+  count recorded here — it grows with the gate); structure-check allows
   `.py` under `.claude/hooks/` (hook scripts live with the config that
   registers them).
 
