@@ -172,6 +172,9 @@ def main():
                   gate_exit_code_raw("git commit -n", temp_dir) == 2)
             check("malformed payload without a commit passes",
                   gate_exit_code_raw("just some text", temp_dir) == 0)
+            check("non-string command value never crashes the gate",
+                  gate_exit_code_raw('{"tool_input":{"command":null}}',
+                                     temp_dir) == 0)
             subprocess.run(["git", "-C", temp_dir, "config",
                             "core.hooksPath", ".githooks"], check=True)
             check("commit passes once the #47 gate is active",
@@ -235,6 +238,10 @@ def main():
                 check("equals-form --git-dir targeting is honored",
                       gate_exit_code(
                           f'git --git-dir="{other_repo}/.git" commit -m x',
+                          temp_dir) == 2)
+                check("fallback keeps -C targeting on unparseable input",
+                      gate_exit_code(
+                          f'git -C {other_repo} commit -m x "unclosed',
                           temp_dir) == 2)
 
     for name in failures:

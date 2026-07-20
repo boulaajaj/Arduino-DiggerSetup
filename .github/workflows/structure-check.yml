@@ -63,7 +63,8 @@ jobs:
             nf="${f#./}"
             dir=$(dirname "$nf")
             # .claude/hooks holds Claude Code hook scripts (#206) — they live
-            # with the hook config that registers them, like .claude/ .md files
+            # with the hook config that registers them, mirroring the
+            # .claude/ allowance the markdown rule below already makes
             if [ "$dir" != "." ] && [ "$dir" != "scripts" ] && [ "$dir" != ".claude/hooks" ]; then
               echo "ERROR: Python file in unexpected location: $f"
               errors=$((errors + 1))

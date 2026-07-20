@@ -271,19 +271,34 @@ def commit_invocation_from(tokens, start_index):
     return None
 
 
+def fallback_repo_options(tokens):
+    """Best-effort -C/--git-dir/--work-tree extraction for fallback lines."""
+    options = []
+    for index, token in enumerate(tokens):
+        if (token in ("-C", "--git-dir", "--work-tree")
+                and index + 1 < len(tokens)):
+            options.extend(tokens[index:index + 2])
+        elif token.startswith(("--git-dir=", "--work-tree=")):
+            options.append(token)
+    return options
+
+
 def fallback_invocations(text):
     """Whitespace-token check for text that cannot be tokenized (fail-close).
 
     Every line naming both `git` and `commit` is treated as a potential
     invocation, so an unclosed quote cannot smuggle a bypass onto a later
     line. If no single line names both, all tokens are checked together.
+    Repo-targeting options are still extracted so the hooksPath check
+    queries the commit's target repo, not the hook's working directory.
     """
     lines = [line.split() for line in text.splitlines()]
     suspicious = [tokens for tokens in lines
                   if "git" in tokens and "commit" in tokens]
     if not suspicious:
         suspicious = [text.split()]
-    return [{"arguments": tokens, "repo_options": []}
+    return [{"arguments": tokens,
+             "repo_options": fallback_repo_options(tokens)}
             for tokens in suspicious]
 
 
@@ -359,6 +374,10 @@ def main():
     except (ValueError, AttributeError):
         # Fail CLOSE on malformed payloads: inspect the raw text with the
         # same parser instead of waving the call through.
+        command_text = raw_input_text
+    if not isinstance(command_text, str):
+        # A JSON-legal but non-string command (null, list, number) is
+        # malformed for our purposes — inspect the raw text, never crash.
         command_text = raw_input_text
     # Cheap pre-filter only — the parser below decides what a commit IS
     # (catches `git -C path commit` that the old "git commit" glob missed).
