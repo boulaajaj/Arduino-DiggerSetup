@@ -26,7 +26,8 @@ design; source of truth:
    PWM stops, and the ESCs failsafe — the runaway backstop.
 6. **Observers** — X.BUS telemetry poll (read-only Read Register; it runs
    AFTER the gate and cannot affect the control output), Wi-Fi dashboard
-   serving (monitoring only), alert/beeper state machines
+   serving plus its periodic serving diagnostics (monitoring only), then
+   the alert/beeper state machines
    ([telemetry-and-dashboard](telemetry-and-dashboard.md)).
 7. **Debug output** — the CSV line, last.
 
