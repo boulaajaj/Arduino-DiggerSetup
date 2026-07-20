@@ -5,6 +5,18 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — durable wiki architecture pages (#201)
+
+- Four stable concept pages added: architecture-overview (the durable
+  entry; architecture-remediation stays as dated migration history),
+  application-loop (the firmwareLoop pass order incl. the two ordering
+  invariants: ladders before gear select, watchdog refresh directly after
+  the output gate), ports-and-adapters (link-time seams, vendor types
+  never cross, the reverse telemetry-frame seam), configuration-authority
+  (value kinds: config layer / adapter-owned / branding / operator /
+  historical). home.md links the set; loop order verified against
+  FirmwareApp.cpp before writing.
+
 ## 2026-07-19 — authority matrix: one page states which artifact wins (#198)
 
 - `docs/wiki/authority-matrix.md` states the source-of-truth hierarchy once

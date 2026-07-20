@@ -16,7 +16,12 @@ Which artifact wins for what: [authority-matrix](authority-matrix.md).
 - [Telemetry and dashboard](telemetry-and-dashboard.md) — X.BUS in, Wi-Fi out
 - [Testing](testing.md) — host suites that compile the real firmware
 - [Agent governance](agent-governance.md) — Karpathy method, covenant, bots
+- [Architecture](architecture-overview.md) — layers, seams, and the loop
+  ([application-loop](application-loop.md) ·
+  [ports-and-adapters](ports-and-adapters.md) ·
+  [configuration-authority](configuration-authority.md))
 - [Architecture remediation](architecture-remediation.md) — epic #116 program
+  (dated migration history)
 
 ## People and operations
 
