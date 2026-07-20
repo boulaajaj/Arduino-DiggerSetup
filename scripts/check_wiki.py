@@ -1,7 +1,10 @@
 """Wiki lint (#145, v2 #202) — health checks for the docs/wiki/ graph.
 
 The third operation of the Karpathy LLM-wiki pattern (#141): ingest and
-query exist; this is lint. Stdlib-only, identical locally and in CI.
+query exist; this is lint. Stdlib-only Python; when a `git` executable is
+present, gitignored notes (personal scratch files) are skipped — without
+git, everything on disk is linted (CI checks out tracked files only, so
+its result is unaffected either way).
 
 Checks:
   1. Link integrity — every relative Markdown link in a wiki note resolves
