@@ -12,7 +12,10 @@ design; source of truth:
    sampled on its own cadence and shaped (deadband, expo, gain).
 3. **Mix** — RC and joystick combine at the axis level, then curvatureDrive
    runs once on the combined command (average-speed gear cap, pivot blend,
-   desaturation). Invalid RC mixes to neutral.
+   desaturation). Invalid RC mixes to neutral. (This page describes normal
+   operation: a temporary bench-only ESC-calibration mode can bypass the
+   mix with the raw stick — it is compile-time disabled in the field and
+   slated for removal.)
 4. **Safety decision + output gate** — the safety supervisor
    ([safety-system](safety-system.md)) decides drive-allowed from RC
    freshness, battery confirmation/boot grace, cutoff latch, and thermal
