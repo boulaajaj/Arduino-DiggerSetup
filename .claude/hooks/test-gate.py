@@ -382,9 +382,17 @@ def main():
 
     for invocation in invocations:
         # Query the SAME repository the commit targets (git -C / --git-dir).
-        hooks_path = subprocess.run(
-            ["git"] + invocation["repo_options"] + ["config", "core.hooksPath"],
-            capture_output=True, text=True).stdout.strip()
+        try:
+            hooks_path = subprocess.run(
+                ["git"] + invocation["repo_options"]
+                + ["config", "core.hooksPath"],
+                capture_output=True, text=True,
+                timeout=5).stdout.strip()
+        except subprocess.TimeoutExpired:
+            # Fail CLOSE: a hung git means the environment is broken —
+            # do not let the commit through unverified.
+            block("Blocked (#47 gate): git config timed out while checking "
+                  "core.hooksPath — environment looks unhealthy; retry.")
         if hooks_path != ".githooks":
             block("Blocked (#47 gate): the commit-time test gate is not "
                   "active in the repository this commit targets.",

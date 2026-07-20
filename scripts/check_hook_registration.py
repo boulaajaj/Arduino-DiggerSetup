@@ -44,7 +44,7 @@ def gate_exit_code_raw(raw_text, working_dir):
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
     result = subprocess.run([sys.executable, TEST_GATE], input=raw_text,
                             capture_output=True, text=True,
-                            cwd=working_dir, env=environment)
+                            cwd=working_dir, env=environment, timeout=30)
     return result.returncode
 
 
@@ -58,7 +58,7 @@ def gate_exit_code(command, working_dir):
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
     result = subprocess.run([sys.executable, TEST_GATE], input=payload,
                             capture_output=True, text=True,
-                            cwd=working_dir, env=environment)
+                            cwd=working_dir, env=environment, timeout=30)
     return result.returncode
 
 
