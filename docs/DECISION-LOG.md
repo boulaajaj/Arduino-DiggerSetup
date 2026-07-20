@@ -5,6 +5,25 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — single-writer state: the two named #119 remnants closed
+
+- lowVoltLatched now has ONE writer: [SAFETY]'s batteryCutoffUpdate() calls
+  alertNotifyBatteryCutoff() ([ALERT]'s new narrow interface, which does
+  the write) at the exact point it used to write the flag directly — same
+  pass, same instant, alarm still starts WITH the cut. The two rule-file
+  "historical example" sins are now literally historical.
+- curvatureDrive() application delegate is pure: the gear-selected pivot
+  cap arrives as a parameter; the composition root owns the currentGear
+  read (Eco → looser cap). 17 test call sites updated mechanically with
+  the faithful per-site cap value — ZERO expectation changes; suite
+  27/27 green. Flash 119740 (+16 call plumbing), RAM 9800 unchanged.
+- #119's struct-encapsulation proposal judged superseded: extern +
+  single-writer + pure domain cores satisfies the acceptance; converting
+  the remaining externs to structs would be churn against simplicity-first.
+  Known residual (acknowledged, not in the issue's complaints):
+  updateJoystick() reads currentGear for the joystick forward cap — an
+  application-layer boundary read, single-writer respected.
+
 ## 2026-07-20 — temporary diagnostics removed from production firmware (#122)
 
 - CALIBRATION_MODE (compile-time-false raw-throttle bypass inside the

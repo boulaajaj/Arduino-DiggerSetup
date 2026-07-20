@@ -20,13 +20,11 @@
 
 // The curvature mix is extracted to src/domain/drive/CurvatureDrive.* (#117
 // step 6, #164) — the algorithm and its commentary (#72/#86/#96/#114) moved
-// with it. This delegate keeps the call sites and every test reference
-// unchanged, and owns the one dependency the domain must not read: the
-// gear-selected pivot cap (state-ownership rule — currentGear is read HERE,
-// visibly, instead of hidden behind the parameter list).
-WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale) {
-  float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW
-                                             : PIVOT_SPEED_CAP;
+// with it. This delegate bundles the fixed blend/taper tunables; every
+// per-pass dependency, including the gear-selected pivot cap, arrives as a
+// parameter (#119 — the composition root owns the gear read).
+WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale,
+                           float pivotCap) {
   TrackCommand command = curvatureDriveStep(
       xSpeed, zRotation, gearScale,
       CurvatureParameters{pivotCap, PIVOT_THROTTLE_TAPER, PIVOT_BLEND_START,

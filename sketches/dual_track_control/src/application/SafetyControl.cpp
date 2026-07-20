@@ -22,8 +22,9 @@
 //   Stage 1 — Eco lock   (≤ ECO_LOCK_THRESH_V ~10.8 V): updateGear() forces Eco
 //             regardless of the RC gear switch, to ease load on a draining pack.
 //   Stage 2 — Hard cutoff (≤ CUTOFF_THRESH_V 10.0 V): the output gate stops the
-//             motors, and we assert lowVoltLatched so the D8 alarm chirps WITH
-//             the cut — never a silent cutoff.
+//             motors, and alertNotifyBatteryCutoff() starts the D8 alarm WITH
+//             the cut — never a silent cutoff (#119: [ALERT] owns its latch;
+//             this module signals through that narrow interface).
 
 uint32_t cutoffStartMs  = 0;
 uint32_t ecoLockStartMs = 0;
@@ -71,7 +72,7 @@ void batteryCutoffUpdate() {         // Stage 2 — hard cutoff
   batteryOkConfirmed   = ladder.okConfirmed;
   cutoffStartMs        = ladder.cutoffStartMs;
   if (cutoffJustLatched) {
-    lowVoltLatched = true;           // start the D8 alarm WITH the cut (no silent cutoff)
+    alertNotifyBatteryCutoff();      // start the D8 alarm WITH the cut (no silent cutoff)
   }
 }
 

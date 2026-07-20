@@ -11,8 +11,10 @@
 
 TEST_CASE("mixer grid (#131): outputs bounded for every gear x xSpeed x zRotation, incl. out-of-range") {
   resetHarness();
-  const struct { Gear gear; float scale; } gears[] = {
-    {GEAR_LOW, GEAR_LOW_SCALE}, {GEAR_MID, GEAR_MID_SCALE}, {GEAR_HIGH, GEAR_HIGH_SCALE}};
+  const struct { float scale; float pivotCap; } gears[] = {
+    {GEAR_LOW_SCALE, PIVOT_SPEED_CAP_LOW},      // Eco
+    {GEAR_MID_SCALE, PIVOT_SPEED_CAP},          // Normal
+    {GEAR_HIGH_SCALE, PIVOT_SPEED_CAP}};        // Boost
   // Grid straddles the pivot blend band (0.05 / 0.55), the pivot caps
   // (0.60 / 0.725), full deflection, and out-of-range values.
   const float grid[] = {-2.5f, -1.0f, -0.725f, -0.55f, -0.3f, -0.05f, 0.0f,
@@ -20,11 +22,9 @@ TEST_CASE("mixer grid (#131): outputs bounded for every gear x xSpeed x zRotatio
   int checked = 0;
   int outOfBounds = 0;
   for (const auto& g : gears) {
-    currentGear = g.gear;  // curvatureDrive reads this global for the pivot cap
-    gearScale = g.scale;
     for (float xSpeed : grid) {
       for (float zRotation : grid) {
-        ServoOutput out = wheelSpeedsToServo(curvatureDrive(xSpeed, zRotation, g.scale));
+        ServoOutput out = wheelSpeedsToServo(curvatureDrive(xSpeed, zRotation, g.scale, g.pivotCap));
         if (out.left < SVMIN || out.left > SVMAX ||
             out.right < SVMIN || out.right > SVMAX) {
           outOfBounds++;
@@ -49,7 +49,7 @@ TEST_CASE("non-finite mixer inputs (#131): NaN / Inf cannot escape the us clamp"
   int checked = 0;
   int outOfBounds = 0;
   auto probe = [&](float xSpeed, float zRotation) {
-    ServoOutput out = wheelSpeedsToServo(curvatureDrive(xSpeed, zRotation, gearScale));
+    ServoOutput out = wheelSpeedsToServo(curvatureDrive(xSpeed, zRotation, gearScale, PIVOT_SPEED_CAP_LOW));
     if (out.left < SVMIN || out.left > SVMAX ||
         out.right < SVMIN || out.right > SVMAX) {
       outOfBounds++;

@@ -61,7 +61,12 @@ void firmwareLoop() {
     // Combine RC + joystick at the axis level (#90), then run curvatureDrive once
     // on the combined command so a single operator keeps full range.
     DriveCommand cmd = mixCommands(rcCommand(), rcOverride(), cachedJoyCmd);
-    mix = wheelSpeedsToServo(curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale));
+    // Gear-selected pivot cap: Eco keeps the looser cap for maneuvering
+    // authority. Read here so curvatureDrive stays a pure function (#119).
+    float pivotCap = (currentGear == GEAR_LOW) ? PIVOT_SPEED_CAP_LOW
+                                               : PIVOT_SPEED_CAP;
+    mix = wheelSpeedsToServo(
+        curvatureDrive(cmd.xSpeed, cmd.zRotation, gearScale, pivotCap));
   } else {
     mix.left = SVC;  mix.right = SVC;
   }

@@ -20,6 +20,11 @@ extern uint32_t beepPhaseMs;
 extern uint32_t rcOffSinceMs;
 extern uint32_t lowVStartMs;
 extern bool     lowVoltLatched;
+
+// Narrow interface for [SAFETY] (#119): starts the low-battery alarm the
+// instant the hard cutoff latches, without another module writing this
+// module's latch. [ALERT] is the ONLY writer of lowVoltLatched.
+void alertNotifyBatteryCutoff();
 extern uint32_t alertBootMs;
 extern const uint16_t* alarmSeq;
 extern int alarmLen, alarmIdx;

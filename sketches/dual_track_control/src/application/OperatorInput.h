@@ -24,7 +24,8 @@ extern DriveCommand  cachedJoyCmd;
 extern uint32_t      lastAdcTime;
 const uint32_t ADC_INTERVAL = 10000UL;  // 10 ms = 100 Hz
 
-WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale);
+WheelSpeeds curvatureDrive(float xSpeed, float zRotation, float gearScale,
+                           float pivotCap);
 ServoOutput wheelSpeedsToServo(WheelSpeeds ws);
 int sbusToServo(int raw);
 int rcDeadband(int pw);
