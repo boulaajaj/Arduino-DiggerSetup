@@ -94,6 +94,10 @@ def main():
                   gate_exit_code("git commit --no-verif -m x", temp_dir) == 2)
             check("glued separator cannot hide the invocation (true;git)",
                   gate_exit_code("true;git commit -n", temp_dir) == 2)
+            check("glued hash is not a comment (true#;git)",
+                  gate_exit_code("true#;git commit -n", temp_dir) == 2)
+            check("bypass flag before a trailing comment is blocked",
+                  gate_exit_code("git commit -n # note", temp_dir) == 2)
             check("environment-assignment prefix cannot hide the invocation",
                   gate_exit_code("FOO=1 git commit -n", temp_dir) == 2)
             check("env wrapper cannot hide the invocation",
@@ -167,6 +171,9 @@ def main():
                   gate_exit_code("git commit -am x -- -n", temp_dir) == 0)
             check("trailing redirection on a clean commit passes",
                   gate_exit_code("git commit -m x > /dev/null 2>&1",
+                                 temp_dir) == 0)
+            check("prose flags in a trailing comment do not block",
+                  gate_exit_code("git commit -m x # never use -n here",
                                  temp_dir) == 0)
             check("bypass flag still blocked inside a compound command",
                   gate_exit_code(
