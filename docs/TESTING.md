@@ -144,7 +144,7 @@ Three layers, per issue #47:
      {
        "matcher": "Bash",
        "hooks": [
-         { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py\"", "timeout": 30000 }
+         { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py\"", "timeout": 30000 }
        ]
      }
    ]
