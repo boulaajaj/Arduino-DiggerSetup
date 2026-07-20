@@ -5,6 +5,21 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — white-label dashboard: one BRANDING block (#136)
+
+- Product identity (name, tagline, home-screen app title, accent trio) now
+  lives in a single BRANDING config block at the top of
+  dashboard/index.html; applyBranding() writes the text/meta and sets
+  --brand-accent\* CSS custom properties (CSS carries the same values as
+  fallbacks). Default skin is the generic DUAL TRACK CONTROL /
+  VEHICLE COMMAND; "Malaki SuperTracks" is documented in the block as the
+  example skin. Verified both directions with the Playwright harness:
+  config-only edit produces the full Malaki look and back, all gauges and
+  layout pixel-identical. The badge asset slot is the apple-touch-icon
+  data URI (noted in the block); epic #81 lands the HUD badge against
+  this. Remaining Malaki/Jason mentions repo-wide are operator
+  documentation, which the naming rule permits.
+
 ## 2026-07-20 — dev tooling consolidated under tools/ (#123)
 
 - All human-run tools in one home with a README index: serial

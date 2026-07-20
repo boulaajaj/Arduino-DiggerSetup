@@ -19,6 +19,11 @@ can ever command a track. Canonical detail and current cadence/keys:
 - [XBUS-PROTOCOL](../XBUS-PROTOCOL.md) — wire protocol reference
 - Dashboard source lives at `dashboard/index.html`, embedded into firmware as
   `sketches/dual_track_control/web_page.h` (generated — edit the source, regenerate)
+- The platform is white-label (#136): product name, tagline, home-screen app
+  name, and accent colors live in ONE `BRANDING` block at the top of the
+  dashboard source — swapping a skin never touches logic. The default skin is
+  generic; vehicle-specific skins (the "Malaki SuperTracks" example is
+  documented in the block) are applied by editing only those values.
 - Dashboard rules (frame budget, UI testing before flashing):
   [.claude/rules/dashboard](../../.claude/rules/dashboard.md)
 - Telemetry feeds the [battery ladder](battery-ladder.md) and
