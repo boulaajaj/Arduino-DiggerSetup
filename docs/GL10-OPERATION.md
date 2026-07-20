@@ -57,6 +57,10 @@ signal lead. Two options when running the procedure:
   each ESC learns the *exact* µs range the firmware actually outputs (this
   project: 1000/1500/2000). Write a one-off sketch that holds 1000 µs at
   boot, then advances to 2000 µs and 1500 µs on Serial input or fixed delays.
+  The production firmware deliberately contains **no** calibration
+  passthrough (the temporary `CALIBRATION_MODE` flag was removed, #122) — a
+  dedicated bench sketch under `sketches/` is the sanctioned home for this
+  one-off, written when recalibration is actually needed.
 - **Option B:** bypass the Arduino, plug the receiver throttle channel
   straight into the ESC's signal lead, and use the physical transmitter
   stick for the three positions. Faster if you don't mind the temporary

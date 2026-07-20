@@ -9,7 +9,7 @@ Updated by session hooks — only technical content, no personal info.
 
 - CALIBRATION_MODE (compile-time-false raw-throttle bypass inside the
   control path, #113 ESC-endpoint relearn — served its purpose, both ESCs
-  recalibrated 2026-06) DELETED: DriveConfig.h const + FirmwareApp.cpp
+  recalibrated 2026-07-03) DELETED: DriveConfig.h const + FirmwareApp.cpp
   bypass block. If re-calibration is ever needed again, a dedicated bench
   sketch under sketches/ is the sanctioned home, not a production branch.
 - telemetryDebug* X.BUS bring-up diagnostics (ex-telDbg, per-RX-byte
