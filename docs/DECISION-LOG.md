@@ -5,6 +5,17 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — dev tooling consolidated under tools/ (#123)
+
+- All human-run tools in one home with a README index: serial
+  monitors/plotters + deploy + board drawings moved from root and
+  scripts/ into tools/, joining the UI tests; scripts/ deliberately
+  KEEPS the CI/hook machinery (the CI-vs-human split is now the rule,
+  not an accident). npm scripts expose every .mjs entry point; VS Code
+  tasks, README, FILE-MAP, and structure-check allowlists updated.
+  capture.py (#37) no longer exists in the tree — disposition resolved
+  as already-deleted.
+
 ## 2026-07-20 — repo front door: ARCHITECTURE.md + CONTRIBUTING.md (#126)
 
 - docs/ARCHITECTURE.md: human-facing narrative (layer shape, signal

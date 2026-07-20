@@ -4,7 +4,12 @@
   "description": "Local dev tooling for the excavator project (dashboard UI testing).",
   "type": "module",
   "scripts": {
-    "ui-test": "node tools/ui-test.mjs"
+    "ui-test": "node tools/ui-test.mjs",
+    "ui-test:battery": "node tools/ui-test-battery.mjs",
+    "ui-test:battery-color": "node tools/ui-test-battery-color.mjs",
+    "ui-test:safety": "node tools/ui-test-safety.mjs",
+    "ui-test:thermal": "node tools/ui-test-thermal.mjs",
+    "drive-trace": "node tools/drive-trace.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.0"
