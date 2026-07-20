@@ -96,8 +96,13 @@ void alertInit() { alertBootMs = clockNowMs(); }
 
 // NOTE: [ALERT] below is AUDIO-ONLY — it drives the D8 piezo and never touches the
 // motors. The motor-affecting battery cutoff lives in its own [SAFETY] section
-// (search [SAFETY]); it only *borrows* this module's lowVoltLatched to start the
-// chirp when it cuts.
+// (search [SAFETY]); it signals through alertNotifyBatteryCutoff() below to
+// start the chirp when it cuts — this module is the only writer of its latch.
+
+// [SAFETY]'s narrow interface (#119): latch the alarm the instant the hard
+// cutoff latches, so the cut is never silent. Same latch-until-power-cycle
+// semantics as the policy's own debounced latch.
+void alertNotifyBatteryCutoff() { lowVoltLatched = true; }
 
 // Call every loop. rcOn = sbusValid. Sets alarmOutputOn for the piezo.
 // The decision logic and playback live in alerts/AlertPolicy +
