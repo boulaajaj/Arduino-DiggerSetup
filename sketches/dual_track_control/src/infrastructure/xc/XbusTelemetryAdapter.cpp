@@ -16,12 +16,6 @@ uint32_t telemetryRequestStartUs   = 0;
 uint8_t  telemetryReceiveBuffer[64];
 int      telemetryReceiveLength    = 0;
 
-uint32_t telemetryDebugReceiveTotal    = 0;
-uint32_t telemetryDebugEchoCount       = 0;
-uint32_t telemetryDebugSlaveCount      = 0;
-uint8_t  telemetryDebugSnapshot[16]    = {0};
-int      telemetryDebugSnapshotLength  = 0;
-uint32_t telemetryDebugPrintPreviousMs = 0;
 
 void telemetrySourceInitialize() {
   Serial1.begin(115200);  // X.BUS telemetry bus on D0/D1 (read-only, 0x10)
@@ -110,14 +104,7 @@ void telemetrySourceUpdate(EscTelem *telemetry, uint8_t escCount) {
 
   // Drain available bytes every iteration (cheap).
   while (Serial1.available() && telemetryReceiveLength < (int)sizeof(telemetryReceiveBuffer)) {
-    uint8_t b = Serial1.read();
-    telemetryReceiveBuffer[telemetryReceiveLength++] = b;
-    telemetryDebugReceiveTotal++;                        // any byte on D0
-    if (b == XBUS_HEADER_MASTER) telemetryDebugEchoCount++;   // 0x0F = our own TX echo
-    if (b == XBUS_HEADER_SLAVE)  telemetryDebugSlaveCount++;  // 0xF0 = ESC reply
-    if (telemetryDebugSnapshotLength < (int)sizeof(telemetryDebugSnapshot)) {
-      telemetryDebugSnapshot[telemetryDebugSnapshotLength++] = b;
-    }
+    telemetryReceiveBuffer[telemetryReceiveLength++] = Serial1.read();
   }
 
   if (telemetryAwaitingResponse) {

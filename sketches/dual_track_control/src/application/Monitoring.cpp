@@ -86,24 +86,6 @@ void wifiDebug(uint32_t nowUs) {
   snprintf(line, sizeof(line), "# WIFI up=%d status=%d clients_seq=%lu",
            wifiUp ? 1 : 0, dashboardServiceRadioStatus(), (unsigned long)wifiSeq);
   debugConsolePrintLine(line);
-
-  // X.BUS RX byte-level diagnostics — tells us whether D0 sees anything at all.
-  char xbus[144];
-  int n = snprintf(xbus, sizeof(xbus),
-                   "# XBUS rx_total=%lu echo(0x0F)=%lu slave(0xF0)=%lu snap=[",
-                   (unsigned long)telemetryDebugReceiveTotal,
-                   (unsigned long)telemetryDebugEchoCount,
-                   (unsigned long)telemetryDebugSlaveCount);
-  // snprintf returns the length it WOULD have written — clamp before using
-  // it as an offset so a truncated prefix can never index past the buffer.
-  if (n < 0) n = 0;
-  if (n > (int)sizeof(xbus) - 1) n = (int)sizeof(xbus) - 1;
-  for (int i = 0; i < telemetryDebugSnapshotLength && n < (int)sizeof(xbus) - 4; i++) {
-    n += snprintf(xbus + n, sizeof(xbus) - n, "%02X ", telemetryDebugSnapshot[i]);
-  }
-  snprintf(xbus + n, sizeof(xbus) - n, "]");
-  debugConsolePrintLine(xbus);
-  telemetryDebugSnapshotLength = 0;   // reset for next window's snapshot
 }
 
 // Observe the whole system into one immutable SystemSnapshot (#132). Called

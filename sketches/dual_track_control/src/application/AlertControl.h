@@ -11,13 +11,6 @@
 const uint8_t NUM_ESCS = 2;
 extern EscTelem telem[NUM_ESCS];
 
-// X.BUS RX diagnostics owned by the xc adapter; printed by wifiDebug().
-extern uint32_t telemetryDebugReceiveTotal;
-extern uint32_t telemetryDebugEchoCount;
-extern uint32_t telemetryDebugSlaveCount;
-extern uint8_t  telemetryDebugSnapshot[];  // unsized: bound owned by the adapter
-extern int      telemetryDebugSnapshotLength;
-
 extern bool hornActive;
 extern bool alarmOutputOn;
 extern const uint16_t* beepSeq;
