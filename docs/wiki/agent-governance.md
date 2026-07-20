@@ -1,3 +1,10 @@
+---
+sources:
+  - CLAUDE.md
+  - .claude/rules/
+  - docs/AGENT-EXAMPLES.md
+---
+
 # Agent governance
 
 How AI agents (Claude Code, Copilot, CodeRabbit) are steered in this repo —

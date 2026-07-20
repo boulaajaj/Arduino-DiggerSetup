@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/infrastructure/radiolink/SbusReceiverAdapter.cpp
+  - docs/WIRING-GUIDE-V8.md
+---
+
 # S.BUS input
 
 All RC channels arrive on one wire: the receiver's S.BUS output — an

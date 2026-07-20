@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/architecture/ARCHITECTURE-TARGET.md
+  - docs/architecture/FILE-MAP.md
+---
+
 # Architecture overview
 
 The durable map of the firmware as it IS — independent of the migration

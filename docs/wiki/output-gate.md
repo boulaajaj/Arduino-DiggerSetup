@@ -1,3 +1,8 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/safety/OutputGate.cpp
+---
+
 # Output gate
 
 The final authority between the mixer and the servo pins. When any

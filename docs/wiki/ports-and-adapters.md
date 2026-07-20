@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/ports/
+  - sketches/dual_track_control/src/infrastructure/
+---
+
 # Ports and adapters — the hardware boundary
 
 How the firmware talks to hardware without the logic ever including a

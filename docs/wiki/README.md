@@ -29,7 +29,12 @@ interconnected notes; humans read and visualize them** (issue #141).
 - **Agents own this folder.** A PR that adds, removes, or renames a doc — or
   changes what a subsystem IS — updates the affected wiki notes in the same
   PR. Link fixes are cheap; that is the point of keeping content out.
-- **CI enforces this** (`wiki-lint` workflow, `scripts/check_wiki.py`, #145):
-  broken links, orphan notes, notes unreachable from [home](home.md), and
-  tunable-looking values all fail the build.
+- **Every note declares its sources** (#202): a `---` frontmatter block with
+  a `sources:` list of the repo paths the note navigates to (`sources: none`
+  for pure-navigation pages). Declared paths must exist — a vanished source
+  fails the lint, which is the point: the note must be reconsidered.
+- **CI enforces this** (`wiki-lint` workflow, `scripts/check_wiki.py`,
+  #145/#202): broken links and anchors, orphan notes, notes unreachable
+  from [home](home.md), tunable-looking values, missing or invalid sources
+  frontmatter, duplicate titles, and deprecated phrases all fail the build.
 - Start at [home](home.md).

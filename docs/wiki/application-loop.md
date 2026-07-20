@@ -1,3 +1,8 @@
+---
+sources:
+  - sketches/dual_track_control/src/application/FirmwareApp.cpp
+---
+
 # Application loop — one control cycle
 
 What `firmwareLoop()` does each pass, in order. The order IS the safety

@@ -1,3 +1,7 @@
+---
+sources: none
+---
+
 # Home — Excavator Track Controller
 
 Tank-style dual-track controller for a ride-on excavator: Arduino UNO R4

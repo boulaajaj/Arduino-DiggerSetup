@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/drive/CommandMixer.cpp
+  - OPERATOR-GUIDE.md
+---
+
 # Override modes
 
 Who is driving. A three-position switch on the RC transmitter selects the

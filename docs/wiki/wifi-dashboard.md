@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/infrastructure/network/
+  - dashboard/index.html
+---
+
 # Wi-Fi dashboard
 
 The UNO R4 WiFi hosts its own access point and serves a single-page

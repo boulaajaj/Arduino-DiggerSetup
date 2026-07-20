@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/SAFETY.md
+  - sketches/dual_track_control/src/domain/safety/
+---
+
 # Safety system
 
 Everything that can slow, stop, or refuse a drive command. The canonical,

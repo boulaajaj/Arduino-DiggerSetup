@@ -1,3 +1,7 @@
+---
+sources: none
+---
+
 # Authority matrix — which artifact wins for what
 
 "Canonical" gets used loosely across this repo. This page states the
