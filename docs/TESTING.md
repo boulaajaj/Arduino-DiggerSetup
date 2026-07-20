@@ -131,17 +131,20 @@ Three layers, per issue #47:
    files are staged, plus the firmware-without-tests guard below. Activate
    once per clone: `git config core.hooksPath .githooks`.
    Emergency human bypass: `git commit --no-verify` (document why in the PR).
-2. **`.claude/hooks/test-gate.sh`** — Claude Code `PreToolUse[Bash]` hook
-   that makes layer 1 agent-proof: it refuses `--no-verify` outright and
-   blocks commits in a clone where `core.hooksPath` was never activated.
-   Wired in `.claude/settings.json` (#193):
+2. **`.claude/hooks/test-gate.py`** — Claude Code `PreToolUse[Bash]` hook
+   that makes layer 1 agent-proof: it refuses `--no-verify`/`-n` on real
+   `git commit` invocations and blocks commits in a clone where
+   `core.hooksPath` was never activated. It parses the command (JSON +
+   `shlex`, #206) so benign flags in compound commands (`grep -n`) or prose
+   inside quoted bodies never false-positive; `git -C <path> commit` is
+   still caught. Wired in `.claude/settings.json` (#193):
 
    ```json
    "PreToolUse": [
      {
        "matcher": "Bash",
        "hooks": [
-         { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.sh\"", "timeout": 30000 }
+         { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py\"", "timeout": 30000 }
        ]
      }
    ]
@@ -150,7 +153,15 @@ Three layers, per issue #47:
    Registration itself is CI-checked: `scripts/check_hook_registration.py`
    (run by `hooks-selftest.yml`) fails when a script in `.claude/hooks/` is
    not referenced by any registered hook, and functionally exercises the
-   gate (blocks `--no-verify`/`-n`, blocks inactive `core.hooksPath`).
+   gate across every spelling (the checker's case list is the canonical
+   inventory): bypass flags blocked in exact, bundled (`-anm`), abbreviated
+   (`--no-verif`), glued-separator, wrapper/environment-prefixed,
+   multi-line, line-continuation, redirection-interleaved, nested-shell
+   (`sh -c`), and `git -C`/`--git-dir=` forms — failing CLOSED on
+   malformed or adversarially deep input; inactive `core.hooksPath`
+   blocked in the repo the commit TARGETS; benign flags, quoted prose,
+   short-option values, post-`--` pathspecs, heredoc commit messages, and
+   `git` as another command's data all pass.
 
 3. **CI `unit-tests` job** — the layer that cannot be bypassed; required for
    merge.

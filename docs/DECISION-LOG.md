@@ -5,6 +5,55 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — test-gate rewritten with real command parsing (#206)
+
+- `.claude/hooks/test-gate.sh` (shell globs over the whole JSON payload) →
+  `.claude/hooks/test-gate.py`: JSON + `shlex` parsing; bypass flags are
+  checked ONLY among a real `git commit` invocation's own arguments.
+  Fixes the observed false positives (benign `grep -n` in compound
+  commands; issue/PR body prose quoting the flag names) and catches
+  `git -C <path> commit -n`, which the old `"git commit"` glob missed.
+  Two-attempt parse: line-oriented (newline = separator, catches multi-line
+  bypasses) then whole-text (quoted heredoc commit messages legally span
+  lines — the exact case the first cut blocked LIVE on its own commit);
+  malformed input falls back to a fail-close TOKEN check over every line
+  naming git+commit (whitespace split, same argument analysis). Bypass
+  detection covers every git
+  spelling: exact flags, bundled short options (`-anm` carries `-n`;
+  value-taking shorts `m c C F t S` end the scan so `-mnope` passes),
+  parse-options long abbreviation (`--no-v` prefix), and `--` ends option
+  scanning (pathspecs). Tokenizing uses `shlex` punctuation_chars so glued
+  separators cannot hide an invocation (`true;git commit -n` and
+  `git commit --no-verify&&git push` were live bypasses of the exact-match
+  cut — both reproduced, then sealed). The hooksPath check targets the
+  commit's OWN repo (honors `git -C` / `--git-dir`).
+  Wrapper/environment prefixes (`FOO=1 git`, `env git`, `sudo -u user
+  git`) cannot hide the invocation — `git` is recognized in command
+  position (leading assignments and executing wrappers keep it open;
+  `git` as another command's data, e.g. `echo git commit -n`, does not
+  block, even behind a wrapper: `env echo git commit -n`; duration
+  positionals like `timeout 30 git ...` stay caught).
+  Redirections are not command separators: `git 2>/dev/null commit -n`
+  stays a caught invocation, trailing `> /dev/null 2>&1` on a clean
+  commit passes. Both parse paths use the same command-position logic (git as data
+  after a line-spanning quote stays data; a real bypass after one still
+  blocks). Shell line continuations are joined first (backslash-newline), so a
+  continuation-split `-n` is still caught.
+  Shell -c strings (`sh -c 'git commit -n'`, incl. bundled `-lc`) are
+  parsed recursively (bounded depth 5).
+  Equals-form repo targeting (`--git-dir=`/`--work-tree=`) is honored,
+  and a shell must itself sit in command position (`echo sh -c ...` is
+  data). A wrapper option-value literally named `git` (env -u git git commit)
+  is disambiguated by lookahead. Malformed and depth-capped input fails
+  CLOSED (all-lines token check; the nested depth cap returns the
+  conservative check, never a pass). Path-invoked git (`/usr/bin/git`, `./git`, `git.exe`) matches by
+  basename; wrapper options consume a value only when the per-wrapper
+  table says so (env -i does not eat the wrapped command).
+  `check_hook_registration.py` carries the canonical case inventory (no
+  count recorded here — it grows with the gate); structure-check allows
+  `.py` under `.claude/hooks/` (hook scripts live with the config that
+  registers them).
+
 ## 2026-07-16 — CLAUDE.md trimmed to ~200 lines (#197)
 
 - Root CLAUDE.md 445 → 203 lines. Facts kept (purpose, covenant + gate,

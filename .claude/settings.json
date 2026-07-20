@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py\"",
             "timeout": 30000
           }
         ]
