@@ -52,8 +52,8 @@ def tokenize(text):
     lexer.whitespace_split = True
     # shlex's default commenter swallows `#...` even when glued to a word
     # (true#;git commit -n tokenized to just ['true'] — a live bypass).
-    # Comments are handled shell-accurately in split_on_separators instead:
-    # only a token STARTING with # (word-start) ends the line.
+    # Comments are stripped shell-accurately by strip_comments() BEFORE
+    # tokenization, so the lexer must not comment at all.
     lexer.commenters = ""
     return list(lexer)
 
