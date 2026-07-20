@@ -25,6 +25,7 @@ const BRANDING = {
   accentGlow: 'rgba(240,160,0,0.4)',  // title glow
   accentDim:  '#3a2a10'               // underline edge fade
 };
+// Early title set — avoids a tab-title flicker; applyBranding() re-applies it.
 document.title = BRANDING.name;
 </script>
 <!-- Installable home-screen app: launches standalone (no browser chrome) on iOS/iPadOS. -->
@@ -453,6 +454,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 <script>
 // ── [BRANDING] apply the skin — values live ONLY in the head block (#136) ──
 (function applyBranding(){
+  document.title = BRANDING.name;   // re-applies the early head set — full skin in one place
   const appTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
   if (appTitleMeta) appTitleMeta.setAttribute('content', BRANDING.appTitle);
   const titleMain = document.querySelector('.title-main');
