@@ -27,8 +27,11 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFEST_PATH = os.path.join(REPO_ROOT, "docs", "architecture",
                              "change-impact.json")
+# Anchored: the receipt block's heading line, or an explicit no-effect line
+# WITH a non-empty reason — mid-prose mentions never count.
 RECEIPT_PATTERN = re.compile(
-    r"documentation receipt|no documentation effect", re.IGNORECASE)
+    r"^\s*documentation receipt\b|^\s*no documentation effect:\s*\S",
+    re.IGNORECASE | re.MULTILINE)
 
 
 def load_manifest():

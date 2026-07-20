@@ -50,6 +50,11 @@ def main():
               "No documentation effect: comment-only")))
     check("receipt pattern rejects unrelated prose",
           not checker.RECEIPT_PATTERN.search("updated the docs folder"))
+    check("receipt pattern rejects mid-prose mentions",
+          not checker.RECEIPT_PATTERN.search(
+              "we shipped a documentation receipt yesterday"))
+    check("receipt pattern rejects a bare no-effect line without a reason",
+          not checker.RECEIPT_PATTERN.search("No documentation effect:"))
     check("the REAL manifest validates against the repo",
           checker.validate_manifest(checker.load_manifest()) == [])
 
