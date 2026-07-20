@@ -97,9 +97,9 @@ down. Boost is already at the rail, so it has no extra turn headroom.
 | **Boost** | Fastest | Full authority (at the rail — no turn headroom) |
 
 Reverse is additionally capped below forward speed per gear, and pivot rotation
-has its own speed cap. The exact percentages are tunables — see the current
-values in `[CONFIG]` (`sketches/dual_track_control/dual_track_control.ino`) and the operator-facing
-table in [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md).
+has its own speed cap. The exact percentages are tunables — the current values
+live in `sketches/dual_track_control/src/config/`, and the operator-facing
+table is in [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md).
 
 ---
 
@@ -180,7 +180,7 @@ python live_plot.py
 
 The main firmware entry is
 [`sketches/dual_track_control/dual_track_control.ino`](sketches/dual_track_control/dual_track_control.ino) —
-a twelve-line composition root; the code lives in layers under its `src/`
+a small composition root; the code lives in layers under its `src/`
 (domain / application / ports / infrastructure — see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 

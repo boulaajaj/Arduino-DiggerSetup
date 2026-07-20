@@ -1,8 +1,11 @@
 # Contributing
 
 The human mirror of the agent-facing rules (`CLAUDE.md`, `.claude/rules/`,
-`.claude/skills/`). Same law, different audience. When this page and a rule
-file disagree, the rule file wins — file the discrepancy.
+`.claude/skills/`). Same law, different audience. When this page disagrees with the law
+layer, the law wins — the path-scoped rules, and above them the canonical
+spec (`docs/architecture/ARCHITECTURE-TARGET.md`); the full hierarchy is
+[docs/wiki/authority-matrix.md](docs/wiki/authority-matrix.md). File the
+discrepancy either way.
 
 This firmware drives a real machine with a child rider. The bar for every
 change is: **the machine behaves exactly as reviewed, and every behavior

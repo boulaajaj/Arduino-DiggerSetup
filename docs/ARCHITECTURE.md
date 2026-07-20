@@ -7,8 +7,9 @@ inventory: [FILE-MAP](architecture/FILE-MAP.md), authority hierarchy:
 
 ## The shape
 
-The production sketch's `.ino` is twelve lines: it includes the application
-layer and delegates `setup()`/`loop()`. Everything real lives under
+The production sketch's `.ino` is a small composition root: it includes
+the application layer, delegates `setup()`/`loop()`, and does nothing
+else. Everything real lives under
 `sketches/dual_track_control/src/` in one-way layers:
 
 ```text
@@ -22,6 +23,10 @@ layer and delegates `setup()`/`loop()`. Everything real lives under
         infrastructure ─▶ ports    (the ONLY layer with hardware includes:
                                     Arduino core, S.BUS, X.BUS, Wi-Fi)
 ```
+
+One sanctioned read-back: the telemetry and alert observers read a single
+application-owned struct (the SystemSnapshot) — a data edge by design,
+not a dependency inversion.
 
 Domain logic is host-testable by construction: the test suites compile the
 REAL firmware against a stub Arduino environment, and the pure-domain
@@ -58,19 +63,24 @@ copy, by rule.
 ## The safety model
 
 - **Battery ladder** (three escalating stages: Eco lock, audible alarm,
-  latched motor cutoff) with a plausibility filter so garbage telemetry
-  can neither trip nor release it, and a boot gate so a drained pack
-  cannot drive after a reset wipes the latch.
+  motor cutoff that LATCHES until power-cycle) with a plausibility filter
+  so garbage telemetry can neither trip nor release it. A boot gate holds
+  drive until a valid reading confirms the pack after a reset wipes the
+  latch — and deliberately fails OPEN if telemetry never reports, so a
+  dead sensor bus cannot permanently disable driving.
 - **Thermal stages** with hysteresis — a stage releases at a lower
   temperature than it trips, so the machine never oscillates at a
-  boundary; the thermal cut auto-recovers when the motor cools.
+  boundary; unlike the battery cutoff, the thermal cut auto-recovers when
+  the motor cools and the gate re-attaches the ESCs (RC-loss recovery
+  behaves the same way).
 - **Output gate state machine** — neutral is commanded and held before PWM
   is cut, so the ESC decelerates smoothly instead of freewheeling.
-- **Hardware watchdog** armed after init, refreshed exactly once per pass.
-- **Two permanent invariants**: control is open-loop (telemetry never
-  feeds throttle — a bad sensor cannot command motion), and there is no
-  control path over Wi-Fi (the dashboard can only watch). Both are locked
-  by executable invariant tests ([SAFETY](SAFETY.md)).
+- **Three permanent invariants**: control is open-loop (telemetry never
+  feeds throttle — a bad sensor cannot command motion); there is no
+  control path over Wi-Fi (the dashboard can only watch); and the
+  hardware watchdog is refreshed exactly once per pass, directly after
+  the control path — never anywhere else. All are locked by executable
+  invariant tests ([SAFETY](SAFETY.md)).
 
 Every invariant maps to a host test that drives the real `loop()` under
 injected faults and re-checks the property after every pass.
