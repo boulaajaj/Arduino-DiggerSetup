@@ -30,7 +30,9 @@ EXPECTED_VIOLATIONS = {
     "broken anchor -> home.md#no-such-heading": "anchor with no matching heading",
     "broken anchor -> stale.md#in-fence":
         "a # line inside a code fence is not a heading",
-    "duplicate title": "two notes sharing one H1",
+    "duplicate title": "two notes sharing one H1 (one with leading spaces)",
+    "escape-sources.md: unknown source path":
+        "a declared source escaping the repo root",
     "deprecated phrase ('test-gate.sh')": "retired name reappearing",
     "nested/sub-orphan.md: orphan": "recursive discovery finds subdirectory notes",
 }
@@ -55,17 +57,21 @@ def build_violating_repo(root: Path) -> Path:
           "[safety](safety.md)\n"
           "[bad anchor](home.md#no-such-heading)\n"
           "[dup a](dup-a.md)\n[dup b](dup-b.md)\n[stale](stale.md)\n"
-          "[ghost](ghost-sources.md)\n")
+          "[ghost](ghost-sources.md)\n[escape](escape-sources.md)\n")
     write(wiki / "safety.md",
           "Cutoff at 10.5 V and caps at 60% live here.\n")
     write(wiki / "dup-a.md", FRONTMATTER + "# Same Title\n[home](home.md)\n")
-    write(wiki / "dup-b.md", FRONTMATTER + "# Same Title\n[home](home.md)\n")
+    write(wiki / "dup-b.md",
+          FRONTMATTER + "   # Same Title\n[home](home.md)\n")
     write(wiki / "stale.md",
           FRONTMATTER + "# Stale\nStill mentions test-gate.sh here.\n"
           "```\n# in fence\n```\n"
           "[fence anchor](stale.md#in-fence)\n")
     write(wiki / "ghost-sources.md",
           "---\nsources:\n  - docs/GONE.md\n---\n# Ghost\n[home](home.md)\n")
+    write(wiki / "escape-sources.md",
+          "---\nsources:\n  - ../../../outside.md\n---\n"
+          "# Escape\n[home](home.md)\n")
     write(wiki / "readme-only.md", FRONTMATTER + "# Readme only\n[home](home.md)\n")
     write(wiki / "orphan-note.md", FRONTMATTER + "# Orphan\n[home](home.md)\n")
     write(wiki / "island-one.md", FRONTMATTER + "# One\n[two](island-two.md)\n")

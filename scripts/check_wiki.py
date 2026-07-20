@@ -81,6 +81,21 @@ def heading_slugs(markdown_path: Path) -> set[str]:
     return slugs
 
 
+def first_h1(note: Path) -> str | None:
+    """The note's first H1 title, fence-aware (same rules as anchors)."""
+    in_fence = False
+    for line in note.read_text(encoding="utf-8").splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = HEADING_PATTERN.match(line)
+        if match and len(match.group(1)) == 1:
+            return match.group(2).strip()
+    return None
+
+
 def parse_sources(note: Path) -> tuple[list[str] | None, str | None]:
     """The frontmatter sources list, or (None, why-it-is-malformed)."""
     lines = note.read_text(encoding="utf-8").splitlines()
@@ -155,7 +170,13 @@ def check_note(note: Path, name: str, wiki_root: Path, repo_root: Path,
             failures.append(f"{name}: {problem}")
         else:
             for source in sources or []:
-                if not (repo_root / source).exists():
+                absolute = (repo_root / source).resolve()
+                try:
+                    absolute.relative_to(repo_root.resolve())
+                    inside_repo = True
+                except ValueError:
+                    inside_repo = False  # absolute path or ..-escape
+                if not inside_repo or not absolute.exists():
                     failures.append(
                         f"{name}: unknown source path in frontmatter "
                         f"-> {source}")
@@ -188,16 +209,14 @@ def check_wiki(wiki_root: Path,
         name = note.relative_to(wiki_root).as_posix()
         graph.setdefault(name, set())
         failures += check_note(note, name, wiki_root, repo_root, graph)
-        for line in note.read_text(encoding="utf-8").splitlines():
-            if line.startswith("# "):
-                title = line[2:].strip()
-                if title in titles:
-                    failures.append(
-                        f"{name}: duplicate title ({title!r}) — already "
-                        f"used by {titles[title]}")
-                else:
-                    titles[title] = name
-                break
+        title = first_h1(note)
+        if title is not None:
+            if title in titles:
+                failures.append(
+                    f"{name}: duplicate title ({title!r}) — already "
+                    f"used by {titles[title]}")
+            else:
+                titles[title] = name
     return failures, graph
 
 
