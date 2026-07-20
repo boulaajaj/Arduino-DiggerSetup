@@ -14,7 +14,7 @@
 
 #include <cmath>
 
-#include "../../sketches/dual_track_control/src/domain/drive/CurvatureDrive.h"
+#include "../../../sketches/dual_track_control/src/domain/drive/CurvatureDrive.h"
 
 // Values mirror [CONFIG] — parameters here, no config dependency.
 const CurvatureParameters NORMAL_PARAMETERS{0.60f, 0.70f, 0.05f, 0.55f, 0.70f};

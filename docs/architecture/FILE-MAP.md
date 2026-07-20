@@ -40,7 +40,7 @@ docs/TESTING.md                          — Host characterization + invariants 
 docs/SAFETY.md                           — Safety-invariant registry: propulsion-path invariants + test links (#131)
 docs/AGENT-EXAMPLES.md                   — Good/bad task-execution pairs for AI agents (#53, real precedents)
 docs/wiki/                               — AI-maintained knowledge graph (Obsidian-visualizable, links-only — no constants; #141)
-tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/ + per-domain, e.g. battery/)
+tests/                                   — Host test harness: stub Arduino env + doctest suites (characterization/ + invariants/ cross-cutting; domain/ + telemetry/ + alerts/ mirror src/, #195)
 .claude/skills/                          — Project skills (#127): safety-review, flash-and-log, new-module, field-tune, wiki-impact-review, prepare-pull-request (one procedure per folder)
 .claude/agents/                          — Read-only reviewer subagents (#127): architecture, safety, tests, documentation
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)

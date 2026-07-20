@@ -12,8 +12,8 @@ them green, proving behavior parity while no hardware is available.
 The production sketch is not modified for testing. Each test binary compiles
 `sketches/dual_track_control/dual_track_control.ino` directly, plus the extracted
 `sketches/dual_track_control/src/**/*.cpp` domain sources the sketch delegates to as the
-Phase D migration (#117) proceeds. Pure-domain suites (one dir per extracted
-domain, e.g. `battery/`) test the extracted code directly — no firmware, no
+Phase D migration (#117) proceeds. Pure suites live at the path of the
+layer they test — the tree MIRRORS `src/` (#195) — with no firmware, no
 stubs, and no `src/infrastructure/` sources (those include hardware headers
 and are compiled only into the stub-backed firmware suites, #172):
 
@@ -29,27 +29,24 @@ tests/
 │   ├── WDT.h                   counts refresh() calls
 │   ├── sbus.h                  scripted S.BUS frames (bfs::SbusRx/SbusData)
 │   └── SerialPortStub.h        Serial/Serial1/UART fakes — scripted RX, captured TX
-├── characterization/
-│   ├── FirmwareUnderTest.h     includes the REAL dual_track_control.ino + firmware state reset
+├── characterization/           cross-cutting: compiles the REAL firmware
+│   ├── FirmwareUnderTest.h     includes dual_track_control.ino + state reset
 │   └── test_*.cpp              one focused suite per behavior area
-├── invariants/
-│   ├── InvariantChecks.h       reusable safety-invariant checkers + loop driver (#131)
+├── invariants/                 cross-cutting: safety properties under faults
+│   ├── InvariantChecks.h       reusable checkers + loop driver (#131)
 │   └── test_invariant_*.cpp    one property suite per safety invariant
-├── battery/                    pure-domain suites for src/domain/battery/ (#117)
-│   ├── test_voltage_plausibility.cpp
-│   └── test_battery_ladder_domain.cpp
-├── thermal/                    pure-domain suite for src/domain/thermal/ (#117)
-│   └── test_thermal_domain.cpp
-├── telemetry/                  pure suite for src/telemetry/ (#117)
-│   └── test_telemetry_scaling.cpp
-├── operator_input/             pure-domain suite for src/domain/operator_input/ (#117)
-│   └── test_operator_input_domain.cpp
-├── drive/                      pure-domain suites for src/domain/drive/ (#117)
-│   ├── test_curvature_drive_domain.cpp
-│   └── test_gear_mixer_domain.cpp
-└── safety/                     pure-domain suites for src/domain/safety/ (#117)
-    ├── test_safety_supervisor_domain.cpp
-    └── test_output_gate_domain.cpp
+├── domain/                     mirrors src/domain/ (#195)
+│   ├── battery/                test_voltage_plausibility,
+│   │                           test_battery_ladder_domain
+│   ├── thermal/                test_thermal_domain
+│   ├── operator_input/         test_operator_input_domain
+│   ├── drive/                  test_curvature_drive_domain,
+│   │                           test_gear_mixer_domain
+│   └── safety/                 test_safety_supervisor_domain,
+│                               test_output_gate_domain
+├── telemetry/                  mirrors src/telemetry/: test_telemetry_scaling,
+│                               test_observer_encoders
+└── alerts/                     mirrors src/alerts/: test_alert_policy_domain
 ```
 
 The stub headers shadow the real Arduino/library headers via include order
