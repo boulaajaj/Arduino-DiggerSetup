@@ -5,6 +5,22 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — review/merge protocol amended after 52-round retrospective (#211)
+
+- Operator decisions after PR #210 reached 34 review rounds: (1) self-review
+  BEFORE bots — applicable `.claude/agents/` reviewers + a stale-reference
+  sweep (names/counts/paths/claims the diff invalidates elsewhere);
+  (2) merge = ONE clean bot cycle on the final commit + CI green + 0
+  unresolved threads — never re-invite reviews of unchanged code (the old
+  3-cycle rule re-triggered nondeterministic re-reviews and generated
+  rounds); (3) scope guard — reviewer suggestions expanding a change's
+  scope beyond its issue are declined into follow-up issues by default;
+  (4) no derived values (counts/line numbers) in prose; (5) no hard round
+  cap, but repeating finding patterns get root-caused.
+- Retrospective attribution across 5 PRs / ~52 rounds: ~50% missing
+  up-front spec/threat model (#210 parser), ~25% re-request ritual on
+  unchanged code, ~20% derived-value + cross-reference staleness.
+
 ## 2026-07-19 — test-gate rewritten with real command parsing (#206)
 
 - `.claude/hooks/test-gate.sh` (shell globs over the whole JSON payload) →
