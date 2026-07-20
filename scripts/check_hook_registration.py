@@ -167,6 +167,10 @@ def main():
                       '--body "checked with grep -n"', temp_dir) == 0)
             check("short-option value containing n passes (-mnope)",
                   gate_exit_code("git commit -mnope", temp_dir) == 0)
+            check("a message literally named -n is a value, not a flag",
+                  gate_exit_code("git commit -m -n", temp_dir) == 0)
+            check("long-option separate value named -n is a value",
+                  gate_exit_code("git commit --message -n", temp_dir) == 0)
             check("pathspec after -- is not an option (file named -n)",
                   gate_exit_code("git commit -am x -- -n", temp_dir) == 0)
             check("trailing redirection on a clean commit passes",

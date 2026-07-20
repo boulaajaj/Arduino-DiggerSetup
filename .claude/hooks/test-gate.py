@@ -62,8 +62,16 @@ GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
                      "--exec-path"}
 # git commit short options that consume a value: in a short-option bundle the
 # first of these swallows the rest of the cluster (so letters after it are a
-# VALUE, not options — e.g. -mnope is -m "nope").
+# VALUE, not options — e.g. -mnope is -m "nope"). When such a letter ends the
+# cluster, the value is the NEXT token — even one that looks like a flag
+# (`git commit -m -n` sets the message to "-n"). -S is sticky-only.
 COMMIT_VALUE_SHORTS = "mcCFtS"
+COMMIT_SEPARATE_VALUE_SHORTS = "mcCFt"
+COMMIT_SEPARATE_VALUE_LONGS = {
+    "--message", "--file", "--template", "--author", "--date",
+    "--reuse-message", "--reedit-message", "--fixup", "--squash",
+    "--trailer", "--cleanup", "--pathspec-from-file",
+}
 # Shortest unambiguous parse-options abbreviation of --no-verify among
 # git-commit's --no-* long options (--no-edit, --no-gpg-sign, ...).
 NO_VERIFY_PREFIX = "--no-v"
@@ -76,21 +84,34 @@ def bypasses_verification(arguments):
     (--no-v[erify]), and short-option bundling (-anm carries -n). Scanning
     stops at "--": everything after it is pathspecs.
     """
-    for argument in arguments:
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
         if argument == "--":
             return False
+        if argument in COMMIT_SEPARATE_VALUE_LONGS:
+            index += 2  # the option and its separate value (--message -n)
+            continue
         if argument.startswith("--"):
             if argument == "--no-verify" or (
                     argument.startswith(NO_VERIFY_PREFIX) and
                     "--no-verify".startswith(argument)):
                 return True
+            index += 1
             continue
+        skip_separate_value = False
         if argument.startswith("-") and len(argument) > 1:
-            for letter in argument[1:]:
+            for position, letter in enumerate(argument[1:], start=1):
                 if letter == "n":
                     return True
                 if letter in COMMIT_VALUE_SHORTS:
-                    break  # rest of the cluster is this option's value
+                    # Cluster-final separate-value short: the NEXT token is
+                    # its value, even if it looks like a flag (-m -n).
+                    skip_separate_value = (
+                        position == len(argument) - 1
+                        and letter in COMMIT_SEPARATE_VALUE_SHORTS)
+                    break
+        index += 2 if skip_separate_value else 1
     return False
 
 
