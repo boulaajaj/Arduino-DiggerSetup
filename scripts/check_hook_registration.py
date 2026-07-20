@@ -217,6 +217,10 @@ def main():
             check("prose flags in a trailing comment do not block",
                   gate_exit_code("git commit -m x # never use -n here",
                                  temp_dir) == 0)
+            check("comment strips before the malformed part (prose -n inert)",
+                  gate_exit_code(
+                      'git commit -m x # prose -n and an "unclosed quote',
+                      temp_dir) == 0)
             check("bypass flag still blocked inside a compound command",
                   gate_exit_code(
                       "git add . && git commit -n -m x && git push",

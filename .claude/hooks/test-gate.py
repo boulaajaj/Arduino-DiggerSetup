@@ -440,7 +440,11 @@ def main():
     if invocations is None:
         # Malformed input even as whole-text: fail-close token check over
         # every line naming git+commit; the hooksPath check still applies.
-        invocations = fallback_invocations(command_text)
+        # Same normalization as the main parser (comments stripped,
+        # continuations joined) so commented-out prose cannot false-positive
+        # and a continuation-split flag is still seen.
+        invocations = fallback_invocations(
+            strip_comments(command_text).replace("\\\n", " "))
 
     if not invocations:
         return 0  # "git ... commit" appeared only as prose/quoted text
