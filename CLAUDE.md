@@ -189,6 +189,8 @@ Repeatable procedures are packaged as project skills in `.claude/skills/`
 - **wiki-impact-review** — diff → affected docs/wiki walk + receipt
 - **prepare-pull-request** — issue-first lifecycle: draft PR, review rounds,
   autonomous merge protocol
+- **semantic-doc-lint** — monthly judgment pass: do the docs still tell the
+  truth (reminder issue opens on a schedule, #200)
 
 Read-only reviewer subagents live in `.claude/agents/`:
 `architecture-reviewer`, `safety-reviewer`, `tests-reviewer`,

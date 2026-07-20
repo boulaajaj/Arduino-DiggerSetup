@@ -5,6 +5,20 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — semantic doc lint: the judgment half (#200)
+
+- New `semantic-doc-lint` skill: monthly deep pass walking every wiki
+  note's declared sources (#202 frontmatter is the input), sweeping for
+  cross-page contradictions (authority-matrix rows as the topic list) and
+  coverage gaps (recurring DECISION-LOG/PR nouns without a page); one
+  issue per finding + a dated receipt line here, never inline fixes;
+  safety-overclaiming docs escalate to the operator per the covenant
+  triage. A scheduled workflow (semantic-lint-reminder, monthly +
+  manual dispatch) opens the reminder issue when none is open. Per-PR
+  advisory layer = documentation-reviewer agent in the pre-request
+  self-review + the #199 receipt requirement — Phase F build items
+  complete.
+
 ## 2026-07-20 — wiki lint v2: sources frontmatter + semantic-adjacent checks (#202)
 
 - check_wiki.py extended: recursive note discovery (graph keyed by
