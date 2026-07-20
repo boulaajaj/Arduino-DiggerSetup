@@ -7,6 +7,8 @@ home. Layer rules live in `.claude/rules/architecture.md`; the canonical
 architecture spec is [ARCHITECTURE-TARGET.md](ARCHITECTURE-TARGET.md).
 
 ```text
+docs/ARCHITECTURE.md                     — Human-facing narrative: shape, pipeline, safety model, decisions (#126)
+CONTRIBUTING.md                          — Human mirror of the agent rules: real-time law, workflow, local checks (#126)
 PROJECT-PLAN.md                          — Full technical specification
 OPERATOR-GUIDE.md                        — User guide for Jason (RC) and Malaki (joystick)
 sketches/dual_track_control/dual_track_control.ino             — COMPOSITION ROOT ONLY (#189): includes src/application/FirmwareApp.h and delegates setup()/loop(); the firmware lives under src/

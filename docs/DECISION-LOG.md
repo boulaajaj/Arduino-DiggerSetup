@@ -5,6 +5,17 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — repo front door: ARCHITECTURE.md + CONTRIBUTING.md (#126)
+
+- docs/ARCHITECTURE.md: human-facing narrative (layer shape, signal
+  pipeline with the ordering invariants, safety model incl. the two
+  permanent invariants and why, key decisions with DECISION-LOG receipts,
+  RA4M1/ESP32-S3/GL10 split) — behavior only, no live values, per the
+  authority matrix. CONTRIBUTING.md: human mirror of the agent rules
+  (real-time law, placement, workflow incl. the flash-log rule, local
+  check commands). README's stale [MODULE]-sections paragraph replaced
+  with the composition-root description and both docs linked.
+
 ## 2026-07-20 — tests/ mirrors src/ (#195)
 
 - Five pure-domain suites moved under tests/domain/ (battery, thermal,
