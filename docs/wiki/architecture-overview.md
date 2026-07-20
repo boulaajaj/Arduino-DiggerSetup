@@ -38,4 +38,6 @@ lives under `src/` in layers with a one-way dependency direction:
 - Annotated file inventory: [FILE-MAP](../architecture/FILE-MAP.md)
 - Mechanical enforcement: the architecture-fitness CI workflow
   (layer/size/naming rules) — see [testing](testing.md) for the gate list
+- Human-facing narrative of all of the above:
+  [ARCHITECTURE](../ARCHITECTURE.md) (#126)
 - Which artifact wins for what: [authority-matrix](authority-matrix.md)
