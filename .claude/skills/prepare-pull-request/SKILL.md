@@ -48,9 +48,10 @@ description: The full PR lifecycle procedure for this repo — use when starting
 
 ## 4. Merge (autonomous protocol, operator-amended 2026-07-19)
 
-- Conditions: **ONE clean bot cycle on the final commit** (a consumed
-  re-request with no findings counts as quiet), all CI green,
-  0 unresolved threads. Do not re-invite reviews of unchanged code.
+- Conditions: **ONE clean bot cycle on the final commit** — the single
+  request from step 2 returns no new findings (a silently consumed request
+  counts) — plus all CI green and 0 unresolved threads. Do not re-invite
+  reviews of unchanged code.
 - `gh pr merge --squash --admin --delete-branch`, then update local `main`
   and proceed to the next board item.
 - No hard round cap, but a repeating finding pattern gets root-caused
