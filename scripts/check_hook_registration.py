@@ -175,6 +175,18 @@ def main():
             check("non-string command value never crashes the gate",
                   gate_exit_code_raw('{"tool_input":{"command":null}}',
                                      temp_dir) == 0)
+            # Missing git (empty PATH) must fail CLOSED, not crash open.
+            no_git_environment = dict(os.environ)
+            no_git_environment["GIT_CONFIG_GLOBAL"] = os.devnull
+            no_git_environment["GIT_CONFIG_SYSTEM"] = os.devnull
+            no_git_environment["PATH"] = ""
+            no_git = subprocess.run(
+                [sys.executable, TEST_GATE],
+                input=json.dumps(
+                    {"tool_input": {"command": "git commit -m x"}}),
+                capture_output=True, text=True, cwd=temp_dir,
+                env=no_git_environment, timeout=30)
+            check("missing git fails closed", no_git.returncode == 2)
             subprocess.run(["git", "-C", temp_dir, "config",
                             "core.hooksPath", ".githooks"], check=True)
             check("commit passes once the #47 gate is active",

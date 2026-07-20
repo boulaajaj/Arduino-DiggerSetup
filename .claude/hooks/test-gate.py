@@ -407,11 +407,12 @@ def main():
                 + ["config", "core.hooksPath"],
                 capture_output=True, text=True,
                 timeout=5).stdout.strip()
-        except subprocess.TimeoutExpired:
-            # Fail CLOSE: a hung git means the environment is broken —
-            # do not let the commit through unverified.
-            block("Blocked (#47 gate): git config timed out while checking "
-                  "core.hooksPath — environment looks unhealthy; retry.")
+        except (subprocess.SubprocessError, OSError):
+            # Fail CLOSE: a hung or missing git means the environment is
+            # broken — do not let the commit through unverified.
+            block("Blocked (#47 gate): could not verify core.hooksPath "
+                  "(git hung or unavailable) — environment looks unhealthy; "
+                  "retry.")
         if hooks_path != ".githooks":
             block("Blocked (#47 gate): the commit-time test gate is not "
                   "active in the repository this commit targets.",
