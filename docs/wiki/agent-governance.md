@@ -48,7 +48,7 @@ the Karpathy method (#53) plus the behavior-preservation covenant
   semantic-doc-lint skill — a monthly deep pass over every note's declared
   sources (a scheduled workflow opens the reminder issue), with per-PR
   coverage from the documentation-reviewer agent in the pre-request
-  self-review
+  self-review.
 
 The [testing](testing.md) suites are the enforcement arm: expectations are
 law, and the gate defines "done" for any agent task.

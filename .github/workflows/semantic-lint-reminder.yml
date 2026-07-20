@@ -16,11 +16,14 @@ jobs:
         with:
           script: |
             const title = "Run the semantic documentation lint (monthly)";
-            const open = await github.rest.issues.listForRepo({
-              owner: context.repo.owner, repo: context.repo.repo,
-              state: "open", labels: "documentation", per_page: 100,
-            });
-            if (open.data.some(issue => issue.title === title)) {
+            const open = await github.paginate(
+              github.rest.issues.listForRepo, {
+                owner: context.repo.owner, repo: context.repo.repo,
+                state: "open", labels: "documentation", per_page: 100,
+              });
+            // listForRepo returns PRs too — only true issues count.
+            if (open.some(issue => !issue.pull_request
+                                   && issue.title === title)) {
               core.info("Reminder already open — nothing to do.");
               return;
             }
