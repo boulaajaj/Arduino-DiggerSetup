@@ -23,6 +23,11 @@
   docs/TESTING.md, docs/SAFETY.md and OPERATOR-GUIDE.md still match — the
   documentation-sync hook (`scripts/documentation_sync_hook.py`, #156)
   prompts this once per session; the prompt is a floor, not the ceiling.
+  CI enforces the deterministic half (#199): a PR touching an area mapped
+  in `docs/architecture/change-impact.json` must update an affected page
+  or carry a **documentation receipt** in its body — the
+  wiki-impact-review skill's receipt block, or an explicit
+  `No documentation effect: <reason>` line.
 - **Every firmware flash** (when hardware returns) gets a row in
   `docs/FIRMWARE-UPLOAD-LOG.md` immediately — an unlogged flash is treated as
   not done.

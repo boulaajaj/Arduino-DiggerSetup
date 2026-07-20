@@ -1,0 +1,25 @@
+name: change-impact
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  change-impact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test the change-impact checker (#199)
+        run: python scripts/check_change_impact_selftest.py
+      - name: Changed areas must update their pages or carry a receipt (#199)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python scripts/check_change_impact.py
