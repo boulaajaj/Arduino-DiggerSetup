@@ -81,11 +81,6 @@ inline void resetFirmwareState() {
   telemetryLastPollMs = 0;
   telemetryRequestStartUs = 0;
   telemetryReceiveLength = 0;
-  telemetryDebugReceiveTotal = 0;
-  telemetryDebugEchoCount = 0;
-  telemetryDebugSlaveCount = 0;
-  telemetryDebugSnapshotLength = 0;
-  telemetryDebugPrintPreviousMs = 0;
   // [BEEPER]
   hornActive = false;
   alarmOutputOn = false;

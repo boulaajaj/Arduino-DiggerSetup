@@ -66,17 +66,6 @@ void firmwareLoop() {
     mix.left = SVC;  mix.right = SVC;
   }
 
-  // 2.5 ESC CALIBRATION MODE (#113, temporary) — bypass ALL mixing/caps/gear and
-  // send the raw throttle stick to the full ±100% range (1000/1500/2000 us) on
-  // BOTH tracks, so the GL10s learn the Arduino's true endpoints. Steering is
-  // ignored so both ESCs see identical full-range signals for a clean capture.
-  if (CALIBRATION_MODE && sbusValid) {
-    float thr = clampFloat((float)(rcThrottle() - SVC) / SOFT_RANGE, -1.0f, 1.0f);
-    int pwm = SVC + (int)(thr * SOFT_RANGE);
-    mix.left = pwm;
-    mix.right = pwm;
-  }
-
   // 3. Fail-safe output gate (#88 / #65) — drive ONLY when RC is valid AND the
   // battery is above the cutoff (latched in step 1.5). Otherwise command neutral
   // (GL10 decelerates smoothly) then cut PWM so the ESCs lose signal and beep.

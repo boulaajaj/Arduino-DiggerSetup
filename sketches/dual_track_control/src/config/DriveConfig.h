@@ -35,18 +35,6 @@ const float REVERSE_CAP_BOOST = 0.65f;  // Boost
 // Power range — full PWM authority (1000-2000 us = ±500 us from SVC)
 const float SOFT_RANGE = 500.0f;  // Max servo offset from center (us)
 
-// ── ESC THROTTLE-CALIBRATION MODE (#113) ───────────────────────────────────
-// TEMPORARY. When true, the throttle stick passes STRAIGHT THROUGH to the full
-// ±100% PWM range (1000 / 1500 / 2000 us) on BOTH tracks — ALL caps, gear scaling
-// and steering are bypassed — so the GL10s can learn the Arduino's TRUE endpoints
-// (Option A, docs/GL10-OPERATION.md §5). Needed because the ESCs were previously
-// calibrated while the firmware capped reverse at 65%, so they mislearned 65% as
-// their 100% reverse endpoint (that is why 65%-commanded reverse drove ~100%).
-// After BOTH ESCs are recalibrated, set this back to false and reflash the normal
-// firmware (where REVERSE_CAP etc. become TRUE percentages again).
-// SAFETY: motors reach full power in this mode — tracks clear / wheels up.
-const bool CALIBRATION_MODE = false;
-
 // Gear scaling — RC CH4 selects the AVERAGE-speed cap. 3-position switch:
 //   LOW  → 65% average-speed cap  (training / tight spaces)
 //   MID  → 80% average-speed cap  (normal driving — the everyday gear)

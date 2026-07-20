@@ -84,14 +84,6 @@ extern uint32_t telemetryRequestStartUs;
 extern uint8_t  telemetryReceiveBuffer[64];
 extern int      telemetryReceiveLength;
 
-// X.BUS RX byte-level diagnostics (temporary, post-solder bring-up).
-extern uint32_t telemetryDebugReceiveTotal;      // total bytes ever seen on D0
-extern uint32_t telemetryDebugEchoCount;         // 0x0F bytes (our own TX echo)
-extern uint32_t telemetryDebugSlaveCount;        // 0xF0 bytes (ESC response header)
-extern uint8_t  telemetryDebugSnapshot[16];
-extern int      telemetryDebugSnapshotLength;
-extern uint32_t telemetryDebugPrintPreviousMs;
-
 // Frame and send one 0x10 read of all five registers to `esc` (drops any
 // stale RX first). Exposed for the characterization suite.
 void telemetrySendReadRequest(uint8_t esc);

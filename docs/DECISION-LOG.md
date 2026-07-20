@@ -5,6 +5,22 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — temporary diagnostics removed from production firmware (#122)
+
+- CALIBRATION_MODE (compile-time-false raw-throttle bypass inside the
+  control path, #113 ESC-endpoint relearn — served its purpose, both ESCs
+  recalibrated 2026-06) DELETED: DriveConfig.h const + FirmwareApp.cpp
+  bypass block. If re-calibration is ever needed again, a dedicated bench
+  sketch under sketches/ is the sanctioned home, not a production branch.
+- telemetryDebug* X.BUS bring-up diagnostics (ex-telDbg, per-RX-byte
+  counters + 16-byte snapshot + the "# XBUS rx_total=…" console dump in
+  wifiDebug()) DELETED end-to-end (adapter, re-exports, print block,
+  resetFirmwareState entries). They answered "does D0 see anything at
+  all" during post-solder bring-up; git history keeps them. The 10 Hz CSV
+  debugPrint() stream STAYS — it feeds tools/live_plot.py (production
+  feature). Machine behavior unchanged; debug-console output change
+  authorized by #122.
+
 ## 2026-07-20 — white-label dashboard: one BRANDING block (#136)
 
 - Product identity (name, tagline, home-screen app title, accent trio) now
