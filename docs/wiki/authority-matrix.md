@@ -2,13 +2,13 @@
 
 "Canonical" gets used loosely across this repo. This page states the
 hierarchy once; every other document points here instead of restating it.
-When two sources disagree, the one higher in its row's column wins, and the
-disagreement is a bug to file.
+When two sources disagree about a row's question, the artifact named in
+that row wins — and the disagreement itself is a doc bug to file.
 
 | Question | The authority | Where |
 | --- | --- | --- |
 | What does the firmware DO? | The code, proven by the host suites — test expectations are behavior law | [dual_track_control](../../sketches/dual_track_control/dual_track_control.ino) + [testing](testing.md) |
-| What are the current tunable values? | The config layer — no doc carries a live copy | `sketches/dual_track_control/src/config/` |
+| What are the current tunable values? | The config layer — no doc carries a live copy | `sketches/dual_track_control/src/config/` (inventory: [FILE-MAP](../architecture/FILE-MAP.md)) |
 | What structure must code follow? | The architecture spec + accepted ADRs (rules files summarize; the spec wins) | [ARCHITECTURE-TARGET](../architecture/ARCHITECTURE-TARGET.md) + [adr/](../architecture/adr/0001-domain-oriented-firmware-architecture.md) |
 | What must NEVER change without sign-off? | The safety-invariant registry, each invariant tied to an executable test | [SAFETY](../SAFETY.md) + [safety-system](safety-system.md) |
 | How is the machine operated? | The operator guide (numbers there must match the config layer — drift is a doc bug) | [OPERATOR-GUIDE](../../OPERATOR-GUIDE.md) |
