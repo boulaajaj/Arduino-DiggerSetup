@@ -37,6 +37,17 @@ def registered_commands():
     return commands
 
 
+def gate_exit_code_raw(raw_text, working_dir):
+    """Run test-gate.py with arbitrary raw stdin (malformed-payload cases)."""
+    environment = dict(os.environ)
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_CONFIG_SYSTEM"] = os.devnull
+    result = subprocess.run([sys.executable, TEST_GATE], input=raw_text,
+                            capture_output=True, text=True,
+                            cwd=working_dir, env=environment)
+    return result.returncode
+
+
 def gate_exit_code(command, working_dir):
     """Run test-gate.py with a PreToolUse-style JSON payload on stdin."""
     payload = json.dumps({"tool_input": {"command": command}})
@@ -157,6 +168,10 @@ def main():
                       '--no-verify or -n here"', temp_dir) == 0)
             check("git log --grep commit -n 5 is not a commit",
                   gate_exit_code("git log --grep commit -n 5", temp_dir) == 0)
+            check("malformed payload with a bypass fails closed",
+                  gate_exit_code_raw("git commit -n", temp_dir) == 2)
+            check("malformed payload without a commit passes",
+                  gate_exit_code_raw("just some text", temp_dir) == 0)
             subprocess.run(["git", "-C", temp_dir, "config",
                             "core.hooksPath", ".githooks"], check=True)
             check("commit passes once the #47 gate is active",

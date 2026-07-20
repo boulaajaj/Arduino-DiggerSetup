@@ -15,7 +15,7 @@ inside a quoted issue/PR body never triggers the block. Residual
 conservatism: when the COMMAND TEXT cannot be tokenized even as a whole
 (unclosed quotes), a fail-close token check applies over every line naming
 git+commit (all tokens together when no single line does); a payload that
-is not valid JSON at all is passed through (nothing to inspect).
+is not valid JSON is inspected as raw text with the same parser.
 """
 
 import json
@@ -350,10 +350,16 @@ def commit_invocations(command_text, depth=0):
 
 def main():
     try:
-        payload = json.load(sys.stdin)
-    except (ValueError, UnicodeDecodeError):
-        return 0
-    command_text = (payload.get("tool_input") or {}).get("command", "")
+        raw_input_text = sys.stdin.read()
+    except (OSError, UnicodeDecodeError):
+        return 0  # nothing readable to inspect
+    try:
+        payload = json.loads(raw_input_text)
+        command_text = (payload.get("tool_input") or {}).get("command", "")
+    except (ValueError, AttributeError):
+        # Fail CLOSE on malformed payloads: inspect the raw text with the
+        # same parser instead of waving the call through.
+        command_text = raw_input_text
     # Cheap pre-filter only — the parser below decides what a commit IS
     # (catches `git -C path commit` that the old "git commit" glob missed).
     if "git" not in command_text or "commit" not in command_text:
