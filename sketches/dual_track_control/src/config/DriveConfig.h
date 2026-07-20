@@ -1,5 +1,5 @@
 // config — drive/output tunables: servo authority, per-gear caps, pivot
-// blend, calibration mode (#185).
+// blend (#185).
 #pragma once
 
 // Servo PWM range (matches GL10's standard 50 Hz, 1-2 ms input spec)
