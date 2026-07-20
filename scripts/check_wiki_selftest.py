@@ -28,6 +28,8 @@ EXPECTED_VIOLATIONS = {
     "unknown source path in frontmatter -> docs/GONE.md":
         "declared source that does not exist",
     "broken anchor -> home.md#no-such-heading": "anchor with no matching heading",
+    "broken anchor -> stale.md#in-fence":
+        "a # line inside a code fence is not a heading",
     "duplicate title": "two notes sharing one H1",
     "deprecated phrase ('test-gate.sh')": "retired name reappearing",
     "nested/sub-orphan.md: orphan": "recursive discovery finds subdirectory notes",
@@ -59,7 +61,9 @@ def build_violating_repo(root: Path) -> Path:
     write(wiki / "dup-a.md", FRONTMATTER + "# Same Title\n[home](home.md)\n")
     write(wiki / "dup-b.md", FRONTMATTER + "# Same Title\n[home](home.md)\n")
     write(wiki / "stale.md",
-          FRONTMATTER + "# Stale\nStill mentions test-gate.sh here.\n")
+          FRONTMATTER + "# Stale\nStill mentions test-gate.sh here.\n"
+          "```\n# in fence\n```\n"
+          "[fence anchor](stale.md#in-fence)\n")
     write(wiki / "ghost-sources.md",
           "---\nsources:\n  - docs/GONE.md\n---\n# Ghost\n[home](home.md)\n")
     write(wiki / "readme-only.md", FRONTMATTER + "# Readme only\n[home](home.md)\n")
@@ -75,7 +79,9 @@ def build_clean_repo(root: Path) -> Path:
     repo = root / "repo"
     wiki = repo / "docs" / "wiki"
     write(repo / "docs" / "CANONICAL.md",
-          "# Canonical\n\n## Real Constants\n\nThe real constants live here.\n")
+          "# Canonical\n\n## Real Constants\n\nThe real constants live here.\n"
+          "\n```\n# not a heading (inside a code fence)\n```\n"
+          "\n## Real Constants\n\nDuplicate heading gets a -1 slug.\n")
     write(wiki / "README.md", "[home](home.md)\n")
     write(wiki / "home.md",
           FRONTMATTER + "# Home\n[safety](safety.md)\n[drive](drive.md)\n"
@@ -86,7 +92,8 @@ def build_clean_repo(root: Path) -> Path:
           "[canonical](../CANONICAL.md#real-constants). [drive](drive.md)\n")
     write(wiki / "drive.md",
           "---\nsources:\n  - docs/CANONICAL.md\n---\n"
-          "# Drive\nLoops back to [safety](safety.md).\n")
+          "# Drive\nLoops back to [safety](safety.md). Duplicate-heading "
+          "anchor: [second](../CANONICAL.md#real-constants-1).\n")
     write(wiki / "nested" / "deep.md",
           FRONTMATTER + "# Deep\n[home](../home.md)\n")
     return repo

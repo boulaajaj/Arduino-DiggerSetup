@@ -52,14 +52,32 @@ def note_links(note: Path) -> list[str]:
             and not target.startswith("#")]
 
 
+HEADING_PATTERN = re.compile(r"^ {0,3}(#{1,6})\s+(.*)$")
+
+
 def heading_slugs(markdown_path: Path) -> set[str]:
-    """GitHub-style anchor slugs for every heading in a Markdown file."""
+    """GitHub-style anchor slugs: fence-aware, duplicate-suffixed."""
     slugs: set[str] = set()
+    seen: dict[str, int] = {}
+    in_fence = False
     for line in markdown_path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("#"):
-            heading = line.lstrip("#").strip().lower()
-            heading = re.sub(r"[^\w\- ]", "", heading, flags=re.UNICODE)
-            slugs.add(heading.replace(" ", "-"))
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = HEADING_PATTERN.match(line)
+        if not match:
+            continue
+        heading = match.group(2).strip().lower()
+        heading = re.sub(r"[^\w\- ]", "", heading, flags=re.UNICODE)
+        slug = heading.replace(" ", "-")
+        if slug in seen:
+            seen[slug] += 1
+            slugs.add(f"{slug}-{seen[slug]}")
+        else:
+            seen[slug] = 0
+            slugs.add(slug)
     return slugs
 
 
@@ -137,9 +155,7 @@ def check_note(note: Path, name: str, wiki_root: Path, repo_root: Path,
             failures.append(f"{name}: {problem}")
         else:
             for source in sources or []:
-                absolute = repo_root / source
-                if not (absolute.exists() or list(
-                        absolute.parent.glob(absolute.name + "*"))):
+                if not (repo_root / source).exists():
                     failures.append(
                         f"{name}: unknown source path in frontmatter "
                         f"-> {source}")
@@ -149,11 +165,12 @@ def check_note(note: Path, name: str, wiki_root: Path, repo_root: Path,
 def git_ignored(note: Path, repo_root: Path) -> bool:
     """True when git ignores the file (personal scratch notes stay local)."""
     try:
+        relative = note.resolve().relative_to(repo_root.resolve()).as_posix()
         return subprocess.run(
-            ["git", "check-ignore", "-q", str(note)],
+            ["git", "check-ignore", "-q", relative],
             cwd=repo_root, capture_output=True, timeout=10).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False  # no git — lint everything
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return False  # no git (or outside the repo) — lint everything
 
 
 def check_wiki(wiki_root: Path,
