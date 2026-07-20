@@ -9,8 +9,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/dual_track_control/src/domain/drive/CommandMixer.h"
-#include "../../sketches/dual_track_control/src/domain/drive/GearPolicy.h"
+#include "../../../sketches/dual_track_control/src/domain/drive/CommandMixer.h"
+#include "../../../sketches/dual_track_control/src/domain/drive/GearPolicy.h"
 
 // Values mirror [CONFIG] — parameters here, no config dependency.
 const GearPolicyParameters GEAR_PARAMETERS{0.65f, 0.80f, 1.00f, 1400, 1600};

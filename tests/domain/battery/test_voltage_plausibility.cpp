@@ -10,7 +10,7 @@
 
 #include <cmath>
 
-#include "../../sketches/dual_track_control/src/domain/battery/VoltagePlausibility.h"
+#include "../../../sketches/dual_track_control/src/domain/battery/VoltagePlausibility.h"
 
 // Bounds mirror LOWV_PLAUS_MIN_V / LOWV_PLAUS_MAX_V — but they are
 // parameters here: the domain function has no config dependency.

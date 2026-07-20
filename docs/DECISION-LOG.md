@@ -5,6 +5,16 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — tests/ mirrors src/ (#195)
+
+- Five pure-domain suites moved under tests/domain/ (battery, thermal,
+  operator_input, drive, safety) so every suite sits at the path of the
+  layer it tests; telemetry/ and alerts/ already mirrored. Pure git moves
+  plus include-depth fix plus Makefile glob/rule paths — ZERO expectation
+  changes; full suite green (27 binaries, exit 0). TESTING.md tree
+  redrawn (it had already drifted: alerts/ and test_observer_encoders
+  were missing) and FILE-MAP line updated.
+
 ## 2026-07-20 — semantic doc lint: the judgment half (#200)
 
 - New `semantic-doc-lint` skill: monthly deep pass walking every wiki

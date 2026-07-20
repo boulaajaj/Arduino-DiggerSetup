@@ -1,5 +1,5 @@
 # Host test suites: characterization (#47) + safety invariants (#131) +
-# pure-domain suites (one dir per extracted domain, #117 — e.g. battery/).
+# pure-domain suites mirroring src/ (#195 — e.g. domain/battery/).
 # One binary per test file — characterization/invariants compile the REAL
 # dual_track_control.ino inside the stub Arduino environment (see stubs/); pure-domain
 # suites compile only the extracted src/ code WITHOUT -Istubs, so an
@@ -35,12 +35,12 @@ HARNESS  := $(wildcard stubs/*.h) characterization/FirmwareUnderTest.h \
 
 TESTS := $(wildcard characterization/test_*.cpp) \
          $(wildcard invariants/test_*.cpp) \
-         $(wildcard battery/test_*.cpp) \
-         $(wildcard thermal/test_*.cpp) \
+         $(wildcard domain/battery/test_*.cpp) \
+         $(wildcard domain/thermal/test_*.cpp) \
          $(wildcard telemetry/test_*.cpp) \
-         $(wildcard operator_input/test_*.cpp) \
-         $(wildcard drive/test_*.cpp) \
-         $(wildcard safety/test_*.cpp) \
+         $(wildcard domain/operator_input/test_*.cpp) \
+         $(wildcard domain/drive/test_*.cpp) \
+         $(wildcard domain/safety/test_*.cpp) \
          $(wildcard alerts/test_*.cpp)
 BINS  := $(addprefix build/,$(notdir $(TESTS:.cpp=)))
 
@@ -65,11 +65,11 @@ build/%: invariants/%.cpp $(HARNESS) $(FIRMWARE)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(SKETCH_SRC_CPPS) -o $@
 
-build/%: battery/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: domain/battery/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: thermal/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: domain/thermal/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
@@ -77,15 +77,15 @@ build/%: telemetry/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: operator_input/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: domain/operator_input/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: drive/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: domain/drive/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 
-build/%: safety/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
+build/%: domain/safety/%.cpp $(SKETCH_PURE_CPPS) $(SKETCH_SRC_HEADERS)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(DOMAIN_INCLUDES) $< $(SKETCH_PURE_CPPS) -o $@
 

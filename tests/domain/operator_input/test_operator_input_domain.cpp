@@ -10,8 +10,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "../../sketches/dual_track_control/src/domain/operator_input/DeadbandPolicy.h"
-#include "../../sketches/dual_track_control/src/domain/operator_input/ExpoCurve.h"
+#include "../../../sketches/dual_track_control/src/domain/operator_input/DeadbandPolicy.h"
+#include "../../../sketches/dual_track_control/src/domain/operator_input/ExpoCurve.h"
 
 // Values mirror the [CONFIG] pairs — parameters here, no config dependency.
 const float EXPO_THROTTLE_LINEAR = 0.4f;
