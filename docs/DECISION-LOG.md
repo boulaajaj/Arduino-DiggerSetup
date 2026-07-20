@@ -5,6 +5,19 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — change-impact manifest: deterministic doc-code sync (#199)
+
+- `docs/architecture/change-impact.json` maps source areas (path prefixes)
+  to knowledge pages; `scripts/check_change_impact.py` (new change-impact
+  CI workflow, always-run) computes affected pages from the PR diff and
+  passes only when no mapped area was touched, an affected page is updated
+  in the same diff, or the PR body carries a documentation receipt
+  (wiki-impact-review block or an explicit no-documentation-effect line).
+  The manifest self-validates on every run (pages must exist, area
+  prefixes must match something). Selftest exercises matching, sibling
+  non-swallowing, receipt patterns, and real-manifest validity. The
+  manifest is now the SSOT for the wiki-impact-review skill's mapping.
+
 ## 2026-07-19 — durable wiki architecture pages (#201)
 
 - Four stable concept pages added: architecture-overview (the durable

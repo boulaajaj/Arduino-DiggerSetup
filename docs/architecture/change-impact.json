@@ -1,0 +1,116 @@
+{
+  "comment": "Change-impact manifest (#199): which knowledge pages must be reconsidered when a source area changes. Areas are repo-relative path PREFIXES; pages are repo-relative files. Consumed by scripts/check_change_impact.py (CI: change-impact workflow) and the wiki-impact-review skill. A PR touching an area must update at least one mapped page or carry a documentation receipt in its body.",
+  "mappings": [
+    {
+      "areas": [
+        "sketches/dual_track_control/src/domain/drive/",
+        "sketches/dual_track_control/src/domain/operator_input/",
+        "sketches/dual_track_control/src/application/OperatorInput",
+        "sketches/dual_track_control/src/application/MotorOutput"
+      ],
+      "pages": [
+        "docs/wiki/control-pipeline.md",
+        "docs/wiki/application-loop.md",
+        "OPERATOR-GUIDE.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/domain/battery/",
+        "sketches/dual_track_control/src/domain/thermal/",
+        "sketches/dual_track_control/src/domain/safety/",
+        "sketches/dual_track_control/src/application/SafetyControl"
+      ],
+      "pages": [
+        "docs/wiki/safety-system.md",
+        "docs/SAFETY.md",
+        "docs/wiki/application-loop.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/alerts/",
+        "sketches/dual_track_control/src/application/AlertControl"
+      ],
+      "pages": [
+        "docs/wiki/safety-system.md",
+        "OPERATOR-GUIDE.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/infrastructure/network/",
+        "sketches/dual_track_control/src/application/Monitoring",
+        "dashboard/"
+      ],
+      "pages": [
+        "docs/wiki/telemetry-and-dashboard.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/infrastructure/xc/",
+        "sketches/dual_track_control/src/infrastructure/radiolink/",
+        "sketches/dual_track_control/src/telemetry/"
+      ],
+      "pages": [
+        "docs/wiki/telemetry-and-dashboard.md",
+        "docs/XBUS-PROTOCOL.md",
+        "docs/WIRING-GUIDE-V8.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/ports/",
+        "sketches/dual_track_control/src/infrastructure/arduino/"
+      ],
+      "pages": [
+        "docs/wiki/ports-and-adapters.md",
+        "docs/architecture/FILE-MAP.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/config/"
+      ],
+      "pages": [
+        "docs/wiki/configuration-authority.md",
+        "OPERATOR-GUIDE.md",
+        "PROJECT-PLAN.md"
+      ]
+    },
+    {
+      "areas": [
+        "sketches/dual_track_control/src/application/FirmwareApp",
+        "sketches/dual_track_control/src/application/FirmwareState",
+        "sketches/dual_track_control/dual_track_control.ino"
+      ],
+      "pages": [
+        "docs/wiki/application-loop.md",
+        "docs/wiki/architecture-overview.md",
+        "docs/architecture/FILE-MAP.md"
+      ]
+    },
+    {
+      "areas": [
+        ".claude/",
+        ".githooks/",
+        ".github/workflows/",
+        "scripts/"
+      ],
+      "pages": [
+        "docs/wiki/agent-governance.md",
+        "docs/TESTING.md"
+      ]
+    },
+    {
+      "areas": [
+        "tests/"
+      ],
+      "pages": [
+        "docs/TESTING.md",
+        "docs/wiki/testing.md"
+      ]
+    }
+  ]
+}

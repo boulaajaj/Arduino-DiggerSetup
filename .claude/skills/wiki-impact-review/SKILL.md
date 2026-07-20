@@ -7,9 +7,11 @@ description: Documentation-impact walk for a diff — use before finishing any P
 
 ## 1. Map the diff to knowledge pages
 
-For each changed area, open the pages that describe it (until the
-change-impact manifest of #199 lands, use this table + `docs/wiki/home.md`).
-`src/...` entries below are relative to `sketches/dual_track_control/`:
+The machine-readable mapping is `docs/architecture/change-impact.json`
+(#199) — CI enforces it (change-impact workflow), so start there. The table
+below is the human-oriented summary; when the two disagree, the manifest
+wins and the disagreement is a bug. `src/...` entries below are relative to
+`sketches/dual_track_control/`:
 
 | Changed area | Reconsider |
 | --- | --- |

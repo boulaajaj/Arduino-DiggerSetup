@@ -33,7 +33,11 @@ the Karpathy method (#53) plus the behavior-preservation covenant
 - **This wiki** is itself governed here: agents maintain it, PRs that change
   docs update affected notes ([README](README.md)); a session hook
   (`scripts/documentation_sync_hook.py`, #156) prompts the agent to re-check
-  wiki + architecture docs whenever production code changes
+  wiki + architecture docs whenever production code changes, and CI
+  enforces the deterministic half (#199): the change-impact manifest
+  (`docs/architecture/change-impact.json`) maps source areas to knowledge
+  pages, and a PR touching a mapped area must update an affected page or
+  carry a documentation receipt
 
 The [testing](testing.md) suites are the enforcement arm: expectations are
 law, and the gate defines "done" for any agent task.
