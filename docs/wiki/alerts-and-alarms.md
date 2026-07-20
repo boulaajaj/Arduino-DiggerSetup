@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/alerts/
+  - OPERATOR-GUIDE.md
+---
+
 # Alerts and alarms
 
 Audible signals from a piezo beeper, driven non-blocking with a strict

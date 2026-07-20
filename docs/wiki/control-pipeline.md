@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/drive/
+  - PROJECT-PLAN.md
+---
+
 # Control pipeline
 
 Stick to track, end to end — all shaping happens on the Arduino, all motor

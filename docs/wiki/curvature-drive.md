@@ -1,3 +1,8 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/drive/CurvatureDrive.cpp
+---
+
 # Curvature drive
 
 The tank-mixing algorithm: throttle plus steering in, one speed per track

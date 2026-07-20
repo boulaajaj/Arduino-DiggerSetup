@@ -1,3 +1,8 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/drive/GearPolicy.cpp
+---
+
 # Gear and reverse caps
 
 The speed-limiting layer between [curvature drive](curvature-drive.md) and

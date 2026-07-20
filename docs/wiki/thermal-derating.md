@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/thermal/
+  - docs/SAFETY.md
+---
+
 # Thermal derating
 
 Staged response to ESC and motor temperature — **monotone by design**: a

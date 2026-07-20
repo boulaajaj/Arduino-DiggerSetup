@@ -38,7 +38,7 @@ sits above all four: during epic #116, organization changes NOTHING observable
      `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control`
    - CI green: `arduino-ci`, `lint`, `static-analysis`, `code-quality`,
      `structure-check`, `unit-tests`, `architecture-fitness` (#129),
-     `wiki-lint` (#145), `hooks-selftest` (#156/#193), `change-impact`
+     `wiki-lint` (#145/#202), `hooks-selftest` (#156/#193), `change-impact`
      (#199 — mapped areas update their pages or the PR carries a receipt)
    - no blocking calls in `loop()` (`delay()`, `pulseIn()`, unbounded `while`)
    - zero behavior change unless the task's own issue explicitly authorizes it

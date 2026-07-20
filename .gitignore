@@ -35,3 +35,6 @@ node_modules/
 
 # Wi-Fi credentials (#125) — copy arduino_secrets.h.example and fill in
 sketches/*/arduino_secrets.h
+
+# Obsidian default-named scratch notes are personal working files (#202)
+Untitled*

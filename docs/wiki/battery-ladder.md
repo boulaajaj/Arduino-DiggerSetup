@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/domain/battery/
+  - docs/SAFETY.md
+---
+
 # Battery ladder
 
 Staged response to falling pack voltage, always keyed to the **worse** of the

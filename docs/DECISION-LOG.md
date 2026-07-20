@@ -5,6 +5,19 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — wiki lint v2: sources frontmatter + semantic-adjacent checks (#202)
+
+- check_wiki.py extended: recursive note discovery (graph keyed by
+  relative path), heading-anchor validation (GitHub slugs), mandatory
+  `sources:` frontmatter on every note except README (declared paths must
+  exist — a vanished source fails the lint so the note gets reconsidered;
+  `sources: none` for pure navigation), duplicate-H1 detection, and a
+  curated deprecated-phrase list (retired sketch name, retired gate
+  filename, completed-phase framing). Selftest demonstrates every failure
+  mode including recursive subdirectory discovery. All real notes gained
+  honest sources frontmatter; manifest validation stays with the #199
+  checker (no duplication).
+
 ## 2026-07-19 — change-impact manifest: deterministic doc-code sync (#199)
 
 - `docs/architecture/change-impact.json` maps source areas (path prefixes)

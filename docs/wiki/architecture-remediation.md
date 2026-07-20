@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/architecture/ARCHITECTURE-TARGET.md
+  - docs/DECISION-LOG.md
+---
+
 # Architecture remediation (epic #116)
 
 Active program: reorganize the single-sketch firmware into a domain-oriented

@@ -1,3 +1,9 @@
+---
+sources:
+  - sketches/dual_track_control/src/infrastructure/xc/
+  - dashboard/index.html
+---
+
 # Telemetry and dashboard
 
 Read-only observation path: the ESCs report voltage, current, RPM, and

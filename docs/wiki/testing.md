@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/TESTING.md
+  - tests/
+---
+
 # Testing
 
 Host-side suites that compile the **real firmware** (`dual_track_control.ino`) against

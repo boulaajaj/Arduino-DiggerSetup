@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/WIRING-GUIDE-V8.md
+  - docs/GL10-PARAMETERS.md
+---
+
 # Hardware
 
 Arduino **UNO R4 WiFi** (RA4M1 + ESP32-S3 Wi-Fi coprocessor) drives two

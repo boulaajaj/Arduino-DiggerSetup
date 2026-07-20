@@ -1,3 +1,8 @@
+---
+sources:
+  - sketches/dual_track_control/src/config/
+---
+
 # Configuration authority — which values live where
 
 Every number has exactly one home. The full hierarchy of who wins what:

@@ -1,3 +1,9 @@
+---
+sources:
+  - docs/XBUS-PROTOCOL.md
+  - sketches/dual_track_control/src/infrastructure/xc/XbusTelemetryAdapter.cpp
+---
+
 # X.BUS telemetry
 
 How the firmware reads voltage, current, RPM, and temperatures from both
