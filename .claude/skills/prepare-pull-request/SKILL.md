@@ -33,8 +33,9 @@ description: The full PR lifecycle procedure for this repo — use when starting
    prose — the artifact is the inventory.
 2. Mark ready; request Copilot —
    `gh api -X POST repos/<owner>/<repo>/pulls/<PR>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`
-   — and comment `@coderabbitai review`. Once per fix commit, never on
-   unchanged code.
+   — and comment `@coderabbitai review`. After every fix commit, repeat
+   from step 1 (self-review the fix, then one request); never re-request
+   on unchanged code.
 3. For each finding: VERIFY the claim against the code first (probe and
    refute with evidence when wrong; never apply a behavior-changing
    suggestion, see `.claude/rules/behavior-preservation.md`).
