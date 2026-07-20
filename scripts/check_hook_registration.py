@@ -113,6 +113,8 @@ def main():
                   gate_exit_code("true;git commit -n", temp_dir) == 2)
             check("glued hash is not a comment (true#;git)",
                   gate_exit_code("true#;git commit -n", temp_dir) == 2)
+            check("quoted hash literal is not a comment",
+                  gate_exit_code('echo "#"; git commit -n', temp_dir) == 2)
             check("bypass flag before a trailing comment is blocked",
                   gate_exit_code("git commit -n # note", temp_dir) == 2)
             check("environment-assignment prefix cannot hide the invocation",

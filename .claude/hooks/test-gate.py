@@ -121,11 +121,61 @@ def block(*lines):
     sys.exit(2)
 
 
+def strip_comments(text):
+    """Remove shell comments quote-aware, before any tokenization.
+
+    A `#` starts a comment only when unquoted and preceded by whitespace or
+    line start — so `true#;git` is not a comment, and a quoted literal
+    `"#"` survives (shlex strips quotes, making token-level # handling
+    ambiguous; this is the only altitude where both cases are decidable).
+    Quote state carries across newlines (heredoc strings span lines).
+    """
+    result = []
+    quote = None
+    escaped = False
+    previous = "\n"
+    skipping = False
+    for character in text:
+        if character == "\n":
+            skipping = False
+            escaped = False
+            result.append(character)
+            previous = character
+            continue
+        if skipping:
+            continue
+        if escaped:
+            result.append(character)
+            escaped = False
+            previous = character
+            continue
+        if character == "\\" and quote != "'":
+            result.append(character)
+            escaped = True
+            previous = character
+            continue
+        if quote:
+            if character == quote:
+                quote = None
+            result.append(character)
+            previous = character
+            continue
+        if character in "'\"":
+            quote = character
+            result.append(character)
+            previous = character
+            continue
+        if character == "#" and previous in " \t\n":
+            skipping = True
+            continue
+        result.append(character)
+        previous = character
+    return "".join(result)
+
+
 def split_on_separators(tokens):
     commands, current = [], []
     for token in tokens:
-        if token.startswith("#"):
-            break  # word-start # comments out the rest of the line
         if is_separator(token):
             commands.append(current)
             current = []
@@ -339,8 +389,10 @@ def commit_invocations(command_text, depth=0):
     parses the whole text at once, where such strings collapse to single
     tokens and prose inside them can never look like arguments.
     """
-    # Shell line continuations join lines: `git commit \` + newline + `-n`
-    # is ONE invocation. Applied before line splitting so attempt A sees it.
+    # Comments strip FIRST (a backslash inside a comment is commented out,
+    # not a continuation), then shell line continuations join lines:
+    # `git commit \` + newline + `-n` is ONE invocation.
+    command_text = strip_comments(command_text)
     command_text = command_text.replace("\\\n", " ")
     try:
         commands = []
