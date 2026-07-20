@@ -42,9 +42,12 @@ def gate_exit_code_raw(raw_text, working_dir):
     environment = dict(os.environ)
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
-    result = subprocess.run([sys.executable, TEST_GATE], input=raw_text,
-                            capture_output=True, text=True,
-                            cwd=working_dir, env=environment, timeout=30)
+    try:
+        result = subprocess.run([sys.executable, TEST_GATE], input=raw_text,
+                                capture_output=True, text=True,
+                                cwd=working_dir, env=environment, timeout=30)
+    except subprocess.TimeoutExpired:
+        return -1  # deterministic failure: matches neither 0 nor 2
     return result.returncode
 
 
@@ -56,9 +59,12 @@ def gate_exit_code(command, working_dir):
     # leak into the temp-repo assertions (the gate reads effective config).
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_SYSTEM"] = os.devnull
-    result = subprocess.run([sys.executable, TEST_GATE], input=payload,
-                            capture_output=True, text=True,
-                            cwd=working_dir, env=environment, timeout=30)
+    try:
+        result = subprocess.run([sys.executable, TEST_GATE], input=payload,
+                                capture_output=True, text=True,
+                                cwd=working_dir, env=environment, timeout=30)
+    except subprocess.TimeoutExpired:
+        return -1  # deterministic failure: matches neither 0 nor 2
     return result.returncode
 
 
