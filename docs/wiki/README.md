@@ -18,9 +18,11 @@ interconnected notes; humans read and visualize them** (issue #141).
 ## Rules for this folder (anti-drift)
 
 - **Navigation layer, not a second copy.** Notes describe stable concepts and
-  link to the canonical source. Tunable values — constants, thresholds, pin
-  numbers, versions — live ONLY in the canonical docs (`CLAUDE.md`,
-  `docs/SAFETY.md`, …); a wiki note that restates one is a bug. Stable
+  link to the canonical source — which artifact is canonical for what is
+  stated once in [authority-matrix](authority-matrix.md). Tunable values —
+  constants, thresholds, pin numbers, versions — live ONLY in their
+  authority (the config layer for tunables); a wiki note that restates one
+  is a bug. Stable
   identity is fine: component model names and ordinary descriptive
   quantities ("three-position switch") make notes readable and only change
   when the thing itself changes.

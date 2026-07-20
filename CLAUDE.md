@@ -145,7 +145,8 @@ lineage): `docs/DECISION-LOG.md`.
 ## Coding Rules
 
 Path-scoped rules in `.claude/rules/` and the architecture spec WIN over any
-summary. Quick reference:
+summary; which artifact is authoritative for what is stated once in
+`docs/wiki/authority-matrix.md` (#198). Quick reference:
 
 - **Architecture**: production sketch only — layers per the table above;
   one file = one concept (150/250); structs shared with the `.ino` in

@@ -5,6 +5,16 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-19 — authority matrix: one page states which artifact wins (#198)
+
+- `docs/wiki/authority-matrix.md` states the source-of-truth hierarchy once
+  (behavior=code+tests, tunables=config layer, structure=architecture
+  spec+ADRs, safety=SAFETY.md+invariant tests, operation=OPERATOR-GUIDE,
+  rationale=DECISION-LOG, navigation=wiki, agent conduct=CLAUDE.md+rules+
+  skills). Wiki README's stale "canonical docs (CLAUDE.md, SAFETY.md)"
+  tunables claim repointed (tunables' authority is the config layer);
+  CLAUDE.md Coding Rules intro links the matrix.
+
 ## 2026-07-19 — review/merge protocol amended after 52-round retrospective (#211)
 
 - Operator decisions after PR #210 reached 34 review rounds: (1) self-review

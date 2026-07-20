@@ -6,6 +6,8 @@ telemetry dashboard. Project memory: [CLAUDE.md](../../CLAUDE.md) · full
 spec: [PROJECT-PLAN.md](../../PROJECT-PLAN.md) · design philosophy:
 [MISSION](../MISSION.md) (smoothness above all).
 
+Which artifact wins for what: [authority-matrix](authority-matrix.md).
+
 ## Domains
 
 - [Hardware](hardware.md) — board, ESCs, motors, batteries, wiring
