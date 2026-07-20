@@ -46,6 +46,5 @@ tests/                                   — Host test harness: stub Arduino env
 .claude/skills/                          — Project skills (#127): safety-review, flash-and-log, new-module, field-tune, wiki-impact-review, prepare-pull-request (one procedure per folder)
 .claude/agents/                          — Read-only reviewer subagents (#127): architecture, safety, tests, documentation
 .githooks/pre-commit                     — Commit-time test gate (activate: git config core.hooksPath .githooks)
-live_plot.py                             — Real-time matplotlib monitor
-monitor.py                               — Simple serial monitor
+tools/                                   — Human-run dev tools with README index (#123): serial monitors/plotters, deploy, dashboard UI tests (Playwright + mock SSE), board drawings — scripts/ stays CI/hook machinery only
 ```

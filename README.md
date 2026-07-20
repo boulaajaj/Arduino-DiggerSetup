@@ -159,8 +159,8 @@ arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_con
 arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control
 
 # Monitor / live plot
-python monitor.py
-python live_plot.py
+python tools/monitor.py
+python tools/live_plot.py
 ```
 
 ---

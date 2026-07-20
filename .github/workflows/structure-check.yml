@@ -58,14 +58,13 @@ jobs:
             done
           fi
 
-          # Check: .py files only in root, scripts/, or .claude/hooks/
+          # Check: .py files only in root, scripts/, tools/, or .claude/hooks/
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
-            # .claude/hooks holds Claude Code hook scripts (#206) — they live
-            # with the hook config that registers them, mirroring the
-            # .claude/ allowance the markdown rule below already makes
-            if [ "$dir" != "." ] && [ "$dir" != "scripts" ] && [ "$dir" != ".claude/hooks" ]; then
+            # .claude/hooks holds Claude Code hook scripts (#206); tools/
+            # holds human-run dev tools (#123) — scripts/ is CI machinery
+            if [ "$dir" != "." ] && [ "$dir" != "scripts" ] && [ "$dir" != ".claude/hooks" ] && [ "$dir" != "tools" ]; then
               echo "ERROR: Python file in unexpected location: $f"
               errors=$((errors + 1))
             fi
@@ -73,11 +72,13 @@ jobs:
 
           # Check: .md files only in root, docs/ (any depth), .github/ (any depth),
           # .claude/ (any depth — agent rules/skills live there, issue #134),
-          # or sketches/README.md (production-vs-bench index, issue #118)
+          # sketches/README.md (production-vs-bench index, #118), or
+          # tools/README.md (dev-tool index, #123)
           while IFS= read -r f; do
             nf="${f#./}"
             dir=$(dirname "$nf")
             if [ "$nf" != "sketches/README.md" ] &&
+               [ "$nf" != "tools/README.md" ] &&
                [ "$dir" != "." ] &&
                [ "$dir" != "docs" ] && [[ "$dir" != docs/* ]] &&
                [ "$dir" != ".github" ] && [[ "$dir" != .github/* ]] &&
