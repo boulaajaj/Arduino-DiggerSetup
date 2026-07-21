@@ -10,8 +10,8 @@ paths:
 - **`dashboard/index.html` is the single source of truth; `web_page.h` is
   GENERATED** (#120) — never hand-edit it. After editing the source, run
   `python scripts/generate_web_page.py` and commit both files; CI
-  (`dashboard-drift` job in structure-check) fails on any mismatch. The
-  generated file moves to `src/generated/` when the Phase D tree exists.
+  (`dashboard-drift` job in structure-check) fails on any mismatch. Its
+  planned home is `src/generated/` per the architecture target (#227).
 - **Test UI changes locally before any flash**: run the Playwright harness
   (`tools/ui-test*.mjs`) with mock data and check the screenshots. Never make
   the operator tether to the machine to verify a UI change.

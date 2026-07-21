@@ -57,8 +57,9 @@ The watchdog (#69, `WDT_TIMEOUT_MS` 250 ms) cannot fire in the host stub; the
 host suite asserts its *contract* — exactly one `WDT.refresh()` per loop pass
 (`tests/characterization/test_control_loop.cpp`; the stub counts calls, it
 does not assert ordering). That the single refresh sits *after* the control
-path is a code-placement rule (`[MODULE]` loop order in `dual_track_control.ino`,
-enforced by review + `.claude/rules/firmware-realtime.md`). That a WDT reset
+path is a code-placement rule (the loop order in
+`src/application/FirmwareApp.cpp`, enforced by review +
+`.claude/rules/firmware-realtime.md`). That a WDT reset
 actually stops PWM is physical behavior — tracked in
 `docs/architecture/BENCH-VERIFICATION-DEFERRED.md`.
 
@@ -66,7 +67,8 @@ actually stops PWM is physical behavior — tracked in
 
 Both gaps below are **locked as current behavior** by `// #131 FINDING:` test
 cases; fixing either is a behavior change requiring its own issue + operator
-sign-off (behavior-preserving constraint during epic #116). Follow-up
+sign-off (the behavior-preservation covenant,
+`.claude/rules/behavior-preservation.md` — permanent policy). Follow-up
 hardening issues are pending operator filing; until then the full drafts live
 in the appendix of the PR that introduced this registry
 ([PR #138](https://github.com/boulaajaj/Arduino-DiggerSetup/pull/138) — the

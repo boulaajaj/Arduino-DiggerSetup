@@ -265,8 +265,8 @@ version SSOT (activates with #124). Implementation:
 `scripts/check_architecture.py` + `scripts/architecture_rules.py`, run by the
 `architecture-fitness` workflow after a self-test
 (`scripts/check_architecture_selftest.py`) proves every failure mode fires.
-The check is **advisory** (not in branch protection) until the Phase D
-extraction lands, then flipped to required. Section 3's table is canonical —
+The check is **advisory** (not in branch protection) until the operator
+flips it to required (#196 — Phase D itself landed 2026-07-20). Section 3's table is canonical —
 a rule change here must change the script in the same PR.
 
 **Migration window (#150):** the composition-root rule (`.ino` →

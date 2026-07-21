@@ -7,7 +7,8 @@ every identifier** — types, functions, variables, files, folders.
   `command`, not `cmd`. `temperature`, not `temp` (ambiguous with
   "temporary"). `previous`, not `prev`. `button`, not `btn`.
 - Applies to NEW and MOVED code. Do not mass-rename untouched legacy code —
-  names are fixed as each file is extracted during the Phase D migration.
+  names were fixed as each file was extracted during the Phase D migration
+  (completed, #189); legacy names change only when their code next moves.
 
 ## Permitted exceptions (closed list — extending it requires operator sign-off)
 
