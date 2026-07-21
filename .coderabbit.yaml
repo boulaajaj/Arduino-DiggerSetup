@@ -19,7 +19,7 @@ reviews:
         [covenant] Organization and refactor work in this repo (splitting
         files, domain-driven design per
         docs/architecture/ARCHITECTURE-TARGET.md, doc-code sync, readable
-        meaningful tests) must change NOTHING observable: no timing,
+        and meaningful tests) must change NOTHING observable: no timing,
         no parameter or constant values, no input/output handling, no control
         flow that alters outputs. Do NOT suggest behavior changes, constant
         retunes, or "simplifications" that alter what the firmware does — even
@@ -55,9 +55,9 @@ reviews:
         [covenant] Production firmware behavior is LAW. For structural PRs:
         verify moved code is byte-equivalent in effect, includes/layers
         follow the architecture rules, and nothing "extra" snuck into a move.
-        Any behavior, timing, or parameter concern the PR's linked issue does
-        not explicitly authorize becomes an issue recommendation, never a
-        committable suggestion.
+        Any behavior, timing, or parameter concern that the PR's linked issue
+        does not explicitly authorize becomes an issue recommendation, never
+        a committable suggestion.
     - path: "tests/**"
       instructions: >-
         [covenant] Test EXPECTATIONS are behavior law: changing an expected

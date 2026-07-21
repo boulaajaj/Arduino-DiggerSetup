@@ -16,8 +16,13 @@ Updated by session hooks — only technical content, no personal info.
   instruction now scopes the no-committable-suggestion rule to changes the
   PR's linked issue does not authorize), agent-governance + home wiki
   notes, flash-and-log skill (no-hardware constraint unhooked from the
-  epic — it stands while the machine is away).
-  architecture-remediation.md keeps its epic title as dated history.
+  epic — it stands while the machine is away). Self-review round widened
+  the sweep to Phase-D-conditioned wording: SAFETY.md (known-gaps clause +
+  stale .ino loop-order reference), naming rule (migration past tense),
+  TESTING.md intro, architecture-fitness advisory-until claims (now point
+  at #196), and the dashboard rule's src/generated promise (now tracked
+  as #227). architecture-remediation.md keeps its epic title as dated
+  history.
 
 ## 2026-07-20 — single-writer state: the two named #119 remnants closed
 
