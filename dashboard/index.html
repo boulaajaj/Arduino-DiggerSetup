@@ -182,8 +182,11 @@ html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Rajdhani',s
 </style>
 </head>
 <body>
-<!-- Discrete firmware-version badge (top-left). Bump with the sketch version. -->
-<div id="fwVer" style="position:fixed;top:3px;left:5px;z-index:9999;font:10px monospace;color:#6b8;opacity:.6;letter-spacing:.5px;pointer-events:none">V7.33</div>
+<!-- Discrete firmware-version badge (top-left). The placeholder is replaced
+     with config/BuildInfo.h's FIRMWARE_VERSION at generation (#222) — never
+     hand-write a version here. Served pages always show the SSOT value;
+     opening this source file directly shows the raw placeholder. -->
+<div id="fwVer" style="position:fixed;top:3px;left:5px;z-index:9999;font:10px monospace;color:#6b8;opacity:.6;letter-spacing:.5px;pointer-events:none">{{FIRMWARE_VERSION}}</div>
 <div class="dash-frame">
 
 <div class="top-bar">
