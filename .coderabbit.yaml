@@ -1,27 +1,25 @@
 # CodeRabbit review configuration.
 #
-# EPIC #116 SCOPE (TEMPORARY): the sections marked [epic #116] steer reviews
-# during the architecture-remediation program (organize code, split files,
-# domain-driven design, doc-code sync, meaningful tests) under a strict
-# behavior-preservation covenant. Relax/remove those sections when epic #116
-# completes — tracked in the epic's definition of done.
+# The [covenant] sections are PERMANENT policy (epic-#116 scaffolding retired
+# 2026-07-20, #203): the firmware is field-tuned on a child-ridden machine.
+# Behavior changes are legitimate ONLY when a PR's linked issue explicitly
+# authorizes them — never as review corrections.
 language: en-US
 
 tone_instructions: >-
-  Safety-critical child-ridden vehicle, mid behavior-preserving refactor
-  (epic #116). Never suggest changes to behavior, timing, parameters, or
-  test expectations; propose follow-up issues instead. Verify numeric
-  claims against the code first.
+  Safety-critical child-ridden vehicle under a permanent
+  behavior-preservation covenant. Never suggest changes to behavior, timing,
+  parameters, or test expectations; propose follow-up issues instead. Verify
+  numeric claims against the code first.
 
 reviews:
   path_instructions:
     - path: "**"
       instructions: >-
-        [epic #116 — behavior-preservation covenant] This repo is mid
-        refactor whose ONLY goals are: organize code, split large files,
-        follow domain-driven design (docs/architecture/ARCHITECTURE-TARGET.md),
-        keep documentation synchronized with code, and keep tests readable and
-        meaningful. Organization must change NOTHING observable: no timing,
+        [covenant] Organization and refactor work in this repo (splitting
+        files, domain-driven design per
+        docs/architecture/ARCHITECTURE-TARGET.md, doc-code sync, readable
+        and meaningful tests) must change NOTHING observable: no timing,
         no parameter or constant values, no input/output handling, no control
         flow that alters outputs. Do NOT suggest behavior changes, constant
         retunes, or "simplifications" that alter what the firmware does — even
@@ -54,14 +52,15 @@ reviews:
         exactly the review comments this program needs.
     - path: "sketches/**"
       instructions: >-
-        [epic #116] Production firmware behavior is LAW during the refactor.
-        Structural review only: verify moved code is byte-equivalent in
-        effect, includes/layers follow the architecture rules, and nothing
-        "extra" snuck into a move. Any behavior, timing, or parameter concern
-        becomes an issue recommendation, never a committable suggestion.
+        [covenant] Production firmware behavior is LAW. For structural PRs:
+        verify moved code is byte-equivalent in effect, includes/layers
+        follow the architecture rules, and nothing "extra" snuck into a move.
+        Any behavior, timing, or parameter concern that the PR's linked issue
+        does not explicitly authorize becomes an issue recommendation, never
+        a committable suggestion.
     - path: "tests/**"
       instructions: >-
-        [epic #116] Test EXPECTATIONS are behavior law: changing an expected
+        [covenant] Test EXPECTATIONS are behavior law: changing an expected
         value requires its own issue + operator sign-off first — never suggest
         editing an expectation to "correct" it. Welcome suggestions:
         readability, meaningful scenario coverage (tests should exercise
@@ -71,7 +70,7 @@ reviews:
         firmware.
     - path: "docs/**"
       instructions: >-
-        [epic #116] Doc-code synchronization is a first-class review goal:
+        [covenant] Doc-code synchronization is a first-class review goal:
         flag any constant, threshold, pin, file path, or behavior description
         that no longer matches the code. Do not propose changing the CODE to
         match stale docs — docs follow code.

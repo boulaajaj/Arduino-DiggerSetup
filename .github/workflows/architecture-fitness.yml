@@ -3,8 +3,8 @@ name: Architecture Fitness
 # Fitness functions for the epic #116 target architecture (#129):
 # forbidden includes, layer direction, file-size policy, banned names,
 # no mutable domain globals, generated-file guard, version SSOT.
-# Advisory until the Phase D extraction lands (not in branch protection);
-# flip to required afterwards — see ARCHITECTURE-TARGET.md section 10.
+# Advisory until the operator adds it to branch protection (#196) —
+# see ARCHITECTURE-TARGET.md section 10.
 
 on:
   push:

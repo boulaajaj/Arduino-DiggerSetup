@@ -9,7 +9,7 @@ sources:
 
 How AI agents (Claude Code, Copilot, CodeRabbit) are steered in this repo —
 the Karpathy method (#53) plus the behavior-preservation covenant
-(epic #116).
+(permanent policy — born in epic #116, retained after its 2026-07-20 close).
 
 - **Working Agreement** — four principles (think before coding, simplicity
   first, surgical changes, goal-driven execution with a verifiable gate):
@@ -34,7 +34,7 @@ the Karpathy method (#53) plus the behavior-preservation covenant
 - **Reviewer subagents** (#127) — read-only specialist reviewers under
   `.claude/agents/` (architecture, safety, tests, documentation) that
   challenge a diff before it is marked ready — they report, never edit.
-- **Review bots** — `.coderabbit.yaml` (epic-scoped covenant steering) and
+- **Review bots** — `.coderabbit.yaml` (permanent covenant steering) and
   [copilot-instructions](../../.github/copilot-instructions.md) mirror the
   same rules so bot reviews align with the program
 - **This wiki** is itself governed here: agents maintain it, PRs that change

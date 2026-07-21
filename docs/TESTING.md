@@ -4,15 +4,15 @@ The firmware's control logic runs on a laptop, byte-for-byte unchanged, inside
 a fake Arduino environment. Two suites share the harness: **characterization**
 (#47) locks in example behavior, and **invariants** (#131) asserts safety
 properties that must always hold, under injected faults. Together they are the
-**primary safety net for the Phase D refactor**: every extraction PR must keep
-them green, proving behavior parity while no hardware is available.
+**primary safety net for any structural change**: every PR must keep them
+green, proving behavior parity while no hardware is available.
 
 ## How it works — zero firmware changes
 
 The production sketch is not modified for testing. Each test binary compiles
 `sketches/dual_track_control/dual_track_control.ino` directly, plus the extracted
-`sketches/dual_track_control/src/**/*.cpp` domain sources the sketch delegates to as the
-Phase D migration (#117) proceeds. Pure suites live at the path of the
+`sketches/dual_track_control/src/**/*.cpp` domain sources the sketch delegates
+to (extracted during Phase D, #117 — complete). Pure suites live at the path of the
 layer they test — the tree MIRRORS `src/` (#195) — with no firmware, no
 stubs, and no `src/infrastructure/` sources (those include hardware headers
 and are compiled only into the stub-backed firmware suites, #172):

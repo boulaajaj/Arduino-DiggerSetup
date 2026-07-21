@@ -24,8 +24,8 @@ Which artifact wins for what: [authority-matrix](authority-matrix.md).
   ([application-loop](application-loop.md) ·
   [ports-and-adapters](ports-and-adapters.md) ·
   [configuration-authority](configuration-authority.md))
-- [Architecture remediation](architecture-remediation.md) — epic #116 program
-  (dated migration history)
+- [Architecture remediation](architecture-remediation.md) — epic #116 program,
+  completed 2026-07-20 (dated migration history)
 
 ## People and operations
 
