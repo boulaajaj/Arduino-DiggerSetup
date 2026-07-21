@@ -5,6 +5,15 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-21 — dashboard version badge injected from the SSOT (#222)
+
+- dashboard/index.html carries {{FIRMWARE_VERSION}}; generate_web_page.py
+  substitutes the BuildInfo.h value (regex-anchored, fail-close on a
+  missing declaration or wrong placeholder count). The badge had drifted
+  twice (V7.33 shown vs V7.35 SSOT) — impossible now: a version bump
+  without regenerating web_page.h fails the dashboard-drift CI check, so
+  bumps and regeneration travel in the same commit by construction.
+
 ## 2026-07-20 — epic #116 closed; covenant made permanent (#203)
 
 - Epic #116 closed with all child issues done (operator go-ahead). The

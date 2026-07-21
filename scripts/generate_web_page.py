@@ -15,6 +15,7 @@ Newlines are normalized to LF so output is byte-identical on every platform
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -22,6 +23,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 PAGE_BUDGET_BYTES = 100 * 1024  # epic #81: served dashboard <= 100 KB
 RAW_DELIMITER = "DIGGER"
+VERSION_PLACEHOLDER = b"{{FIRMWARE_VERSION}}"
+VERSION_PATTERN = re.compile(
+    rb'const\s+char\s+FIRMWARE_VERSION\[\]\s*=\s*"([^"]+)"')
 
 HEADER = f"""\
 // GENERATED FILE — do not edit. Source: dashboard/index.html
@@ -31,9 +35,25 @@ const char INDEX_HTML[] PROGMEM = R"{RAW_DELIMITER}(
 TRAILER = f"){RAW_DELIMITER}\";\n"
 
 
+def firmware_version(repo_root: Path) -> bytes:
+    """The FIRMWARE_VERSION SSOT (#124) from BuildInfo.h — fail loudly if
+    the declaration ever moves or changes shape, never emit a stale badge."""
+    build_info = (repo_root / "sketches" / "dual_track_control" / "src"
+                  / "config" / "BuildInfo.h")
+    match = VERSION_PATTERN.search(build_info.read_bytes())
+    if not match:
+        raise SystemExit(f"FAIL: FIRMWARE_VERSION declaration not found in "
+                         f"{build_info} — badge injection (#222) would go stale")
+    return match.group(1)
+
+
 def generate(repo_root: Path) -> bytes:
     source_path = repo_root / "dashboard" / "index.html"
     page = source_path.read_bytes().replace(b"\r\n", b"\n")
+    if page.count(VERSION_PLACEHOLDER) != 1:
+        raise SystemExit(f"FAIL: {source_path} must contain exactly one "
+                         f"{VERSION_PLACEHOLDER.decode()} placeholder (#222)")
+    page = page.replace(VERSION_PLACEHOLDER, firmware_version(repo_root))
     if len(page) > PAGE_BUDGET_BYTES:
         raise SystemExit(f"FAIL: {source_path} is {len(page)} bytes — over the "
                          f"{PAGE_BUDGET_BYTES} byte page budget (epic #81)")

@@ -24,6 +24,10 @@ can ever command a track. Canonical detail and current cadence/keys:
   dashboard source — swapping a skin never touches logic. The default skin is
   generic; vehicle-specific skins (the "Malaki SuperTracks" example is
   documented in the block) are applied by editing only those values.
+- The version badge is injected at generation (#222): the source carries a
+  `{{FIRMWARE_VERSION}}` placeholder and the generator substitutes the
+  `BuildInfo.h` SSOT — a version bump without regeneration now fails the
+  drift check.
 - Dashboard rules (frame budget, UI testing before flashing):
   [.claude/rules/dashboard](../../.claude/rules/dashboard.md)
 - Telemetry feeds the [battery ladder](battery-ladder.md) and
