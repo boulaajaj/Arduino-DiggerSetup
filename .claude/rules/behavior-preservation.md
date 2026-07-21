@@ -1,4 +1,4 @@
-# Behavior-Preservation Covenant (epic #116 — highest-priority rule)
+# Behavior-Preservation Covenant (highest-priority rule)
 
 **Operator's words (2026-07-06):** "organizing, refactoring and improving the
 code should never ever, ever cause change of controls or change of behavior
@@ -9,7 +9,9 @@ firmware again, I would like the machine to perform exactly like it used to
 perform before."
 
 The firmware is field-tuned on a real machine with a child rider. The entire
-value of epic #116 is a better-organized firmware that drives IDENTICALLY.
+value of any reorganization is a better-organized firmware that drives
+IDENTICALLY. (Born as epic #116's law; permanent policy since the epic closed,
+2026-07-20, #203.)
 
 ## The rule
 

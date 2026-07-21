@@ -1,12 +1,13 @@
 # Copilot Code Review Instructions — Arduino Digger Controller
 
-## ⚠️ Current program: epic #116 — behavior-preservation covenant (TEMPORARY until epic completes)
+## ⚠️ Behavior-preservation covenant (permanent policy)
 
-The repo is mid architecture-remediation: organize code, split large files,
-domain-driven design, doc-code sync, readable and meaningful tests. During
-this program, organization must change NOTHING observable — no behavior, no
-timing, no parameter/constant values, no input/output handling. Firmware
-flashed after a refactor must make the machine perform exactly as before.
+This firmware is field-tuned on a real machine with a child rider.
+Organization and refactor work must change NOTHING observable — no behavior,
+no timing, no parameter/constant values, no input/output handling. Firmware
+flashed after a refactor must make the machine perform exactly as before; a
+behavior change is legitimate only when the PR's linked issue explicitly
+authorizes it.
 
 - Do NOT suggest behavior changes, constant retunes, or simplifications that
   alter what the firmware does — even where current behavior looks wrong.

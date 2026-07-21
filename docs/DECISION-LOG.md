@@ -5,6 +5,20 @@ Updated by session hooks — only technical content, no personal info.
 
 ---
 
+## 2026-07-20 — epic #116 closed; covenant made permanent (#203)
+
+- Epic #116 closed with all child issues done (operator go-ahead). The
+  behavior-preservation covenant survives the epic as PERMANENT policy —
+  one home: .claude/rules/behavior-preservation.md. Epic-conditioned
+  wording retired from CLAUDE.md, workflow rule, copilot-instructions
+  (covenant section retitled permanent), .coderabbit.yaml ([epic #116]
+  markers → [covenant]; "mid-refactor" framing dropped; sketches/ path
+  instruction now scopes the no-committable-suggestion rule to changes the
+  PR's linked issue does not authorize), agent-governance + home wiki
+  notes, flash-and-log skill (no-hardware constraint unhooked from the
+  epic — it stands while the machine is away).
+  architecture-remediation.md keeps its epic title as dated history.
+
 ## 2026-07-20 — single-writer state: the two named #119 remnants closed
 
 - lowVoltLatched now has ONE writer: [SAFETY]'s batteryCutoffUpdate() calls

@@ -12,7 +12,8 @@ description: Firmware upload procedure — use whenever flashing the digger (pro
    `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control`
 3. The change is on an issue-linked PR branch (see `prepare-pull-request`
    skill) — never flash unreviewed drive-by edits.
-4. If NO hardware is connected (epic #116 standing constraint), STOP: no
+4. If NO hardware is connected (standing constraint while the machine is
+   away), STOP: no
    flashing, no bench claims. Physical checks go to
    `docs/architecture/BENCH-VERIFICATION-DEFERRED.md` instead.
 

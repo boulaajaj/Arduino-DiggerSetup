@@ -12,7 +12,7 @@ dashboard (monitoring only).
 
 Behavioral guardrails for every agent working in this repo. The
 **behavior-preservation covenant** (`.claude/rules/behavior-preservation.md`)
-sits above all four: during epic #116, organization changes NOTHING observable
+sits above all four: organization changes NOTHING observable
 — firmware flashed after a refactor must drive exactly as before.
 
 1. **Think before coding — never guess on safety-relevant ambiguity.**
