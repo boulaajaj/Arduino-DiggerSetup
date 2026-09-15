@@ -206,3 +206,10 @@ Read-only reviewer subagents live in `.claude/agents/`:
 - Upload: `arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/dual_track_control && arduino-cli upload --fqbn arduino:renesas_uno:unor4wifi -p COM7 sketches/dual_track_control`
   (then log it — `flash-and-log` skill)
 - VS Code: Ctrl+Shift+B → "Live Plot" for real-time monitoring
+
+<!-- amibou:bridge 1 (managed by "amibou bridge sync"; put your own text outside these markers) -->
+## Amibou
+
+Ordinary work here needs nothing from this section. When a task concerns the person rather than this code (their projects, priorities, past decisions, people, preferences), consult their private Amibou brain through the `brain_query` tool, as the `/amibou` skill describes. It answers only when this machine has authorized this repository. Nothing from the brain is ever written here. Details: `.amibou/BRIDGE.md`.
+
+<!-- /amibou:bridge -->

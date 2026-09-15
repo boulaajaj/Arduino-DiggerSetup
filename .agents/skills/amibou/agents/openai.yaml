@@ -1,0 +1,7 @@
+interface:
+  display_name: "Amibou"
+  short_description: "Consult your private Amibou brain when a task concerns something outside this repository"
+  default_prompt: "Use the Amibou brain to answer: where does my main project stand right now?"
+policy:
+  allow_implicit_invocation: true
+

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Grill Me (Amibou)"
+  short_description: "Build brain context through saved, one-question interviews"
+  default_prompt: "Use $grill-me to explore this topic and save each answer to my brain."
+policy:
+  allow_implicit_invocation: true
+
