@@ -1,0 +1,7 @@
+interface:
+  display_name: "Amibou Level Up"
+  short_description: "Turn one gap in the brain into a verified improvement"
+  default_prompt: "Use $level-up to improve one workflow or close an audit gap."
+policy:
+  allow_implicit_invocation: true
+

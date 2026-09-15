@@ -1,0 +1,7 @@
+interface:
+  display_name: "Project Discovery"
+  short_description: "Find the projects your recent conversations concern, propose them to the brain"
+  default_prompt: "Use $project-discovery: find my active projects in the last 90 days of conversations from my connected source, up to 150 conversations."
+policy:
+  allow_implicit_invocation: true
+

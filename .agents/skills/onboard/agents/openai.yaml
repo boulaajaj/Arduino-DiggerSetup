@@ -1,0 +1,7 @@
+interface:
+  display_name: "Amibou Onboard"
+  short_description: "Set up or refresh the brain from this repository"
+  default_prompt: "Use $onboard to set up my brain."
+policy:
+  allow_implicit_invocation: true
+

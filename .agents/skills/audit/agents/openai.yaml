@@ -1,0 +1,7 @@
+interface:
+  display_name: "Amibou Audit"
+  short_description: "Score the brain's Four Cs and find routing gaps"
+  default_prompt: "Run $audit on my brain."
+policy:
+  allow_implicit_invocation: true
+

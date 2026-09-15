@@ -1,0 +1,7 @@
+interface:
+  display_name: "Weekly Review"
+  short_description: "What to be on top of this week, from the brain, with sources"
+  default_prompt: "Use $weekly-review: what should I be on top of this week?"
+policy:
+  allow_implicit_invocation: true
+

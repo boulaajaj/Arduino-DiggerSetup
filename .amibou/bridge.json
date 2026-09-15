@@ -1,0 +1,59 @@
+{
+  "bridge": 1,
+  "framework": "amibou-os",
+  "frameworkVersion": "2.0.0-beta.4",
+  "clients": [
+    "claude",
+    "codex"
+  ],
+  "capabilities": [
+    "audit",
+    "grill-me",
+    "level-up",
+    "link",
+    "onboard",
+    "project-discovery",
+    "weekly-review"
+  ],
+  "verbs": {
+    "AGENTS.md": "$",
+    "CLAUDE.md": "/"
+  },
+  "files": {
+    ".agents/skills/amibou/SKILL.md": "82bb068e28ad68a91621c5cc5d1fce726029a9a6dae2665843d963ece31d377b",
+    ".agents/skills/amibou/agents/openai.yaml": "705e5a0bbf9cbd51b4712cb595fb4753e4860a24700afc708b8e9dcbe21b4a5b",
+    ".agents/skills/audit/SKILL.md": "69829b39ef96b80302f86256c358325a9e39fcf4d7edfc38904d5baeb3dace31",
+    ".agents/skills/audit/agents/openai.yaml": "b5364eab749e54640c165f01a64a38d553e8bbeb6b646108b7d30e91193d7570",
+    ".agents/skills/grill-me/SKILL.md": "3a58cd893e3b3a25368daf29512bffdeb799f3ca80390c0e9b1690fbffce2c66",
+    ".agents/skills/grill-me/agents/openai.yaml": "8f74c91755ec2eff5ef60719c3f46eb14841859b686a0f95636373dd541003e8",
+    ".agents/skills/level-up/SKILL.md": "24b1888d59b3a35fc8161d08dcc5a9616ab47f78236dafae95a4949aad4e8cfe",
+    ".agents/skills/level-up/agents/openai.yaml": "104679962a4fa15c412a1cbc7a97014fa1652ff5ff71aeedbfc15df8e71186a1",
+    ".agents/skills/link/SKILL.md": "81b81eaef97253401d17ff095142ee9e1bfa369a96d2c1815092f7000a7e5a61",
+    ".agents/skills/link/agents/openai.yaml": "79e3ef8d56a831112e6c01d56ed2d66832b804aaf62691ea544940873b7131b0",
+    ".agents/skills/onboard/SKILL.md": "092ef6e83b7c1863baac4973d2da27fe50ee40b02e341e6a538ce3fa23d07b65",
+    ".agents/skills/onboard/agents/openai.yaml": "00e9825985e39ce173f88b62c879c628b5f5ff5fe118d7fc77e961b735041817",
+    ".agents/skills/project-discovery/SKILL.md": "dd392f50617bb6974704a52b3c4a3539222f50085e0c44700c577c4b1b8e260e",
+    ".agents/skills/project-discovery/agents/openai.yaml": "aff342ed4db97962c0e836f3b1cdbf64732f8a51d216a6bd1ff77fd9df6fd330",
+    ".agents/skills/weekly-review/SKILL.md": "c35a7f00f5f2aa7a16bd6fbd10a843828c7c9424bee6b38ebe78c0ea7e2443d8",
+    ".agents/skills/weekly-review/agents/openai.yaml": "50314b85272d3fba1c5b6b791346237f288f7d18f8ec3c5ab59d49a7386dcd4a",
+    ".amibou/BRIDGE.md": "5021ad9cb89f778ee1f210286b7fd4ec81bd34bbb9aa48ccb8faa63165dbfef9",
+    ".claude/skills/amibou/SKILL.md": "82bb068e28ad68a91621c5cc5d1fce726029a9a6dae2665843d963ece31d377b",
+    ".claude/skills/amibou/agents/openai.yaml": "705e5a0bbf9cbd51b4712cb595fb4753e4860a24700afc708b8e9dcbe21b4a5b",
+    ".claude/skills/audit/SKILL.md": "ce53adbbdc6debf5f94d708ca0ccbfa5019ef734209f1371e85a1a799bdba080",
+    ".claude/skills/audit/agents/openai.yaml": "b5364eab749e54640c165f01a64a38d553e8bbeb6b646108b7d30e91193d7570",
+    ".claude/skills/grill-me/SKILL.md": "c37cae73520ef6e5180107cf8c03ac900f122a5ae99c922ee83ce579a0e2f340",
+    ".claude/skills/grill-me/agents/openai.yaml": "8f74c91755ec2eff5ef60719c3f46eb14841859b686a0f95636373dd541003e8",
+    ".claude/skills/level-up/SKILL.md": "8cffd87594f66a2f958399fa2b2bae776e02a5c217b9f2f2c6b3efb62b0ec746",
+    ".claude/skills/level-up/agents/openai.yaml": "104679962a4fa15c412a1cbc7a97014fa1652ff5ff71aeedbfc15df8e71186a1",
+    ".claude/skills/link/SKILL.md": "d83608f3ebf5854905a9058ee8169d1441eb5287a621f46e44fb2eee2ba3efc4",
+    ".claude/skills/link/agents/openai.yaml": "79e3ef8d56a831112e6c01d56ed2d66832b804aaf62691ea544940873b7131b0",
+    ".claude/skills/onboard/SKILL.md": "7d909c12bd70fa642eb08e2b9fbc4886da2f164339240be2f2d870b926979aff",
+    ".claude/skills/onboard/agents/openai.yaml": "00e9825985e39ce173f88b62c879c628b5f5ff5fe118d7fc77e961b735041817",
+    ".claude/skills/project-discovery/SKILL.md": "dd392f50617bb6974704a52b3c4a3539222f50085e0c44700c577c4b1b8e260e",
+    ".claude/skills/project-discovery/agents/openai.yaml": "aff342ed4db97962c0e836f3b1cdbf64732f8a51d216a6bd1ff77fd9df6fd330",
+    ".claude/skills/weekly-review/SKILL.md": "c35a7f00f5f2aa7a16bd6fbd10a843828c7c9424bee6b38ebe78c0ea7e2443d8",
+    ".claude/skills/weekly-review/agents/openai.yaml": "50314b85272d3fba1c5b6b791346237f288f7d18f8ec3c5ab59d49a7386dcd4a",
+    "AGENTS.md#amibou:bridge": "f4953e08f8f6f72ebd6af1f2f1d4b322e724d0241286b4f9a05b2294644658ee",
+    "CLAUDE.md#amibou:bridge": "a893bb9499a52cbe8c01b70f1b5b11e8900d6e87da69f37a9605565cc0416bd6"
+  }
+}

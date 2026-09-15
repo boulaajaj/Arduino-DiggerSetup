@@ -1,0 +1,7 @@
+interface:
+  display_name: "Amibou Link"
+  short_description: "Link this repository or a source into the brain's routing"
+  default_prompt: "Use $link to add this repository to my brain's routing."
+policy:
+  allow_implicit_invocation: true
+
