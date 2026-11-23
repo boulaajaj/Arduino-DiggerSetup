@@ -1,4 +1,5 @@
 ---
+parent: safety-system.md
 sources:
   - sketches/dual_track_control/src/domain/battery/
   - docs/SAFETY.md

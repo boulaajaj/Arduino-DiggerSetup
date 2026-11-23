@@ -29,6 +29,8 @@ Which artifact wins for what: [authority-matrix](authority-matrix.md).
 
 ## People and operations
 
+- [Wiki guide](README.md) — how to browse and maintain this knowledge layer
+
 - [OPERATOR-GUIDE](../../OPERATOR-GUIDE.md) — for the RC supervisor and rider
 - [FIRMWARE-UPLOAD-LOG](../FIRMWARE-UPLOAD-LOG.md) — the device's flight log
 - [DECISION-LOG](../DECISION-LOG.md) — every technical decision, dated

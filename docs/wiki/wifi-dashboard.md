@@ -1,4 +1,5 @@
 ---
+parent: telemetry-and-dashboard.md
 sources:
   - sketches/dual_track_control/src/infrastructure/network/
   - dashboard/index.html

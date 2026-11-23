@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - docs/SAFETY.md
   - sketches/dual_track_control/src/domain/safety/

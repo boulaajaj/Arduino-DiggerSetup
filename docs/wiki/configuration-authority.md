@@ -1,4 +1,5 @@
 ---
+parent: architecture-overview.md
 sources:
   - sketches/dual_track_control/src/config/
 ---

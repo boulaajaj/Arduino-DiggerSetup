@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - CLAUDE.md
   - .claude/rules/

@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - docs/architecture/ARCHITECTURE-TARGET.md
   - docs/architecture/FILE-MAP.md

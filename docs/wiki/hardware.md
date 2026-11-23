@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - docs/WIRING-GUIDE-V8.md
   - docs/GL10-PARAMETERS.md

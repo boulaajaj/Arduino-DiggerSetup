@@ -1,3 +1,8 @@
+---
+parent: home.md
+sources: none
+---
+
 # Project Wiki — AI-maintained knowledge graph
 
 A navigation layer over this repo's documentation, built for graph
@@ -6,6 +11,20 @@ LLM-wiki pattern adopted in #53: **agents create and maintain these
 interconnected notes; humans read and visualize them** (issue #141).
 
 ## How to visualize
+
+From the repository root, run:
+
+```sh
+python scripts/build_knowledge_graph.py
+```
+
+Open `docs/knowledge-graph.html` in a browser. The standalone file includes
+both views and works offline. GitHub and VS Code links open their respective
+destinations. Set the local checkout path in the viewer to enable VS Code links.
+The revision displayed in the viewer identifies the graph inputs, so unrelated
+commits do not invalidate the HTML.
+
+### Obsidian
 
 1. Open **the repository root** as an Obsidian vault (File → Open folder as
    vault). The graph then includes both these hub notes and the canonical
@@ -26,6 +45,11 @@ interconnected notes; humans read and visualize them** (issue #141).
   identity is fine: component model names and ordinary descriptive
   quantities ("three-position switch") make notes readable and only change
   when the thing itself changes.
+- **One parent per topic.** Every Markdown note except `home.md` declares a
+  relative `parent` path in frontmatter. The parent must link to the note using
+  a standard Markdown link. All parent chains reach Home. Additional links
+  connect related topics across the hierarchy. Mark dated context with
+  `status: historical`; `status: current` is optional.
 - **Agents own this folder.** A PR that adds, removes, or renames a doc — or
   changes what a subsystem IS — updates the affected wiki notes in the same
   PR. Link fixes are cheap; that is the point of keeping content out.
@@ -37,4 +61,7 @@ interconnected notes; humans read and visualize them** (issue #141).
   #145/#202): broken links and anchors, orphan notes, notes unreachable
   from [home](home.md), tunable-looking values, missing or invalid sources
   frontmatter, duplicate titles, and deprecated phrases all fail the build.
+  The same job checks parent chains and whether the HTML matches its inputs.
+  Stage new files before building so the generator includes them. Keep new
+  hierarchy links in the existing relative Markdown syntax.
 - Start at [home](home.md).

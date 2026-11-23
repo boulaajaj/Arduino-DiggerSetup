@@ -1,4 +1,6 @@
 ---
+parent: home.md
+status: historical
 sources:
   - docs/architecture/ARCHITECTURE-TARGET.md
   - docs/DECISION-LOG.md

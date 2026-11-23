@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - sketches/dual_track_control/src/infrastructure/xc/
   - dashboard/index.html

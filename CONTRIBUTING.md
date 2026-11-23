@@ -65,13 +65,16 @@ A PR touching a mapped source area must update the pages that describe it
 or carry an explicit documentation receipt — CI enforces this via
 `docs/architecture/change-impact.json`. The wiki (`docs/wiki/`) is a
 navigation layer: notes declare their sources and never restate tunable
-values.
+values. When a change affects the wiki, local source links, or the graph
+generator, run `python scripts/build_knowledge_graph.py` after your edits.
+It lints the wiki and refreshes `docs/knowledge-graph.html` for both views.
+Commit the generated file whenever it changes. Wiki Lint checks for drift.
 
 ## Running the CI checks locally
 
 ```sh
 python scripts/check_architecture.py     # layer/size/naming fitness
-python scripts/check_wiki.py             # wiki graph + sources health
+python scripts/build_knowledge_graph.py --check  # wiki + standalone map
 python scripts/check_change_impact.py    # doc-impact (vs origin/main)
 python scripts/check_hook_registration.py
 python scripts/generate_web_page.py --check
