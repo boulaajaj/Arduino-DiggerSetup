@@ -7,7 +7,7 @@ const raw=JSON.parse(document.getElementById('graph-data').textContent);
 const by=new Map(raw.nodes.map(n=>[n.id,n]));
 const $=id=>document.getElementById(id);
 const domains=[{id:'wiki',label:'Knowledge & wiki',color:'#8a73ef',test:n=>n.kind==='wiki'},{id:'docs',label:'Documentation',color:'#4a8fee',test:n=>n.id.startsWith('docs/')&&n.kind!=='wiki'},{id:'source',label:'Code & configuration',color:'#ed9c55',test:n=>!n.id.startsWith('docs/')&&n.kind!=='wiki'}];
-const domainId=n=>n.domainKey||(domains.find(d=>d.test(n))||domains[2]).id;const colorOf=n=>(domains.find(d=>d.id===domainId(n))||domains[2]).color;
+const domainId=n=>{if(n.domainKey)return n.domainKey;let x=n.id,seen=new Set();while(typeof parents!=='undefined'&&parents.has(x)&&!seen.has(x)){seen.add(x);x=parents.get(x);if(x.startsWith('__domain__'))return x.slice(10)}return (domains.find(d=>d.test(n))||domains[2]).id};const colorOf=n=>(domains.find(d=>d.id===domainId(n))||domains[2]).color;
 const types={child:{name:'Hierarchy',color:'#b8a6ec',dashes:false},link:{name:'Documentation links',color:'#8499b5',dashes:[3,7]},source:{name:'Source references',color:'#39b6a8',dashes:[8,5]}};
 const activeD=new Set(domains.map(d=>d.id)),activeT=new Set(Object.keys(types));
 let depth=0,opened=new Set(),selected=null,network,nodesDS,edgesDS;
