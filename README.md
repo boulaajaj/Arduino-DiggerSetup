@@ -17,9 +17,9 @@ Wi-Fi dashboard you open on your phone.
 
 ### Malaki SuperTracks dashboard
 
-See the proposed dashboard in motion. Simulated telemetry accelerates, peaks, and eases back to idle.
+Preview the proposed dashboard. Open it to play a short demo with simulated telemetry.
 
-[![Animated Malaki SuperTracks dashboard](docs/images/dashboard-demo.webp)](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html "Open Malaki SuperTracks dashboard")
+[![Malaki SuperTracks dashboard design](docs/images/dashboard-demo-still.webp)](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html "Open Malaki SuperTracks dashboard")
 
 [Open Malaki SuperTracks dashboard](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html)
 
