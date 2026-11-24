@@ -17,9 +17,9 @@ Wi-Fi dashboard you open on your phone.
 
 ### Malaki SuperTracks dashboard
 
-Preview the proposed dashboard. Open it to play a short demo with simulated telemetry.
+See the original Malaki SuperTracks dashboard mockup from issue #81.
 
-[![Malaki SuperTracks dashboard design](docs/images/dashboard-demo-still.webp)](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html "Open Malaki SuperTracks dashboard")
+[![Malaki SuperTracks dashboard design](docs/images/malaki-supertracks-original.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html "Open Malaki SuperTracks dashboard")
 
 [Open Malaki SuperTracks dashboard](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html)
 
