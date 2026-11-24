@@ -6,6 +6,7 @@ from unittest.mock import patch
 import subprocess
 
 import build_knowledge_graph as graph
+from knowledge_catalog import inventory
 
 
 class KnowledgeGraphTests(unittest.TestCase):
@@ -67,10 +68,37 @@ class KnowledgeGraphTests(unittest.TestCase):
         markdown = "[`title`](real.md) and `[sample](code.md)`\n~~~md\n[example](fenced.md)\n~~~"
         self.assertEqual(list(graph.links(markdown)), [("`title`", "real.md")])
 
+    def test_inventory_covers_unlinked_tracked_paths_and_evidenced_edges(self):
+        self.write("docs/notes.md", "# Unlinked note\n\n[Output](reference.md#output)\n")
+        self.write("firmware/helper.h", "struct Helper {};\n")
+        self.write("firmware/example.cpp", '#include "helper.h"\n\nint adjust(int x) { return x; }\n')
+        self.write("firmware/local.h", "// Local scratch file\n")
+        subprocess.run(["git", "add", "docs/notes.md", "firmware/helper.h", "firmware/example.cpp"],
+                       cwd=self.root, check=True)
+        files, _ = graph.list_paths(self.root)
+
+        def build_inventory():
+            base, _ = graph.build(self.root)
+            return inventory(base, self.root, files, graph.document, graph.summary,
+                             graph.links, graph.resolve, graph.MARKDOWN)
+
+        result = build_inventory()
+        nodes = {node["id"]: node for node in result["nodes"]}
+        self.assertTrue(files <= nodes.keys())
+        self.assertNotIn("firmware/local.h", nodes)
+        self.assertIn("firmware", nodes)
+        self.assertEqual(nodes["docs/notes.md"]["title"], "Unlinked note")
+        self.assertIn({"from": "docs/notes.md", "to": "docs/reference.md", "type": "link",
+                       "label": "Output", "anchor": "output", "line": 3}, result["edges"])
+        self.assertIn({"from": "firmware/example.cpp", "to": "firmware/helper.h", "type": "includes",
+                       "label": "helper.h", "sourceLine": 1}, result["edges"])
+        self.assertEqual(nodes["firmware/example.cpp"]["codeEntries"][0]["label"], "adjust")
+        self.assertEqual(result, build_inventory())
+
     def test_single_command_and_stale_detection(self):
         def run(*args):
             with patch.object(graph, "ROOT", self.root), \
-                 patch("sys.argv", [graph.__file__, *args]):
+                 patch("sys.argv", [graph.__file__, "--wiki-only", *args]):
                 return graph.main()
 
         self.assertEqual(run(), 0)

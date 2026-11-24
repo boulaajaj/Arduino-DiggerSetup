@@ -13,6 +13,18 @@ Wi-Fi dashboard you open on your phone.
 
 ---
 
+## Interactive Knowledge Map
+
+Explore the controller from the main index through its domain branches,
+topic clusters, and the screens, code, and tests behind them.
+
+[![Arduino Digger knowledge map showing the central index, domain branches, and labeled screen and code leaves](docs/images/knowledge-map.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/knowledge-explorer-kit.html "Open the interactive Arduino Digger knowledge map")
+
+Select the preview to open the [interactive map](https://boulaajaj.github.io/Arduino-DiggerSetup/knowledge-explorer-kit.html),
+or start with the [Markdown wiki index](docs/wiki/home.md).
+
+---
+
 ## ✨ What It Can Do
 
 - **Tank / curvature mixing** — one stick (or wheel + trigger) blends into smooth

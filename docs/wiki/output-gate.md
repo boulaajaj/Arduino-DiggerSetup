@@ -24,6 +24,9 @@ and thermal cut reopen the gate when they clear; battery cutoff latches.
   [SAFETY](../SAFETY.md)
 - Position in the chain: [control pipeline](control-pipeline.md)
 
+Explore [drive safeguards](drive-safeguards.md) for the watchdog, and for
+which behavior is enforced by tests or verified on the bench.
+
 The boot-side counterpart: on power-up the gate waits for battery
 confirmation but **fails open** after a bounded window, so the machine
 remains drivable with dead telemetry — a deliberate, documented trade-off

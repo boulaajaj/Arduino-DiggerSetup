@@ -20,6 +20,8 @@ WIKI = "docs/wiki/"
 HOME = WIKI + "home.md"
 OUTPUT = "docs/knowledge-graph.html"
 TEMPLATE = "scripts/knowledge_graph.html"
+EXPLORER = "docs/knowledge-explorer-kit.html"
+EXPLORER_TEMPLATE = "scripts/knowledge_explorer_kit.html"
 REPOSITORY = "https://github.com/boulaajaj/Arduino-DiggerSetup"
 LINK = re.compile(
     r"!?(?<!\\)\[(?P<label>[^\]]+)\]\(\s*"
@@ -120,8 +122,8 @@ def summary(text: str) -> str:
     return ""
 
 
-def build(root: Path) -> tuple[dict, list[str]]:
-    files, directories = list_paths(root)
+def build(root: Path, paths: tuple[set[str], set[str]] | None = None) -> tuple[dict, list[str]]:
+    files, directories = paths if paths is not None else list_paths(root)
     notes = sorted(path for path in files if path.startswith(WIKI) and path.endswith(".md"))
     if HOME not in notes:
         raise ValueError(f"Missing tracked wiki root: {HOME}")
@@ -236,34 +238,55 @@ def build(root: Path) -> tuple[dict, list[str]]:
     graph = {"home": HOME, "repository": REPOSITORY, "ref": "main",
              "nodes": [nodes[path] for path in sorted(nodes)],
              "edges": [edges[key] for key in sorted(edges)]}
-    payload = json.dumps(graph, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    graph["revision"] = hashlib.sha256(payload.encode()).hexdigest()[:12]
+    graph["revision"] = graph_revision(graph)
     return graph, sorted(warnings)
+
+
+def graph_revision(graph: dict) -> str:
+    inputs = {key: value for key, value in graph.items() if key != "revision"}
+    payload = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()[:12]
+
+
+def render(path: str, graph: dict) -> bytes:
+    template = (ROOT / path).read_text(encoding="utf-8")
+    if template.count("<!--GRAPH_DATA-->") != 1:
+        raise ValueError(f"{path} must contain exactly one graph data marker")
+    payload = json.dumps(graph, ensure_ascii=False, separators=(",", ":"))
+    return template.replace("<!--GRAPH_DATA-->", payload.replace("<", "\\u003c")).encode("utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="verify the committed HTML")
+    parser.add_argument("--wiki-only", action="store_true", help="build just the original wiki graph")
     options = parser.parse_args()
     try:
         failures = check_wiki.run(ROOT)
         if failures:
             raise ValueError("\n".join(failures))
-        graph, warnings = build(ROOT)
-        template = (ROOT / TEMPLATE).read_text(encoding="utf-8")
-        if template.count("<!--GRAPH_DATA-->") != 1:
-            raise ValueError("HTML template must contain one graph data marker")
-        payload = json.dumps(graph, ensure_ascii=False, separators=(",", ":"))
-        rendered = template.replace("<!--GRAPH_DATA-->", payload.replace("<", "\\u003c"))
-        output = ROOT / OUTPUT
-        if options.check:
-            if not output.exists() or output.read_bytes() != rendered.encode("utf-8"):
-                raise ValueError(f"{OUTPUT} is stale. Run python scripts/build_knowledge_graph.py and commit the result.")
-        else:
-            output.write_bytes(rendered.encode("utf-8"))
+        paths = list_paths(ROOT)
+        graph, warnings = build(ROOT, paths)
+        outputs = [(OUTPUT, render(TEMPLATE, graph))]
+        if not options.wiki_only:
+            from knowledge_inspector import enrich
+            from knowledge_catalog import inventory
+            explorer = inventory(graph, ROOT, paths[0], document, summary, links, resolve, MARKDOWN)
+            explorer = enrich(explorer, ROOT, paths[0])
+            explorer["ref"] = "agent/c-builder/wiki-knowledge-map"
+            explorer["revision"] = graph_revision(explorer)
+            del explorer["firmwareInputs"]
+            outputs.append((EXPLORER, render(EXPLORER_TEMPLATE, explorer)))
+        for path, content in outputs:
+            output = ROOT / path
+            stale = not output.is_file() or output.read_text(encoding="utf-8") != content.decode("utf-8")
+            if options.check and stale:
+                raise ValueError(f"{path} is stale. Run python scripts/build_knowledge_graph.py and commit the result.")
+            if not options.check and stale:
+                output.write_bytes(content)
         for warning in warnings:
             print(f"Reference outside wiki: {warning}", file=sys.stderr)
-        print(f"Knowledge graph {graph['revision']} {'verified' if options.check else 'generated'}: {OUTPUT}")
+        print(f"Knowledge map {'verified' if options.check else 'generated'}: {', '.join(path for path, _ in outputs)}")
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"Knowledge graph: {error}", file=sys.stderr)
         return 1

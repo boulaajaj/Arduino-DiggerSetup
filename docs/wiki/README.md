@@ -1,5 +1,5 @@
 ---
-parent: home.md
+parent: agent-governance.md
 sources: none
 ---
 
@@ -10,6 +10,22 @@ visualization (Obsidian) and fast orientation. It follows the Karpathy
 LLM-wiki pattern adopted in #53: **agents create and maintain these
 interconnected notes; humans read and visualize them** (issue #141).
 
+## Knowledge structure
+
+- [Home](home.md) is the main index. Domain indexes group related clusters
+  and topics. Topic notes can link across clusters while keeping one parent.
+- Firmware, tests, and canonical docs are the source layer. Notes summarize
+  behavior and link to the evidence. The generated explorer also offers a
+  separate file tree for browsing the entire checkout.
+- For maintenance, follow this guide and the [project rules](../../CLAUDE.md).
+  Read the index before starting a query, update affected notes and links when
+  ingesting evidence, and record substantive changes in the
+  [wiki maintenance log](log.md). Run lint after updating the notes and resolve
+  any semantic discrepancies against the canonical source.
+
+This adapts [Andrej Karpathy’s LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+to a source-controlled firmware project.
+
 ## How to visualize
 
 From the repository root, run:
@@ -18,7 +34,7 @@ From the repository root, run:
 python scripts/build_knowledge_graph.py
 ```
 
-Open `docs/knowledge-graph.html` in a browser. The standalone file includes
+Open `docs/knowledge-explorer-kit.html` in a browser. The standalone file includes
 both views and works offline. GitHub and VS Code links open their respective
 destinations. Set the local checkout path in the viewer to enable VS Code links.
 The revision displayed in the viewer identifies the graph inputs, so unrelated

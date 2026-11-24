@@ -1,5 +1,5 @@
 ---
-parent: home.md
+parent: architecture-overview.md
 sources: none
 ---
 

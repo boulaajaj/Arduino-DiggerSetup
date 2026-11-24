@@ -1,5 +1,5 @@
 ---
-parent: home.md
+parent: architecture-overview.md
 status: historical
 sources:
   - docs/architecture/ARCHITECTURE-TARGET.md

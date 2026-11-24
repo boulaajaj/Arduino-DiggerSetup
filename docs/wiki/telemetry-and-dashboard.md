@@ -11,11 +11,13 @@ Read-only observation path: the ESCs report voltage, current, RPM, and
 temperatures over [X.BUS telemetry](xbus-telemetry.md); the firmware smooths
 and streams them to the [Wi-Fi dashboard](wifi-dashboard.md).
 
-**Monitoring only — permanent decision.** There is no path from Wi-Fi (or any
-telemetry) back into motor output; the [safety system](safety-system.md)
-consumes telemetry for derating/cutoff decisions, but nothing network-side
-can ever command a track. Canonical detail and current cadence/keys:
-[CLAUDE.md](../../CLAUDE.md).
+**Wi-Fi is monitoring only.** The local [safety system](safety-system.md)
+uses ESC telemetry for derating and cutoff decisions. The network side
+can observe those decisions and carries no track commands.
+
+Use this domain index to explore [X.BUS acquisition](xbus-telemetry.md),
+[Wi-Fi serving and the browser](wifi-dashboard.md), or
+[telemetry interfaces](telemetry-interfaces.md) for the JSON and CSV contracts.
 
 - [XBUS-PROTOCOL](../XBUS-PROTOCOL.md) — wire protocol reference
 - Dashboard source lives at `dashboard/index.html`, embedded into firmware as

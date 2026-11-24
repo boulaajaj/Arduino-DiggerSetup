@@ -12,7 +12,10 @@ spec: [PROJECT-PLAN.md](../../PROJECT-PLAN.md) · design philosophy:
 
 Which artifact wins for what: [authority-matrix](authority-matrix.md).
 
-## Domains
+This is the main index. Start with the domain indexes below, then follow their
+links to focused topics and source files.
+
+## Domain indexes
 
 - [Hardware](hardware.md) — board, ESCs, motors, batteries, wiring
 - [Control pipeline](control-pipeline.md) — stick to track PWM, end to end
@@ -24,13 +27,10 @@ Which artifact wins for what: [authority-matrix](authority-matrix.md).
   ([application-loop](application-loop.md) ·
   [ports-and-adapters](ports-and-adapters.md) ·
   [configuration-authority](configuration-authority.md))
-- [Architecture remediation](architecture-remediation.md) — epic #116 program,
-  completed 2026-07-20 (dated migration history)
 
 ## People and operations
 
-- [Wiki guide](README.md) — how to browse and maintain this knowledge layer
-
+- [Wiki guide](README.md) — structure, refresh rules, and the [maintenance log](log.md)
 - [OPERATOR-GUIDE](../../OPERATOR-GUIDE.md) — for the RC supervisor and rider
 - [FIRMWARE-UPLOAD-LOG](../FIRMWARE-UPLOAD-LOG.md) — the device's flight log
 - [DECISION-LOG](../DECISION-LOG.md) — every technical decision, dated

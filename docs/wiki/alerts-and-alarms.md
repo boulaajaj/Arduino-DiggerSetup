@@ -7,11 +7,11 @@ sources:
 
 # Alerts and alarms
 
-Audible signals from a piezo beeper, driven non-blocking with a strict
-priority: the horn overrides one-shot patterns, which override repeating
-alarms. Today's set: a boot chirp when Wi-Fi is ready, a horn button on the
-RC transmitter, an inactivity reminder ("unplug me"), and a latched
-low-battery alarm fed by the [battery ladder](battery-ladder.md).
+The piezo combines the manual horn, one-shot patterns, and the selected
+repeating alarm. Signals include Wi-Fi readiness, thermal warning, cutoff
+and recovery, RC inactivity, and a low-battery alarm fed by the
+[battery ladder](battery-ladder.md). See [notification channels](notification-channels.md)
+for priority, ESC beeps, and the dashboard’s independent warning display.
 
 - Current pin, patterns, thresholds, and debounce:
   [CLAUDE.md](../../CLAUDE.md) (canonical); the beep table for operators:

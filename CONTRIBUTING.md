@@ -65,10 +65,19 @@ A PR touching a mapped source area must update the pages that describe it
 or carry an explicit documentation receipt — CI enforces this via
 `docs/architecture/change-impact.json`. The wiki (`docs/wiki/`) is a
 navigation layer: notes declare their sources and never restate tunable
-values. When a change affects the wiki, local source links, or the graph
-generator, run `python scripts/build_knowledge_graph.py` after your edits.
-It lints the wiki and refreshes `docs/knowledge-graph.html` for both views.
-Commit the generated file whenever it changes. Wiki Lint checks for drift.
+values. When files, links, or documented behavior change, run
+`python scripts/build_knowledge_graph.py` from the repository root. The command
+lints the wiki and refreshes both maps.
+
+Open `docs/knowledge-explorer-kit.html` directly in a browser. Use
+**Browse files** to reach tracked files outside the wiki. Search covers paths,
+headings, symbols, settings and interface fields. The generator extracts
+settings, beep timings, safety invariant references, dashboard elements, and
+JSON and CSV contracts from their sources. When behavior changes, review the
+explanations in `scripts/knowledge_inspector.py` and `scripts/knowledge_subsystems.py`.
+The viewer was adapted from the corrected Knowledge Kit local artifact described
+in [issue #231](https://github.com/boulaajaj/Arduino-DiggerSetup/issues/231).
+Commit generated map changes alongside their inputs. Wiki Lint runs the same command with `--check` to detect stale output.
 
 ## Running the CI checks locally
 
