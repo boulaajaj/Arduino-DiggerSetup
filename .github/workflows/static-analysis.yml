@@ -24,7 +24,7 @@ jobs:
             -not -path './tests/*' | \
           xargs cppcheck \
             --enable=warning,style,performance,portability \
-            --suppress=missingIncludeSystem \
+            --suppress=missingIncludeSystem -DPROGMEM= \
             --suppress=unusedFunction \
             --suppress=unusedStructMember \
             --error-exitcode=1 \
