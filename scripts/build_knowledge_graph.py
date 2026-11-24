@@ -273,7 +273,7 @@ def main() -> int:
             from knowledge_catalog import inventory
             explorer = inventory(graph, ROOT, paths[0], document, summary, links, resolve, MARKDOWN)
             explorer = enrich(explorer, ROOT, paths[0])
-            explorer["ref"] = "agent/c-builder/wiki-knowledge-map"
+            explorer["ref"] = "main"
             explorer["revision"] = graph_revision(explorer)
             del explorer["firmwareInputs"]
             outputs.append((EXPLORER, render(EXPLORER_TEMPLATE, explorer)))
