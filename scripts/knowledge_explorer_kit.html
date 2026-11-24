@@ -217,6 +217,7 @@ body.leftoff #showLeft{display:block}
 }
 
 #panel .detail-nav{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+ .guided-steps{margin:8px 0;padding-left:23px}.guided-steps li{padding:5px 0;border-bottom:1px solid #415066}.guided-steps a{font-size:11px}
 #panel .fact-list{display:grid;gap:9px}
 #panel .fact+.fact{margin-top:7px}
 #panel .layer-item{border-left:2px solid var(--edge);padding:2px 0 7px 8px;margin:6px 0}
@@ -345,7 +346,7 @@ const RAW = (() => {
     kind: n.id === GRAPH.home ? 'root' : n.parent === GRAPH.home ? 'module'
       : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'cluster' : 'screen') : n.kind === 'directory' ? 'cluster' : 'doc',
     parent: n.parent === GRAPH.home ? 'root' : n.branchParent || n.parent || (n === home ? null : folder(n.id)),
-    module: n === home ? null : n.domain || domainOf.get(n.branchParent) || 'references',
+    module: n === home ? null : n.ownerDomain || n.domain || domainOf.get(n.branchParent) || 'references',
     rel: n.kind === 'entity' ? null : n.id, path: n.kind === 'entity' ? null : n.id, fields: [],
     level: n.id === GRAPH.home ? 'Main index' : n.parent === GRAPH.home ? 'Domain index'
       : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'Topic cluster' : 'Topic') : n.branchRole || null,
@@ -1088,7 +1089,7 @@ function reveal(n) {
 }
 function goTo(n) {
   if (S.pathFrom && S.pathFrom !== n) { tracePath(S.pathFrom, n); return; }
-  S.path = null; reveal(n); S.selected = n; if (scopesData(n)) S.dataScope = n; rebuild(); select(n, { frame: true });
+  S.path = null; reveal(n); if (n.module === 'docs/wiki/agent-governance.md' && n.children.length) S.expanded.add(n.id); S.selected = n; if (scopesData(n)) S.dataScope = n; rebuild(); select(n, { frame: true });
 }
 
 // ---------- path tracing ----------
@@ -1233,12 +1234,39 @@ function relationItem(e, primary, secondary) {
     e.note ? el('p', {class:'index-summary'}, e.note) : null,
     el('div', {class:'fact-sources'}, refs.map(s => sourceLink(s.path, null, s.line))));
 }
+function guidedViews(n, bd) {
+  const telemetry = 'docs/wiki/telemetry-and-dashboard.md';
+  const governance = 'docs/wiki/agent-governance.md';
+  const views = (GRAPH.guidedViews || []).filter(g =>
+    (g.area === 'telemetry' && (n.module === telemetry || n.id === telemetry)) ||
+    (g.area === 'governance' && (n.module === governance || n.id === governance)) ||
+    g.steps.some(step => step.node === n.id));
+  if (!views.length) return;
+  const cards = views.map(g => {
+    const show = () => {
+      const list = g.steps.map(step => byId.get(step.node));
+      for (const item of list) reveal(item);
+      S.path = {nodes:list, rels:list.slice(1).map(() => ({rel:'flow',out:true}))};
+      S.pathFrom = null;
+      S.selected = list.at(-1);
+      rebuild(); renderPanel(); renderCrumbs();
+      setTimeout(() => fit(list, 420), 260);
+    };
+    return el('details', {class:'fact'}, el('summary', {}, g.title),
+      el('p', {}, g.summary),
+      el('ol', {class:'guided-steps'}, g.steps.map(step => el('li', {},
+        nodeItem(byId.get(step.node)), el('p', {}, step.label), sourceLink(step.node,null,step.line,'View source')))),
+      g.area === 'telemetry' ? el('button', {class:'btn',on:{click:show}}, 'Highlight this path') : null);
+  });
+  bd.append(section('Follow how it connects', views.length, ...cards));
+}
 function arduinoBody(n, bd) {
   const groups = detailGroups(n);
   if (n.branchRole === 'Screen') groups.sort(([a], [b]) => Number(b === 'Dashboard display') - Number(a === 'Dashboard display'));
   const shortcuts = el("nav", {class:"detail-nav", "aria-label":"Inspector sections"});
   const jump = (label, target) => shortcuts.append(el("button", {type:"button", class:"btn", on:{click:() => target.scrollIntoView({block:"start"})}}, label));
   if (groups.length) bd.append(shortcuts);
+  guidedViews(n, bd);
   if (n.wiringIndex && S.layers.wiring) {
     const paths = edges.filter(e => e.pinIndex);
     const wiring = section('Wiring at a glance', paths.length, capList(paths, 10, e =>
@@ -1281,7 +1309,7 @@ function arduinoBody(n, bd) {
   }
   if (browsable) {
     const entries = repositoryChildren.get(n.id) || [];
-    if (entries.length) bd.append(section('Files and folders', entries.length, capList(entries, 14, entry => nodeItem(entry, entry.fileType))));
+    if (entries.length) bd.append(section('Files and folders', entries.length, capList(entries, 14, entry => nodeItem(entry, entry.branchRole || entry.fileType))));
   }
   for (const [title, entries] of [['Contents', n.outlineEntries], ['Symbols and tests', n.codeEntries]]) {
     if (entries?.length) bd.append(section(title, entries.length, capList(entries, 12, entry =>

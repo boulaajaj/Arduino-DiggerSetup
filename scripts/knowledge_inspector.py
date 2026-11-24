@@ -321,6 +321,8 @@ def enrich(graph, root, files):
                 if not nodes[path]["summary"]:
                     nodes[path]["summary"] = card["label"] + ": " + card["description"]
     add_relationships(root, nodes, edges)
+    from knowledge_guides import add_guided_views
+    add_guided_views(graph, root, nodes, edges)
     graph["edges"] = sorted(edges, key=lambda e: (e["from"], e["to"], e["type"], e.get("anchor", "")))
     graph["cards"] = cards
     graph["firmwareInputs"] = firmware_inputs
