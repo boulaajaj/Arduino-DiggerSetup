@@ -219,6 +219,8 @@ body.leftoff #showLeft{display:block}
 #panel .detail-nav{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
 #panel .fact-list{display:grid;gap:9px}
 #panel .fact+.fact{margin-top:7px}
+#panel .layer-item{border-left:2px solid var(--edge);padding:2px 0 7px 8px;margin:6px 0}
+#panel .layer-item .fact-sources{margin:4px 8px}
 #panel .index-summary{margin:3px 8px 9px;color:#aebbd6;font-size:11px;line-height:1.45}
 #panel .reference-row .meta{margin-left:auto;font-size:11px;color:var(--muted)}
 #panel .fact{background:#ffffff08;border:1px solid #ffffff17;border-radius:10px;padding:10px 12px}
@@ -253,7 +255,10 @@ body.leftoff #showLeft{display:block}
     <div class="grp"><h3>Layout</h3>
       <div class="seg" id="layoutSeg"><button data-l="force" class="on">Organic</button><button data-l="radial">Mind map</button></div>
     </div>
-    <div class="grp"><h3>Relationships</h3>
+    <div class="grp"><h3>Relationship layers</h3>
+      <label class="tog" style="--c:#54dcc5"><input type="checkbox" data-layer="wiring"><span class="sw"></span>Wiring<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#54dcc5" stroke-width="2" stroke-dasharray="9 4"/></svg></label>
+      <label class="tog" style="--c:#dca4ff"><input type="checkbox" data-layer="coverage"><span class="sw"></span>Test coverage<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#dca4ff" stroke-width="2" stroke-dasharray="5 4"/></svg></label>
+      <label class="tog" style="--c:#ffb96f"><input type="checkbox" data-layer="dependency"><span class="sw"></span>Dependencies<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#ffb96f" stroke-width="2" stroke-dasharray="2 4"/></svg></label>
       <label class="tog" style="--c:var(--mention)"><input type="checkbox" data-layer="mention"><span class="sw"></span>Related leaves<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#c4c9dc" stroke-width="1.5" stroke-dasharray="1.5 3"/></svg></label>
       <div id="wfToggles">
         <hr class="div">
@@ -341,7 +346,7 @@ const RAW = (() => {
       : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'cluster' : 'screen') : n.kind === 'directory' ? 'cluster' : 'doc',
     parent: n.parent === GRAPH.home ? 'root' : n.branchParent || n.parent || (n === home ? null : folder(n.id)),
     module: n === home ? null : n.domain || domainOf.get(n.branchParent) || 'references',
-    rel: n.id, path: n.id, fields: [],
+    rel: n.kind === 'entity' ? null : n.id, path: n.kind === 'entity' ? null : n.id, fields: [],
     level: n.id === GRAPH.home ? 'Main index' : n.parent === GRAPH.home ? 'Domain index'
       : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'Topic cluster' : 'Topic') : n.branchRole || null,
   }));
@@ -350,7 +355,8 @@ const RAW = (() => {
   const edges = GRAPH.edges.filter(e => e.type !== 'child').map(e => ({
     ...e, s: e.from === GRAPH.home ? 'root' : e.from,
     t: e.to === GRAPH.home ? 'root' : e.to,
-    relation: e.type, type: e.type === 'source' ? 'uses' : 'mention',
+    relation: e.type, type: ({source:'uses', includes:'dependency', connection:'dependency',
+      dependency:'dependency', wiring:'wiring', coverage:'coverage'})[e.type] || 'mention',
   }));
   return {nodes, edges, meta:{
     title: 'Arduino Digger Knowledge Map', source: 'the tracked repository, wiki and subsystem sources',
@@ -373,7 +379,7 @@ const KIND = { root: 'Knowledge layer', module: 'Module', cluster: 'Cluster', sc
   skill: 'Skill', agent: 'Review agent', step: 'Workflow step', ci: 'CI workflow', rule: 'Instruction', prompt: 'Prompt', dep: 'Tool or access', ...(DATA.kindLabels || {}) };
 const KORDER = { doc: 0, cluster: 1, screen: 2, step: 0, skill: 1, agent: 1, rule: 1, prompt: 2, ci: 1, dep: 1 };
 const DATA_COLOR = { table: '#7fd1c3', api: '#f49ac1', dep: '#ffd54f', agent: '#ff79a8', step: '#ffcc80', ci: '#bcaaa4', rule: '#e6ee9c', prompt: '#ffab91' };
-const EDGE_COLOR = { flow: '#8ab4ff', shares: '#4dd8e6', mention: '#c4c9dc', data: '#9fb0c8', uses: '#ffd54f', applies: '#ff8a80' };
+const EDGE_COLOR = { wiring:'#54dcc5', coverage:'#dca4ff', dependency:'#ffb96f', flow: '#8ab4ff', shares: '#4dd8e6', mention: '#c4c9dc', data: '#9fb0c8', uses: '#ffd54f', applies: '#ff8a80' };
 const WF = 'workflow';
 const isWf = n => n.module === WF;
 const BU = DATA.units || {};
@@ -412,7 +418,7 @@ const S = {
   expanded: new Set(['root', 'docs/wiki/safety-system.md', 'docs/wiki/telemetry-and-dashboard.md',
     'docs/wiki/output-gate.md', 'docs/wiki/wifi-dashboard.md', 'docs/wiki/dashboard-display.md']),
   layout: 'force',
-  layers: { flow: true, shares: true, mention: true, table: false, api: false, hubs: false, uses: true, applies: true },
+  layers: { wiring: true, coverage: true, dependency: true, flow: true, shares: true, mention: true, table: false, api: false, hubs: false, uses: true, applies: true },
   // How we work starts hidden, unless it is all the map has (a repository with no knowledge pages yet).
   hiddenMods: new Set(modOrder.includes(WF) && modOrder.length > 1 ? [WF] : []),
   selected: null, hover: null, path: null, pathFrom: null, dataScope: null,
@@ -459,7 +465,10 @@ function rebuild(opts = {}) {
     let g = agg.get(key);
     if (!g) { g = { a: fwd ? a : b, b: fwd ? b : a, type: e.type, todo: !!e.todo, ref: !!e.ref, count: 0, ab: false, ba: false }; agg.set(key, g); }
     g.count++;
-    if (e.type === 'flow') { if (fwd) g.ab = true; else g.ba = true; if (e.bi) g.ab = g.ba = true; }
+    if (e.type === 'flow' || (e.type === 'wiring' && e.direction) || e.type === 'coverage' || e.type === 'dependency') {
+      if (fwd) g.ab = true; else g.ba = true;
+      if (e.bi) g.ab = g.ba = true;
+    }
   }
   visEdges = out.concat([...agg.values()]);
   layoutBranches();
@@ -660,7 +669,7 @@ function drawEdge(e, now) {
     col = e.todo ? '#ffb74d' : EDGE_COLOR[e.type]; const cw = Math.log2(e.count + 1);
     w = (e.type === 'data' ? 0.9 : 1.1) + cw * 0.9;
     al = ({ mention: 0.28, data: 0.3, uses: 0.42, applies: 0.26 })[e.type] ?? 0.48;
-    dash = e.todo ? [6, 4] : e.ref ? [2, 5] : ({ shares: [7, 5], mention: [1.5, 5], uses: [4, 4], applies: [2, 5] })[e.type] || null;
+    dash = e.todo ? [6, 4] : e.ref ? [2, 5] : ({ shares: [7, 5], mention: [1.5, 5], wiring:[9, 4], coverage:[5, 4], dependency:[2, 4], uses: [4, 4], applies: [2, 5] })[e.type] || null;
     if (e.ref) al *= 0.6;
   }
   if (hot) { al = Math.min(1, al * 2.1); w *= 1.5; }
@@ -680,7 +689,7 @@ function drawEdge(e, now) {
   }
   ctx.stroke();
   if (dash) { ctx.setLineDash([]); ctx.lineDashOffset = 0; }
-  if (e.type === 'flow') {
+  if (e.ab || e.ba) {
     const arrow = (t, rev) => {
       const p = qPoint(a, c, b, t), d = qTan(a, c, b, t);
       let ang = Math.atan2(d.y, d.x); if (rev) ang += Math.PI;
@@ -1051,6 +1060,10 @@ function setDataScope(n) {
 function select(n, opts = {}) {
   const changed = S.selected !== n;
   S.selected = n; S.hover = null;
+  if (n.id.startsWith('wiring:') && S.layers.wiring) {
+    for (const {e,o} of adj.get(n)) if (e.type === 'wiring') reveal(o);
+    rebuild();
+  }
   if (scopesData(n)) setDataScope(n); else if (n === root) setDataScope(null);
   updateFocus(); renderPanel(); renderCrumbs();
   if (opts.fly) focusCam(n, opts.k || Math.max(cam.k, n.kind === 'screen' ? 1.25 : 0.9));
@@ -1079,12 +1092,12 @@ function goTo(n) {
 }
 
 // ---------- path tracing ----------
-const W_EDGE = { flow: 1, shares: 1.3, mention: 1.7, data: 1.9, uses: 1.6, applies: 1.8 };
+const W_EDGE = { wiring:1, coverage:1.2, dependency:1.2, flow: 1, shares: 1.3, mention: 1.7, data: 1.9, uses: 1.6, applies: 1.8 };
 function tracePath(a, b) {
   S.pathFrom = null;
   const dist = new Map([[a, 0]]), prev = new Map(), done = new Set();
   const nb = n => {
-    const out = adj.get(n).map(x => ({ o: x.o, w: W_EDGE[x.e.type], rel: x.e.type, out: x.out }));
+    const out = adj.get(n).filter(x => S.layers[x.e.type]).map(x => ({ o: x.o, w: W_EDGE[x.e.type], rel: x.e.type, out: x.out }));
     if (n.p) out.push({ o: n.p, w: 2.6, rel: 'tree', out: false });
     for (const c of n.children) out.push({ o: c, w: 2.6, rel: 'tree', out: true });
     return out;
@@ -1121,6 +1134,8 @@ function showTip(n, x, y) {
   if (preview) tip.append(el("p", {}, preview.label + ": " + preview.description.split(". ")[0] + "."));
   if (!n.summary && !preview && n.rel) tip.append(el("p", {}, n.rel));
   const bits = [];
+  const connected = adj.get(n).filter(a => layerNames[a.e.type] && S.layers[a.e.type]);
+  if (connected.length) bits.push(connected.slice(0, 3).map(a => a.o.label).join(' · '));
   if (n.children.length) bits.push(`${n.children.length} inside · ${S.expanded.has(n.id) ? 'double-click to collapse' : 'click to open'}`);
   if (detailGroups(n).length) bits.push(detailGroups(n).map(([title]) => title).join(' · '));
   if (adj.get(n).length) bits.push(adj.get(n).length + ' related links');
@@ -1209,19 +1224,42 @@ for (const node of nodes) {
 }
 for (const entries of repositoryChildren.values()) entries.sort((a, b) =>
   Number(b.kind === 'cluster') - Number(a.kind === 'cluster') || a.rel.localeCompare(b.rel));
+const layerNames = { wiring:'Wiring connections', coverage:'Test coverage', dependency:'Dependencies' };
+function relationItem(e, primary, secondary) {
+  const refs = e.evidence || (e.sourceLine ? [{path:e.from, line:e.sourceLine}] : [{path:e.from}]);
+  return el('div', {class:'layer-item', style:'--edge:' + EDGE_COLOR[e.type]},
+    nodeItem(primary, primary.branchRole), secondary ? nodeItem(secondary, secondary.branchRole) : null,
+    el('p', {class:'index-summary'}, e.label),
+    e.note ? el('p', {class:'index-summary'}, e.note) : null,
+    el('div', {class:'fact-sources'}, refs.map(s => sourceLink(s.path, null, s.line))));
+}
 function arduinoBody(n, bd) {
   const groups = detailGroups(n);
   if (n.branchRole === 'Screen') groups.sort(([a], [b]) => Number(b === 'Dashboard display') - Number(a === 'Dashboard display'));
   const shortcuts = el("nav", {class:"detail-nav", "aria-label":"Inspector sections"});
   const jump = (label, target) => shortcuts.append(el("button", {type:"button", class:"btn", on:{click:() => target.scrollIntoView({block:"start"})}}, label));
   if (groups.length) bd.append(shortcuts);
-  const direct = adj.get(n).filter(a => a.e.relation === 'connection');
-  if (direct.length) {
-    const connections = section('Direct connections', direct.length, capList(direct, 6, ({e,o}) =>
-      el('div', {}, nodeItem(o, o.branchRole), el('p', {class:'index-summary'}, e.label))));
-    bd.append(connections);
-    if (groups.length) jump('Direct connections', connections);
+  if (n.wiringIndex && S.layers.wiring) {
+    const paths = edges.filter(e => e.pinIndex);
+    const wiring = section('Wiring at a glance', paths.length, capList(paths, 10, e =>
+      relationItem(e, byId.get(e.s), byId.get(e.t))));
+    bd.append(wiring);
   }
+  for (const [type, title] of Object.entries(layerNames)) {
+    if (!S.layers[type]) continue;
+    const links = adj.get(n).filter(a => a.e.type === type);
+    if (!links.length) continue;
+    const show = () => {
+      for (const {o} of links) reveal(o);
+      rebuild(); frameSelection(n);
+    };
+    const group = section(title, links.length,
+      el('button', {class:'btn', on:{click:show}}, 'Show on map'),
+      capList(links, 7, ({e,o}) => relationItem(e, o)));
+    bd.append(group);
+    if (groups.length) jump(title, group);
+  }
+
   for (const [title, cards] of groups) {
     const list = capList(cards, 10, card => el('article', {class:'fact'}, el('h5', {}, card.label),
       el('p', {}, card.description), el('div', {class:'fact-sources'},
@@ -1254,8 +1292,7 @@ function arduinoBody(n, bd) {
   for (const [title, filter] of [
     ['Supporting files', a => a.out && a.e.type === 'uses'],
     ['Outgoing links', a => a.out && a.e.relation === 'link'],
-    ['Includes and imports', a => a.out && a.e.relation === 'includes'],
-    ['Backlinks and usages', a => !a.out && a.e.relation !== 'connection'],
+    ['Backlinks and usages', a => !a.out && !layerNames[a.e.type]],
   ]) {
     const group = related.filter(filter);
     if (group.length) bd.append(section(title, group.length,
@@ -1307,7 +1344,8 @@ function renderPanel() {
   bd.scrollTop = 0;
 }
 
-const REL_TXT = { flow: ['opens', 'opened from'], shares: ['shares data with', 'shares data with'], mention: ['mentions', 'mentioned by'], data: ['uses', 'used by'], tree: ['contains', 'is part of'], uses: ['relies on', 'needed by'], applies: ['covers', 'covered by'] };
+const REL_TXT = { wiring:['connects to','connects to'], coverage:['tests','tested by'],
+  dependency:['depends on','used by'], flow: ['opens', 'opened from'], shares: ['shares data with', 'shares data with'], mention: ['mentions', 'mentioned by'], data: ['uses', 'used by'], tree: ['contains', 'is part of'], uses: ['relies on', 'needed by'], applies: ['covers', 'covered by'] };
 function pathSection() {
   const { nodes: ns, rels } = S.path;
   const steps = el('div', { class: 'steps' });
@@ -1406,7 +1444,10 @@ function setLayout(l) {
 document.querySelectorAll('#layoutSeg button').forEach(b => b.addEventListener('click', () => setLayout(b.dataset.l)));
 function syncToggles() { document.querySelectorAll('[data-layer]').forEach(i => { i.checked = !!S.layers[i.dataset.layer]; }); }
 document.querySelectorAll('[data-layer]').forEach(i => i.addEventListener('change', () => {
-  S.layers[i.dataset.layer] = i.checked; rebuild();
+  S.layers[i.dataset.layer] = i.checked;
+  if (!i.checked && S.path?.rels.some(step => step.rel === i.dataset.layer)) S.path = null;
+  rebuild();
+  if (S.selected && layerNames[i.dataset.layer]) select(S.selected, {frame: true});
   if (['table', 'api', 'hubs'].includes(i.dataset.layer) && S.selected) {
     holdSelected();
     if (i.checked && S.dataScope) toast(`Showing ${i.dataset.layer === 'table' ? 'tables' : i.dataset.layer === 'api' ? 'endpoints' : 'common ones'} for ${S.dataScope.label} only. Press Esc to see them for everything.`, 3500);

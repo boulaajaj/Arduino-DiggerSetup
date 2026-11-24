@@ -4,6 +4,7 @@ from functools import lru_cache
 import re
 
 from knowledge_subsystems import EXTRA_TOPICS, read_subsystems
+from knowledge_relationships import add_relationships
 
 SRC = "sketches/dual_track_control/src/"
 WIKI = "docs/wiki/"
@@ -319,6 +320,7 @@ def enrich(graph, root, files):
                 nodes[path].setdefault("cardRefs", {}).setdefault(group, []).append(index)
                 if not nodes[path]["summary"]:
                     nodes[path]["summary"] = card["label"] + ": " + card["description"]
+    add_relationships(root, nodes, edges)
     graph["edges"] = sorted(edges, key=lambda e: (e["from"], e["to"], e["type"], e.get("anchor", "")))
     graph["cards"] = cards
     graph["firmwareInputs"] = firmware_inputs

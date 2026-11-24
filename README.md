@@ -17,6 +17,8 @@ Wi-Fi dashboard you open on your phone.
 
 Explore the controller from the main index through its domain branches,
 topic clusters, and the screens, code, and tests behind them.
+Toggle **Wiring**, **Test coverage**, and **Dependencies** to trace how the
+pieces connect.
 
 [![Arduino Digger knowledge map showing the central index, domain branches, and labeled screen and code leaves](docs/images/knowledge-map.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/knowledge-explorer-kit.html "Open the interactive Arduino Digger knowledge map")
 

@@ -16,3 +16,9 @@ sources. Added focused notes for [drive safeguards](drive-safeguards.md),
 [notification channels](notification-channels.md),
 [dashboard display](dashboard-display.md), and
 [telemetry interfaces](telemetry-interfaces.md).
+
+## 2026-11-23 · Ingest · hardware and software relationships
+
+Mapped [wiring and Arduino ports](wiring-and-ports.md) against the wiring
+guide and firmware declarations. Added separately filterable relationships
+for documented signals, test coverage, and code dependencies.
