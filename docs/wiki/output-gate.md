@@ -1,4 +1,5 @@
 ---
+parent: safety-system.md
 sources:
   - sketches/dual_track_control/src/domain/safety/OutputGate.cpp
 ---
@@ -22,6 +23,9 @@ and thermal cut reopen the gate when they clear; battery cutoff latches.
   microsecond domain) — the "outputs always in range" invariant in
   [SAFETY](../SAFETY.md)
 - Position in the chain: [control pipeline](control-pipeline.md)
+
+Explore [drive safeguards](drive-safeguards.md) for the watchdog, and for
+which behavior is enforced by tests or verified on the bench.
 
 The boot-side counterpart: on power-up the gate waits for battery
 confirmation but **fails open** after a bounded window, so the machine

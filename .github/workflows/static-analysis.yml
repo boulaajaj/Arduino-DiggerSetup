@@ -18,13 +18,13 @@ jobs:
       - name: Run cppcheck
         # tests/ is host-side doctest code; the macro-heavy framework confuses
         # cppcheck's parser. That tree's quality gate is the unit-tests job
-        # itself (the suite must build and run green). Firmware stays covered.
+        # itself. Firmware stays covered; PROGMEM is an Arduino storage macro.
         run: |
           find . \( -name '*.ino' -o -name '*.cpp' -o -name '*.h' \) \
             -not -path './tests/*' | \
           xargs cppcheck \
             --enable=warning,style,performance,portability \
-            --suppress=missingIncludeSystem \
+            --suppress=missingIncludeSystem -DPROGMEM= \
             --suppress=unusedFunction \
             --suppress=unusedStructMember \
             --error-exitcode=1 \

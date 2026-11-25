@@ -20,7 +20,8 @@ description: The full PR lifecycle procedure for this repo — use when starting
   body carries `Closes #N`, summary, role tag, test plan.
 - Gates before every push: host suite (`wsl -e make -C tests run`) and local
   `arduino-cli` compile when firmware is touched; run the
-  `wiki-impact-review` skill and include its receipt.
+  `wiki-impact-review` skill and include its receipt. Refresh the standalone
+  knowledge graph when its inputs change using `python scripts/build_knowledge_graph.py`.
 
 ## 3. Self-review FIRST, then review rounds
 

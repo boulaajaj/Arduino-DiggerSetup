@@ -1,4 +1,5 @@
 ---
+parent: home.md
 sources:
   - docs/WIRING-GUIDE-V8.md
   - docs/GL10-PARAMETERS.md
@@ -12,6 +13,8 @@ XC GL10 FOC ESCs paired with GL540L sensored brushless motors, powered by two
 hall-effect dual-axis joystick on the ADC. Canonical component table and pin
 assignments: [CLAUDE.md](../../CLAUDE.md).
 
+- [Wiring and Arduino ports](wiring-and-ports.md) — follow each component to
+  its signal path, pin or UART, and supporting evidence.
 - [WIRING-GUIDE-V8](../WIRING-GUIDE-V8.md) — canonical wiring reference
 - [INTERFACE-BOARD-PERFBOARD](../INTERFACE-BOARD-PERFBOARD.md) — soldered
   interface board (X.BUS merge + S.BUS inverter); design history in

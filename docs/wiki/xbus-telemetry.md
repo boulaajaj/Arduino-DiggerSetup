@@ -1,4 +1,5 @@
 ---
+parent: telemetry-and-dashboard.md
 sources:
   - docs/XBUS-PROTOCOL.md
   - sketches/dual_track_control/src/infrastructure/xc/XbusTelemetryAdapter.cpp

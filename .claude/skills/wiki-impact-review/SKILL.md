@@ -30,6 +30,10 @@ update the page IN THE SAME PR (wiki same-PR rule, `docs/wiki/README.md`) or
 record that it is still accurate. Wiki notes stay links-only — never copy a
 tunable value into one (`wiki-lint` enforces this).
 
+When the wiki, its linked paths, or the generator changes, stage new files
+and run `python scripts/build_knowledge_graph.py`. Include any change to
+`docs/knowledge-graph.html` in the same PR.
+
 ## 3. Emit the receipt (goes in the PR body or a PR comment)
 
 ```
@@ -38,6 +42,7 @@ Documentation receipt
 - Pages examined: <list>
 - Updated: <pages, or "none">
 - No-change reasons: <page: why it still holds>
+- Knowledge graph refresh: <updated, unchanged, or reason out of scope>
 - Unverifiable without hardware: <items, or "none">
 ```
 

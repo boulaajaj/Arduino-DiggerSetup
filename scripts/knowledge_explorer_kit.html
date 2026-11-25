@@ -1,0 +1,1587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arduino Digger · Knowledge Map</title>
+<style>
+:root{
+  --bg:#070b17;--bg2:#0d1430;--panel:rgba(15,21,42,.82);--panel2:rgba(255,255,255,.04);
+  --line:rgba(160,180,255,.13);--text:#e8edfb;--muted:#8f9abb;--faint:#5d6788;--accent:#8ab4ff;
+  --flow:#8ab4ff;--shares:#4dd8e6;--mention:#c4c9dc;--table:#7fd1c3;--api:#f49ac1;--warn:#ffb74d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;color:var(--text);font:13px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;
+  background:radial-gradient(1200px 800px at 65% 35%,#14204a 0%,var(--bg2) 35%,var(--bg) 75%)}
+canvas#c{position:fixed;inset:0;display:block;cursor:grab;touch-action:none}
+canvas#c.drag{cursor:grabbing} canvas#c.point{cursor:pointer}
+.glass{background:var(--panel);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);
+  border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)}
+button{font:inherit;color:inherit}
+code{font:12px/1.3 Consolas,"Cascadia Code",monospace;background:rgba(138,180,255,.1);border:1px solid rgba(138,180,255,.15);padding:0 4px;border-radius:5px;color:#cfe0ff;word-break:break-word}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px}
+
+/* left column */
+#left{position:fixed;left:16px;top:16px;bottom:16px;width:330px;display:flex;flex-direction:column;gap:12px;z-index:5;pointer-events:none}
+#left>*{pointer-events:auto}
+#brand{padding:14px 16px 12px}
+#brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:10px}
+#brand h1 .logo{width:22px;height:22px;border-radius:7px;background:conic-gradient(from 200deg,#b39dff,#4fc3f7,#69e0a5,#ffb74d,#b39dff);box-shadow:0 0 18px rgba(138,180,255,.6)}
+#brand .stats{color:var(--muted);font-size:11.5px;margin-top:4px}
+#searchWrap{position:relative;margin-top:12px}
+#search{width:100%;padding:10px 12px 10px 34px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--text);font:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+#search:focus{border-color:rgba(138,180,255,.6);box-shadow:0 0 0 3px rgba(138,180,255,.15)}
+#searchWrap svg{position:absolute;left:11px;top:11px;opacity:.6}
+#searchWrap kbd{position:absolute;right:10px;top:9px}
+kbd{font:11px Consolas,monospace;padding:1px 6px;border-radius:5px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--muted)}
+#results{margin-top:8px;max-height:42vh;overflow:auto;display:none}
+#results.on{display:block}
+.res{display:flex;gap:10px;align-items:center;padding:7px 9px;border-radius:9px;cursor:pointer}
+.res:hover,.res.act{background:rgba(138,180,255,.12)}
+.res .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.res .t{flex:1;min-width:0}
+.res .t b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res .t span{color:var(--muted);font-size:11px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res .k{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
+#controls{padding:12px 14px;overflow:auto;flex:0 1 auto}
+.grp{margin-bottom:12px}.grp:last-child{margin-bottom:0}
+.grp h3{margin:0 0 7px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--faint)}
+.seg{display:flex;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;padding:6px 8px;border-radius:7px;cursor:pointer;color:var(--muted);transition:all .2s}
+.seg button.on{background:rgba(138,180,255,.18);color:var(--text);box-shadow:inset 0 0 0 1px rgba(138,180,255,.3)}
+.tog{display:flex;align-items:center;gap:9px;padding:4px 2px;cursor:pointer;user-select:none;color:#cdd5ee}
+.tog{position:relative}
+.tog input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.tog input:focus-visible+.sw{outline:2px solid #8ab4ff;outline-offset:2px}
+.tog .sw{width:28px;height:16px;border-radius:9px;background:rgba(255,255,255,.12);position:relative;transition:background .2s;flex:none}
+.tog .sw::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#cfd6ee;transition:transform .2s}
+.tog input:checked+.sw{background:var(--c,#8ab4ff)}
+.tog input:checked+.sw::after{transform:translateX(12px);background:#fff}
+.tog .lg{margin-left:auto;width:26px;height:8px}
+.tog small{color:var(--faint)}
+.div{border:0;height:1px;margin:9px 0 7px;background:linear-gradient(90deg,transparent,rgba(160,180,255,.18),transparent)}
+.tog.sub{padding-left:16px}
+.tog.off{opacity:.38;pointer-events:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);cursor:pointer;user-select:none;transition:all .2s;font:inherit;font-size:12px;color:inherit}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.chip.off{opacity:.38;text-decoration:line-through}
+.chip:hover{border-color:rgba(255,255,255,.28)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.btn{border:1px solid var(--line);background:rgba(255,255,255,.05);padding:7px 9px;border-radius:9px;cursor:pointer;transition:all .18s;text-align:left;display:flex;align-items:center;gap:7px}
+.btn:hover{background:rgba(138,180,255,.14);border-color:rgba(138,180,255,.35)}
+.btn kbd{margin-left:auto}
+#collapseLeft{position:absolute;right:10px;top:12px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px}
+
+/* right panel */
+#panel{position:fixed;top:16px;right:16px;bottom:16px;width:400px;z-index:6;display:flex;flex-direction:column;
+  transform:translateX(440px);opacity:0;transition:transform .45s cubic-bezier(.2,.9,.2,1),opacity .3s}
+#panel.on{transform:none;opacity:1}
+#panel .hd{padding:16px 18px 10px;border-bottom:1px solid var(--line);position:relative}
+#panel .bd{padding:12px 18px 18px;overflow:auto;flex:1}
+#panel .x{position:absolute;right:12px;top:12px;border:0;background:rgba(255,255,255,.06);width:28px;height:28px;border-radius:8px;cursor:pointer;color:var(--muted)}
+#panel .x:hover{background:rgba(255,255,255,.14);color:#fff}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-right:36px}
+.pill{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:#cfd6ee}
+.pill.c{background:color-mix(in srgb,var(--c) 18%,transparent);border-color:color-mix(in srgb,var(--c) 45%,transparent);color:#fff}
+#panel h2{margin:0;font-size:19px;line-height:1.25;font-weight:650}
+#panel .sum{color:#cbd3ea;margin:8px 0 0}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.acts .btn{padding:5px 9px;font-size:12px}
+.acts a.btn{text-decoration:none;color:inherit}
+.sec{margin-top:16px}
+.sec h4{margin:0 0 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--faint);display:flex;align-items:center;gap:8px}
+.sec h4 .n{color:var(--muted);font-weight:500;letter-spacing:0}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12.5px}
+.facts dt{color:var(--muted)} .facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.tile b{display:block;font-size:17px;font-weight:650}
+.tile span{font-size:10.5px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:2px}
+.li{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:8px;cursor:pointer;transition:background .15s;width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left}
+.li:hover{background:rgba(138,180,255,.1)}
+.li:focus-visible,.chip:focus-visible,.tag.click:focus-visible,.fc .src:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}
+button.tag{font:inherit;color:inherit;cursor:pointer}
+.fc .src{margin-left:auto;font:10.5px Consolas,monospace;color:var(--faint);text-decoration:none;white-space:nowrap;flex:none}
+.fc .src:hover{color:#a9c4ff}
+.fc .raw{color:#b9c2dc}
+.flow .p.r{background:rgba(138,180,255,.12);border-color:rgba(138,180,255,.35);color:#cfe0ff}
+.flow .c.nt{border-style:dashed;cursor:help}
+.li .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.li .lab{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .meta{font-size:11px;color:var(--faint);flex:none}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:#cdd5ee}
+.tag.click{cursor:pointer}.tag.click:hover{border-color:rgba(138,180,255,.5);background:rgba(138,180,255,.12)}
+.watch{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.watch li{padding:7px 9px;border-radius:9px;background:var(--panel2);border-left:3px solid var(--wc);font-size:12.5px;color:#cfd6ee}
+.tb{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:30px;height:20px;padding:0 6px;border-radius:6px;font:700 10.5px/1 Consolas,monospace;color:#0b1020;background:var(--tc);flex:none}
+.tb.guess{background:transparent;color:var(--tc);box-shadow:inset 0 0 0 1.5px var(--tc)}
+.mix{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:2px 0 8px;background:rgba(255,255,255,.05)}
+.mix i{display:block;height:100%;background:var(--tc);cursor:pointer;transition:opacity .2s}
+.mix i:hover{opacity:.75}
+.mixkey{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.mixkey span{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#cfd6ee;padding:2px 7px 2px 3px;border-radius:7px;border:1px solid var(--line);cursor:pointer;user-select:none}
+.mixkey span.on{border-color:var(--tc);background:color-mix(in srgb,var(--tc) 16%,transparent)}
+.mixkey span .tb{min-width:24px;height:16px;font-size:9.5px}
+.fl{display:flex;flex-direction:column;gap:6px}
+.fc{padding:8px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--tc)}
+.fc .top{display:flex;align-items:center;gap:8px}
+.fc .top b{font-weight:600;flex:1;min-width:0}
+.fc .req{font-size:10px;padding:1px 6px;border-radius:6px;background:rgba(255,138,128,.16);color:#ffb4ab;border:1px solid rgba(255,138,128,.35);flex:none;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .sub{margin-top:4px;font-size:11.5px;color:var(--muted)}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;font:11px Consolas,monospace}
+.flow .p{padding:2px 6px;border-radius:6px;background:rgba(244,154,193,.12);border:1px solid rgba(244,154,193,.35);color:#f8c4da}
+.flow .c{padding:2px 6px;border-radius:6px;background:rgba(127,209,195,.12);border:1px solid rgba(127,209,195,.4);color:#bfeee5;cursor:pointer}
+.flow .c:hover{background:rgba(127,209,195,.25)}
+.flow .ar{color:var(--faint)}
+.flow .sz{color:var(--faint)}
+.ct{width:100%;border-collapse:collapse;font-size:12px}
+.ct th{text-align:left;font-weight:600;color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ct td{padding:6px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+.ct td.col{font:12px Consolas,monospace;color:#e6f6f2;white-space:nowrap}
+.ct td .from{display:block;color:#cfd6ee}
+.ct td .from a{color:#a9c4ff;cursor:pointer;text-decoration:none}
+.ct td .from a:hover{text-decoration:underline}
+.cc{padding:8px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);font-size:12px}
+.cc .top{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cc .top a{font-weight:600;color:#fff;cursor:pointer}
+.cc .rw{font-size:10px;padding:1px 6px;border-radius:6px;text-transform:uppercase;letter-spacing:.5px}
+.cc .rw.read{background:rgba(127,209,195,.15);color:#9fe6d8}
+.cc .rw.write{background:rgba(255,183,77,.16);color:#ffcf8a}
+.cc .via{color:var(--muted)}
+.cc .io{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;margin-top:6px}
+.cc .io dt{color:var(--faint);font-size:11px}
+.cc .io dd{margin:0;color:#cfd6ee}
+.cc .when{margin-top:4px;color:var(--faint);font-size:11px}
+details{border-radius:10px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px;list-style:none;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";display:inline-block;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+.bul{margin:0;padding-left:16px;color:#cfd6ee;font-size:12.5px}
+.bul li{margin:4px 0}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:flex;gap:10px;align-items:stretch;cursor:pointer}
+.step .rail{width:14px;display:flex;flex-direction:column;align-items:center}
+.step .rail i{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;box-shadow:0 0 10px var(--c)}
+.step .rail u{flex:1;width:2px;background:linear-gradient(var(--line),rgba(138,180,255,.4))}
+.step .body{padding:3px 0 10px}
+.step .body small{display:block;color:var(--faint);font-size:11px}
+
+#crumbs{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:7px 14px;z-index:4;display:none;align-items:center;gap:6px;font-size:12.5px;max-width:46vw;white-space:nowrap;overflow:hidden}
+#crumbs.on{display:flex}
+#crumbs span{cursor:pointer;color:var(--muted)} #crumbs span:hover{color:#fff} #crumbs span:last-child{color:#fff;font-weight:600}
+#crumbs em{color:var(--faint);font-style:normal}
+#legend{position:fixed;left:362px;bottom:16px;padding:10px 12px;z-index:4;font-size:11.5px;color:#cbd3ea;transition:left .4s}
+#legend .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+#legend .it{display:flex;align-items:center;gap:6px}
+#legend h5{margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--faint);font-weight:600}
+#legend .wfonly{display:none} body.wf #legend .wfonly{display:flex}
+#mini{position:fixed;right:16px;bottom:16px;width:220px;height:150px;z-index:4;padding:0;overflow:hidden;transition:right .45s cubic-bezier(.2,.9,.2,1),bottom .45s cubic-bezier(.2,.9,.2,1)}
+@media (min-width:761px){body:not(.panel) #mini{top:16px;bottom:auto!important}}
+#mini canvas{width:100%;height:100%;display:block;cursor:crosshair}
+#mini::before{content:"Overview";position:absolute;left:10px;top:6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);pointer-events:none}
+body.panel #mini{right:432px}
+body.leftoff #left{transform:translateX(-360px)} #left{transition:transform .4s cubic-bezier(.2,.9,.2,1)}
+body.leftoff #legend{left:16px}
+#showLeft{position:fixed;left:16px;top:16px;z-index:5;display:none;padding:9px 12px;cursor:pointer}
+body.leftoff #showLeft{display:block}
+#tip{position:fixed;z-index:9;pointer-events:none;padding:9px 12px;max-width:320px;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;font-size:12px}
+#tip.on{opacity:1;transform:none}
+#tip b{display:block;font-size:13px;margin-bottom:2px}
+#tip .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.7px}
+#tip p{margin:5px 0 0;color:#cbd3ea}
+#tip .h{margin-top:6px;color:var(--faint);font-size:11px}
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);opacity:0;padding:10px 16px;z-index:10;transition:all .35s cubic-bezier(.2,.9,.2,1);pointer-events:none;font-size:12.5px}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#help{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(3,6,15,.55)}
+#help.on{display:flex}
+#help .box{width:min(560px,92vw);padding:22px 24px}
+#help h2{margin:0 0 12px;font-size:17px}
+#help table{width:100%;border-collapse:collapse;font-size:12.5px}
+#help td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+#help td:first-child{white-space:nowrap;color:var(--muted);width:42%}
+#intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;pointer-events:none;transition:opacity .9s}
+#intro div{font-size:13px;letter-spacing:4px;text-transform:uppercase;color:var(--muted)}
+@media (max-width:1100px){#legend{display:none}}
+@media (max-width:760px){
+  #left{width:calc(100vw - 32px)}
+  body.leftoff #left{transform:translateX(calc(-100% - 32px))}
+  #panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;height:58vh;transform:translateY(110%)}
+  #panel.on{transform:none}
+  #mini{width:150px;height:100px}
+  body.panel #mini{display:none}
+  #crumbs{max-width:calc(100vw - 150px);left:134px;transform:none}
+}
+
+#panel .detail-nav{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+ .guided-steps{margin:8px 0;padding-left:23px}.guided-steps li{padding:5px 0;border-bottom:1px solid #415066}.guided-steps a{font-size:11px}
+#panel .fact-list{display:grid;gap:9px}
+#panel .fact+.fact{margin-top:7px}
+#panel .layer-item{border-left:2px solid var(--edge);padding:2px 0 7px 8px;margin:6px 0}
+#panel .layer-item .fact-sources{margin:4px 8px}
+#panel .index-summary{margin:3px 8px 9px;color:#aebbd6;font-size:11px;line-height:1.45}
+#panel .reference-row .meta{margin-left:auto;font-size:11px;color:var(--muted)}
+#panel .fact{background:#ffffff08;border:1px solid #ffffff17;border-radius:10px;padding:10px 12px}
+#panel .fact h5{font:600 13px/1.35 system-ui;margin:0;color:#edf3ff}
+#panel .fact p{font:13px/1.55 system-ui;color:#c5cee3;margin:5px 0 7px}
+#panel .fact-sources{display:flex;gap:4px 10px;flex-wrap:wrap}
+#panel .fact-sources a,#panel .reference-row>a{color:#9ec8ff;font-size:11px;overflow-wrap:anywhere}
+#panel .reference-row{display:flex;gap:8px;align-items:center}
+#panel .reference-row button{flex:1;min-width:0}
+#panel .note-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.55;padding:10px 0}
+.motion{font-size:12px;display:inline-flex;align-items:center;gap:4px}
+#tip{max-width:min(330px,calc(100vw - 16px))}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="intro"><div>Mapping the knowledge layer…</div></div>
+
+<div id="left">
+  <div id="brand" class="glass" style="position:relative">
+    <h1><span class="logo"></span><span id="mapTitle">Knowledge Map</span></h1>
+    <div class="stats" id="stats"></div>
+    <button id="collapseLeft" title="Hide panel (H)">⟨</button>
+    <div id="searchWrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" placeholder="Search topics, thresholds, API…" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </div>
+    <div id="results"></div>
+  </div>
+  <div id="controls" class="glass">
+    <div class="grp"><h3>Layout</h3>
+      <div class="seg" id="layoutSeg"><button data-l="force" class="on">Organic</button><button data-l="radial">Mind map</button></div>
+    </div>
+    <div class="grp"><h3>Relationship layers</h3>
+      <label class="tog" style="--c:#54dcc5"><input type="checkbox" data-layer="wiring"><span class="sw"></span>Wiring<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#54dcc5" stroke-width="2" stroke-dasharray="9 4"/></svg></label>
+      <label class="tog" style="--c:#dca4ff"><input type="checkbox" data-layer="coverage"><span class="sw"></span>Test coverage<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#dca4ff" stroke-width="2" stroke-dasharray="5 4"/></svg></label>
+      <label class="tog" style="--c:#ffb96f"><input type="checkbox" data-layer="dependency"><span class="sw"></span>Dependencies<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#ffb96f" stroke-width="2" stroke-dasharray="2 4"/></svg></label>
+      <label class="tog" style="--c:var(--mention)"><input type="checkbox" data-layer="mention"><span class="sw"></span>Related leaves<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#c4c9dc" stroke-width="1.5" stroke-dasharray="1.5 3"/></svg></label>
+      <div id="wfToggles">
+        <hr class="div">
+        <label class="tog sub" id="tUses" style="--c:#ffd54f"><input type="checkbox" data-layer="uses" checked><span class="sw"></span>Supporting file links<svg class="lg"><line x1="0" y1="4" x2="26" y2="4" stroke="#ffd54f" stroke-width="2" stroke-dasharray="4 4"/></svg></label>
+      </div>
+    </div>
+    <div class="grp"><h3>Domains <small style="text-transform:none;letter-spacing:0;color:var(--faint);font-weight:400">· shift-click to solo</small></h3><div class="chips" id="modChips"></div></div>
+    <div class="grp"><h3>View</h3>
+      <div class="btns">
+        <button class="btn" id="mainIndex">Main index</button>
+        <button class="btn" id="browseFiles">Browse files</button>
+        <button class="btn" id="bExpand">Expand all <kbd>E</kbd></button>
+        <button class="btn" id="bCollapse">Collapse <kbd>C</kbd></button>
+        <button class="btn" id="bFit">Fit view <kbd>F</kbd></button>
+        <button class="btn" id="bUnpin">Unpin all <kbd>U</kbd></button>
+        <button class="btn" id="bFull">Full screen <kbd>Z</kbd></button>
+        <label class="motion"><input type="checkbox" id="reduceMotion"> Reduce motion</label>
+        <button class="btn" id="bHelp">How to use <kbd>?</kbd></button>
+      </div>
+    </div>
+  </div>
+</div>
+<button id="showLeft" class="glass">☰ Controls</button>
+
+<div id="crumbs" class="glass"></div>
+
+<aside id="panel" class="glass"><div class="hd" id="phd"></div><div class="bd" id="pbd"></div></aside>
+
+<div id="legend" class="glass">
+  <h5>Legend</h5>
+  <div class="row">
+    <span class="it"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="none" stroke="#cfd6ee" stroke-width="2"/></svg>Cluster</span>
+    <span class="it"><svg width="10" height="10"><circle cx="5" cy="5" r="4.5" fill="#cfd6ee"/></svg>Topic</span>
+    <span class="it"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="#cfd6ee"/></svg>Screen or file</span>
+    <span class="it"><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="none" stroke="#cfd6ee" stroke-dasharray="2 2"/></svg>Collapsed</span>
+    <span class="it"><svg width="22" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#8ab4ff" stroke-width="2"/><polygon points="16,1 22,4 16,7" fill="#8ab4ff"/></svg>Hierarchy</span>
+  </div>
+</div>
+
+<div id="mini" class="glass"><canvas id="mc"></canvas></div>
+<div id="tip" class="glass"></div>
+<div id="toast" class="glass"></div>
+
+<div id="help"><div class="box glass">
+  <h2>How to use the map</h2>
+  <table>
+    <tr><td>Click a node</td><td>Select it, show its details and light up what it connects to. Collapsed groups open.</td></tr>
+    <tr><td>Double-click</td><td>Collapse or expand a module or cluster. On empty space: fit the view.</td></tr>
+    <tr><td>Drag a node</td><td>Its children travel with it and linked nodes follow on springs. It stays pinned where you drop it.</td></tr>
+    <tr><td>Right-click a node</td><td>Unpin it (or pin it).</td></tr>
+    <tr><td>Drag empty space · wheel</td><td>Pan · zoom toward the cursor.</td></tr>
+    <tr><td>Hover</td><td>Preview a node and its neighbors.</td></tr>
+    <tr><td><kbd>/</kbd></td><td>Search topics, repository paths, thresholds, routes, and telemetry fields.</td></tr>
+    <tr><td><kbd>P</kbd> or "Trace path"</td><td>Then click or search a second node: the shortest chain of real links between them lights up.</td></tr>
+    <tr><td><kbd>M</kbd></td><td>Switch between Organic and Mind map layout.</td></tr>
+    <tr><td><kbd>E</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>U</kbd> <kbd>H</kbd></td><td>Expand all · collapse · fit · unpin all · hide the side controls.</td></tr>
+    <tr><td><kbd>Z</kbd></td><td>Full screen: the map covers the whole monitor, taskbar included, so no panel is cut off. <kbd>Z</kbd> or <kbd>Esc</kbd> leaves it.</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Clear the selection, path or search.</td></tr>
+    <tr><td>Branch links</td><td>Solid lines show containment. Hover or select a leaf to show its direct links to other visible leaves.</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:11.5px;margin:12px 0 0">Built from the pages in <code id="srcPath"></code>. Refresh with <code id="buildCmd">node .github/skills/knowledge-layer-sync/scripts/build-knowledge-map.cjs</code>.</p>
+</div></div>
+
+<script type="application/json" id="source-data"><!--GRAPH_DATA--></script>
+<script>
+(async () => {
+'use strict';
+const GRAPH = JSON.parse(document.getElementById('source-data').textContent);
+const RAW = (() => {
+  const ringOrder = ['safety-system', 'control-pipeline', 'architecture-overview', 'agent-governance',
+    'telemetry-and-dashboard', 'testing', 'hardware'].map(slug => 'docs/wiki/' + slug + '.md');
+  const order = id => ringOrder.includes(id) ? ringOrder.indexOf(id) : ringOrder.length;
+  const hubs = GRAPH.nodes.filter(n => n.parent === GRAPH.home).sort((a, b) => order(a.id) - order(b.id));
+  const topicParents = new Set(GRAPH.nodes.map(n => n.branchParent || n.parent).filter(Boolean));
+  const palette = ['#75baff', '#aa9bff', '#ffbe77', '#72dbab', '#ff9b8b', '#64d2e0', '#e2adf2', '#d2cb82', '#93a7c4'];
+  const modules = Object.fromEntries(hubs.map((n, i) => [n.id, {label: n.title, color: palette[i % palette.length]}]));
+  modules.references = {label: 'Repository sources', color: '#a5b6ce'};
+  const home = GRAPH.nodes.find(n => n.id === GRAPH.home);
+  const folder = path => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : 'references';
+  const domainOf = new Map(GRAPH.nodes.map(n => [n.id, n.domain]));
+  const nodes = GRAPH.nodes.map(n => ({
+    ...n, id: n.id === GRAPH.home ? 'root' : n.id,
+    label: n.id === GRAPH.home ? 'Arduino Digger' : n.branchLabel || n.title,
+    kind: n.id === GRAPH.home ? 'root' : n.parent === GRAPH.home ? 'module'
+      : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'cluster' : 'screen') : n.kind === 'directory' ? 'cluster' : 'doc',
+    parent: n.parent === GRAPH.home ? 'root' : n.branchParent || n.parent || (n === home ? null : folder(n.id)),
+    module: n === home ? null : n.ownerDomain || n.domain || domainOf.get(n.branchParent) || 'references',
+    rel: n.kind === 'entity' ? null : n.id, path: n.kind === 'entity' ? null : n.id, fields: [],
+    level: n.id === GRAPH.home ? 'Main index' : n.parent === GRAPH.home ? 'Domain index'
+      : n.kind === 'wiki' ? (topicParents.has(n.id) ? 'Topic cluster' : 'Topic') : n.branchRole || null,
+  }));
+  nodes.push({id:'references', kind:'module', module:'references', parent:'root',
+    label:'Repository sources', title:'Repository sources', summary:'Browse every tracked file and directory, including firmware, tests, schematics, documents, tools and automation.'});
+  const edges = GRAPH.edges.filter(e => e.type !== 'child').map(e => ({
+    ...e, s: e.from === GRAPH.home ? 'root' : e.from,
+    t: e.to === GRAPH.home ? 'root' : e.to,
+    relation: e.type, type: ({source:'uses', includes:'dependency', connection:'dependency',
+      dependency:'dependency', wiring:'wiring', coverage:'coverage'})[e.type] || 'mention',
+  }));
+  return {nodes, edges, meta:{
+    title: 'Arduino Digger Knowledge Map', source: 'the tracked repository, wiki and subsystem sources',
+    buildCommand: 'python scripts/build_knowledge_graph.py', repo: GRAPH.repository, branch: GRAPH.ref,
+    modules, moduleOrder: Object.keys(modules), units: {}, hubMin: 15,
+    kindLabels: {screen:'Topic', doc:'Repository file', cluster:'Repository directory', module:'Domain'},
+    stats: {screens: GRAPH.nodes.filter(n => n.kind === 'wiki').length, links: GRAPH.edges.length},
+  }};
+})();
+
+const DATA = { ...RAW.meta, nodes: RAW.nodes, edges: RAW.edges };
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeOutBack = t => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+const MOD = DATA.modules;
+const KIND = { root: 'Knowledge layer', module: 'Module', cluster: 'Cluster', screen: 'Screen', doc: 'Overview', table: 'DB table', api: 'Endpoint',
+  skill: 'Skill', agent: 'Review agent', step: 'Workflow step', ci: 'CI workflow', rule: 'Instruction', prompt: 'Prompt', dep: 'Tool or access', ...(DATA.kindLabels || {}) };
+const KORDER = { doc: 0, cluster: 1, screen: 2, step: 0, skill: 1, agent: 1, rule: 1, prompt: 2, ci: 1, dep: 1 };
+const DATA_COLOR = { table: '#7fd1c3', api: '#f49ac1', dep: '#ffd54f', agent: '#ff79a8', step: '#ffcc80', ci: '#bcaaa4', rule: '#e6ee9c', prompt: '#ffab91' };
+const EDGE_COLOR = { wiring:'#54dcc5', coverage:'#dca4ff', dependency:'#ffb96f', flow: '#8ab4ff', shares: '#4dd8e6', mention: '#c4c9dc', data: '#9fb0c8', uses: '#ffd54f', applies: '#ff8a80' };
+const WF = 'workflow';
+const isWf = n => n.module === WF;
+const BU = DATA.units || {};
+
+// ---------- graph ----------
+const nodes = DATA.nodes.map(n => Object.assign(n, { x: 0, y: 0, vx: 0, vy: 0, children: [], ap: 0, apAt: 0, dim: 1, pinned: false, depth: 0 }));
+const byId = new Map(nodes.map(n => [n.id, n]));
+for (const n of nodes) if (n.parent && byId.has(n.parent)) { n.p = byId.get(n.parent); n.p.children.push(n); }
+const root = byId.get('root');
+(function setDepth(n, d) { n.depth = d; n.children.forEach(c => setDepth(c, d + 1)); })(root, 0);
+const modOrder = DATA.moduleOrder;
+root.children.sort((a, b) => modOrder.indexOf(a.id) - modOrder.indexOf(b.id));
+const byOrder = (a, b) => (a.order !== undefined && b.order !== undefined ? a.order - b.order : 0);
+for (const n of nodes) if (n !== root) n.children.sort((a, b) => byOrder(a, b) || (KORDER[a.kind] - KORDER[b.kind]) || a.label.localeCompare(b.label));
+const dataNodes = nodes.filter(n => n.kind === 'table' || n.kind === 'api');
+
+const edges = DATA.edges.map(e => ({ ...e, sN: byId.get(e.s), tN: byId.get(e.t) })).filter(e => e.sN && e.tN);
+const adj = new Map(nodes.map(n => [n, []]));
+for (const e of edges) { adj.get(e.sN).push({ e, o: e.tN, out: true }); adj.get(e.tN).push({ e, o: e.sN, out: false }); }
+const degree = n => adj.get(n).filter(a => a.e.type !== 'data').length;
+
+const colorOf = n => n.kind === 'root' ? '#eaf0ff' : n.deprecated ? '#8a8fa3' : (DATA_COLOR[n.kind] || (MOD[n.module] ? MOD[n.module].color : '#cfd6ee'));
+const WF_ITEM = new Set(['skill', 'agent', 'ci', 'rule', 'prompt']);
+for (const n of nodes) {
+  n.color = colorOf(n);
+  n.r = n.kind === 'root' ? 30 : n.kind === 'module' ? 22 : n.kind === 'cluster' ? 13 : n.kind === 'doc' ? 8 : n.kind === 'step' ? 10
+    : n.kind === 'screen' ? 6.5 + Math.min(6, Math.sqrt(degree(n)) * 1.25)
+    : WF_ITEM.has(n.kind) || n.kind === 'dep' ? 6.5 + Math.min(6, Math.sqrt(adj.get(n).length) * 1.1)
+    : 4.5 + Math.min(5, Math.sqrt(adj.get(n).length) * 0.9);
+  n.q = n.kind === 'root' ? 2600 : n.kind === 'module' ? 2200 : n.kind === 'cluster' ? 1500 : n.kind === 'table' || n.kind === 'api' ? 190 : 330;
+  n.warn = n.watch ? n.watch.warn.length : 0;
+}
+
+// ---------- state ----------
+const S = {
+  expanded: new Set(['root', 'docs/wiki/safety-system.md', 'docs/wiki/telemetry-and-dashboard.md',
+    'docs/wiki/output-gate.md', 'docs/wiki/wifi-dashboard.md', 'docs/wiki/dashboard-display.md']),
+  layout: 'force',
+  layers: { wiring: true, coverage: true, dependency: true, flow: true, shares: true, mention: true, table: false, api: false, hubs: false, uses: true, applies: true },
+  // How we work starts hidden, unless it is all the map has (a repository with no knowledge pages yet).
+  hiddenMods: new Set(modOrder.includes(WF) && modOrder.length > 1 ? [WF] : []),
+  selected: null, hover: null, path: null, pathFrom: null, dataScope: null,
+  alpha: 1, tween: null, focus: null, focusCenter: null,
+};
+const motionInput = $('#reduceMotion');
+motionInput.checked = matchMedia('(prefers-reduced-motion: reduce)').matches;
+motionInput.addEventListener('change', () => { if (motionInput.checked) S.tween = null; });
+const cam = { x: 0, y: 0, k: 0.6 };
+let W = 0, H = 0, dpr = 1;
+const cv = $('#c'), ctx = cv.getContext('2d');
+const mc = $('#mc'), mctx = mc.getContext('2d');
+
+// ---------- visibility ----------
+let visSet = new Set(), visNodes = [], visEdges = [];
+const isAncestor = (a, b) => { for (let p = b.p; p; p = p.p) if (p === a) return true; return false; };
+const modHidden = n => n.module && S.hiddenMods.has(n.module);
+function rep(n) {
+  if (n.kind === 'table' || n.kind === 'api') return visSet.has(n) ? n : null;
+  if (modHidden(n)) return null;
+  let c = n; while (c && !visSet.has(c)) c = c.p; return c;
+}
+const dataOn = n => S.layers[n.kind] && (!n.hub || S.layers.hubs);
+function rebuild(opts = {}) {
+  const prev = visSet; visSet = new Set();
+  const walk = n => { if (n !== root && modHidden(n)) return; visSet.add(n); if (S.expanded.has(n.id)) n.children.forEach(walk); };
+  walk(root);
+  const scope = scopeScreens();
+  for (const n of dataNodes) if (dataOn(n) && (n === S.selected || (S.path && S.path.nodes.includes(n)) || adj.get(n).some(a => rep(a.o) && (!scope || scope.has(a.o))))) visSet.add(n);
+  const now = performance.now();
+  for (const n of visSet) if (!prev.has(n)) spawn(n, now, opts.intro);
+  visNodes = [...visSet].sort((a, b) => drawRank(a) - drawRank(b));
+
+  const out = [];
+  for (const n of visNodes) if (n.p && visSet.has(n.p)) out.push({ a: n.p, b: n, type: 'tree', count: 1 });
+  const agg = new Map();
+  for (const e of edges) {
+    const lk = e.type === 'data' ? e.tN.kind : e.type;
+    if (!S.layers[lk]) continue;
+    const a = e.sN, b = e.tN;
+    if (a === b || !visSet.has(a) || !visSet.has(b) || a.children.length || b.children.length) continue;
+    const fwd = a.id < b.id;
+    const key = (fwd ? a.id + '|' + b.id : b.id + '|' + a.id) + '|' + e.type + (e.todo ? '!' : '') + (e.ref ? '~' : '');
+    let g = agg.get(key);
+    if (!g) { g = { a: fwd ? a : b, b: fwd ? b : a, type: e.type, todo: !!e.todo, ref: !!e.ref, count: 0, ab: false, ba: false }; agg.set(key, g); }
+    g.count++;
+    if (e.type === 'flow' || (e.type === 'wiring' && e.direction) || e.type === 'coverage' || e.type === 'dependency') {
+      if (fwd) g.ab = true; else g.ba = true;
+      if (e.bi) g.ab = g.ba = true;
+    }
+  }
+  visEdges = out.concat([...agg.values()]);
+  layoutBranches();
+  S.alpha = Math.max(S.alpha, opts.alpha || 0.7);
+  updateFocus();
+}
+const drawRank = n => ({ table: 0, api: 0, cluster: 2, module: 3, root: 4 })[n.kind] ?? 1;
+
+function spawn(n, now, intro) {
+  n.apAt = now + (intro ? n.depth * 90 : 0);
+  n.ap = 0;
+  if (n.pinned) return;
+  n.x = n.p?.x || 0;
+  n.y = n.p?.y || 0;
+}
+
+function layoutBranches() {
+  const visibleChildren = n => n.children.filter(child => visSet.has(child));
+  const weight = new Map();
+  const density = new Map();
+  function measure(n) {
+    density.set(n.depth, (density.get(n.depth) || 0) + 1);
+    const kids = visibleChildren(n);
+    const leaves = kids.length ? kids.reduce((sum, child) => sum + measure(child), 0) : 1;
+    weight.set(n, leaves);
+    return leaves;
+  }
+  measure(root);
+  let gap = S.layout === 'radial' ? 190 : 150;
+  for (const [depth, count] of density) {
+    if (depth > 0) gap = Math.max(gap, count * 66 / (Math.PI * 2 * depth));
+  }
+  const share = (n, child) => n === root ? 1.45 + Math.sqrt(weight.get(child)) : weight.get(child);
+  function place(n, left, right) {
+    const angle = (left + right) / 2;
+    const radius = gap * n.depth;
+    n.tx = Math.cos(angle) * radius;
+    n.ty = Math.sin(angle) * radius;
+    const kids = visibleChildren(n);
+    const total = kids.reduce((sum, child) => sum + share(n, child), 0);
+    let offset = left;
+    for (const child of kids) {
+      const span = (right - left) * share(n, child) / total;
+      const gutter = Math.min(span * 0.06, 0.16);
+      place(child, offset + gutter, offset + span - gutter);
+      offset += span;
+    }
+  }
+  place(root, -Math.PI, Math.PI);
+}
+
+let drag = null;
+function tick() {
+  if (S.alpha < 0.004 && !drag) return;
+  const motion = motionInput.checked ? 1 : 0.22;
+  for (const n of visNodes) {
+    if ((drag && drag.node === n) || n.pinned || n._hold) continue;
+    n.x += (n.tx - n.x) * motion;
+    n.y += (n.ty - n.y) * motion;
+  }
+  S.alpha *= 0.8;
+}
+
+// ---------- focus / highlight ----------
+function updateFocus() {
+  const c = S.hover || S.selected;
+  S.focusCenter = c && visSet.has(c) ? c : null;
+  if (S.path) { S.focus = new Set(S.path.nodes.map(rep).filter(Boolean)); return; }
+  if (!S.focusCenter) { S.focus = null; return; }
+  const f = new Set([S.focusCenter]);
+  for (const e of visEdges) { if (e.a === S.focusCenter) f.add(e.b); else if (e.b === S.focusCenter) f.add(e.a); }
+  for (let p = S.focusCenter.p; p; p = p.p) if (visSet.has(p)) f.add(p);
+  S.focus = f;
+}
+
+// ---------- camera ----------
+function freeRect() {
+  const panelOpen = document.body.classList.contains('panel');
+  if (W <= 760) return { x0: 0, x1: W, y0: 0, y1: panelOpen ? H * 0.42 - 8 : H };
+  const left = document.body.classList.contains('leftoff') ? 0 : 362;
+  const right = document.body.classList.contains('panel') ? 432 : 0;
+  return { x0: left, x1: W - right, y0: 0, y1: H - 60 };
+}
+function camFor(x, y, k) { const r = freeRect(); return { x: x - ((r.x0 + r.x1) / 2 - W / 2) / k, y: y - ((r.y0 + r.y1) / 2 - H / 2) / k, k }; }
+function flyTo(x, y, k, dur = 750, follow = null) { if (motionInput.checked) { Object.assign(cam, {x, y, k}); return; } S.tween = { fx: cam.x, fy: cam.y, fk: cam.k, x, y, k, t0: performance.now(), dur, follow }; }
+function fitTarget(list, maxK, minK = 0.08) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of list) { x0 = Math.min(x0, n.x - n.r); y0 = Math.min(y0, n.y - n.r); x1 = Math.max(x1, n.x + n.r); y1 = Math.max(y1, n.y + n.r + 20); }
+  const r = freeRect();
+  const k = clamp(Math.min((r.x1 - r.x0 - 120) / (x1 - x0 || 1), (r.y1 - r.y0 - 140) / (y1 - y0 || 1)), minK, maxK);
+  return { k, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+}
+function fit(list = visNodes, dur = 850, maxK = 1.4) {
+  if (!list.length) return;
+  const { k, cx, cy } = fitTarget(list, maxK);
+  const c = camFor(cx, cy, k);
+  if (dur <= 1) { S.tween = null; Object.assign(cam, c); return; }
+  flyTo(c.x, c.y, k, dur);
+}
+
+// ---------- follow the selection ----------
+let frameT = 0, userMovedAt = 0;
+const FRAME_MAX = 24;
+function frameSet(n) {
+  const set = new Set([n]);
+  for (const e of visEdges) {
+    if (e.type === 'tree') { if (e.a === n) set.add(e.b); continue; }
+    if (e.a === n) set.add(e.b); else if (e.b === n) set.add(e.a);
+  }
+  const others = [...set].filter(m => m !== n);
+  // A hub with dozens of links would zoom out until nothing is readable; keep its nearest ones.
+  if (others.length > FRAME_MAX) others.sort((a, b) => Math.hypot(a.x - n.x, a.y - n.y) - Math.hypot(b.x - n.x, b.y - n.y)).length = FRAME_MAX;
+  return [n, ...others];
+}
+function frameNow(n, { force = false } = {}) {
+  if (S.selected !== n || !visSet.has(n)) return;
+  const soloK = clamp(cam.k, 0.9, 1.4);
+  // Centered on the node; zoom so the farthest connection on any side still fits.
+  const target = () => {
+    const list = frameSet(n);
+    if (list.length === 1) return { k: soloK, cx: n.x, cy: n.y };
+    let dx = 0, dy = 0;
+    for (const o of list) { dx = Math.max(dx, Math.abs(o.x - n.x) + o.r + 60); dy = Math.max(dy, Math.abs(o.y - n.y) + o.r + 30); }
+    const r = freeRect();
+    return { k: clamp(Math.min((r.x1 - r.x0 - 80) / (2 * dx), (r.y1 - r.y0 - 150) / (2 * dy)), 0.25, 1.4), cx: n.x, cy: n.y };
+  };
+  const t = target();
+  // The breadcrumbs sit over the top strip and the overview and legend over the bottom one.
+  const r = freeRect(), mx = 40, top = r.y0 + 70, bottom = r.y1 - 70;
+  const p0 = toScreen(n.x, n.y), cxs = (r.x0 + r.x1) / 2, cys = (r.y0 + r.y1) / 2;
+  const centered = Math.abs(p0.x - cxs) < (r.x1 - r.x0) * 0.15 && Math.abs(p0.y - cys) < (r.y1 - r.y0) * 0.15;
+  const inView = frameSet(n).every(o => { const p = toScreen(o.x, o.y); return p.x > r.x0 + mx && p.x < r.x1 - mx && p.y > top && p.y < bottom; });
+  S.follow = { n, since: performance.now() };
+  if (!force && centered && inView && cam.k >= t.k * 0.6 && cam.k <= Math.max(t.k * 2, 1.6)) return;
+  const follow = () => { const g = target(); const c = camFor(g.cx, g.cy, g.k); return { x: c.x, y: c.y, k: g.k }; };
+  const c = follow();
+  flyTo(c.x, c.y, c.k, 900, follow);
+}
+// Frame right away, then once more after new children finish spreading, unless the user moved the view in between.
+function frameSelection(n) {
+  clearTimeout(frameT);
+  const t0 = performance.now();
+  frameNow(n, { force: !visSet.has(n) || n.ap < 1 });
+  frameT = setTimeout(() => { if (userMovedAt < t0) frameNow(n); }, 1300);
+}
+function focusCam(n, k = Math.max(cam.k, 1.05)) { const c = camFor(n.x, n.y, k); flyTo(c.x, c.y, k, 850, n); }
+const toWorld = (sx, sy) => ({ x: (sx - W / 2) / cam.k + cam.x, y: (sy - H / 2) / cam.k + cam.y });
+const toScreen = (x, y) => ({ x: (x - cam.x) * cam.k + W / 2, y: (y - cam.y) * cam.k + H / 2 });
+
+// ---------- drawing ----------
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const mr = mc.getBoundingClientRect(); mc.width = mr.width * dpr; mc.height = mr.height * dpr;
+  dockMini();
+}
+// Sits level with the legend; lifts above it when the two would overlap. Uses target positions, not mid-animation rects.
+function dockMini() {
+  const mini = $('#mini'), legend = $('#legend');
+  const right = document.body.classList.contains('panel') ? 432 : 16;
+  const legendLeft = document.body.classList.contains('leftoff') ? 16 : 362;
+  const shown = legend && getComputedStyle(legend).display !== 'none';
+  const clash = shown && legendLeft + legend.offsetWidth + 12 > W - right - mini.offsetWidth;
+  mini.style.bottom = clash ? `${16 + legend.offsetHeight + 10}px` : '16px';
+}
+const hexA = (hex, a) => { const v = parseInt(hex.slice(1), 16); return `rgba(${v >> 16 & 255},${v >> 8 & 255},${v & 255},${a})`; };
+const lighten = (hex, t) => { const v = parseInt(hex.slice(1), 16); const f = c => Math.round(c + (255 - c) * t); return `rgb(${f(v >> 16 & 255)},${f(v >> 8 & 255)},${f(v & 255)})`; };
+
+function drawGrid() {
+  if (cam.k < 0.22) return;
+  const step = 70, tl = toWorld(0, 0), br = toWorld(W, H);
+  ctx.fillStyle = `rgba(150,170,230,${0.07 * clamp((cam.k - 0.22) * 3, 0, 1)})`;
+  const s = 1.3 / cam.k;
+  for (let x = Math.floor(tl.x / step) * step; x < br.x; x += step)
+    for (let y = Math.floor(tl.y / step) * step; y < br.y; y += step) ctx.fillRect(x - s / 2, y - s / 2, s, s);
+}
+
+const qPoint = (a, c, b, t) => ({ x: (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * c.x + t * t * b.x, y: (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * c.y + t * t * b.y });
+const qTan = (a, c, b, t) => ({ x: 2 * (1 - t) * (c.x - a.x) + 2 * t * (b.x - c.x), y: 2 * (1 - t) * (c.y - a.y) + 2 * t * (b.y - c.y) });
+
+function ctrl(a, b, bend) { const dx = b.x - a.x, dy = b.y - a.y; return { x: (a.x + b.x) / 2 - dy * bend, y: (a.y + b.y) / 2 + dx * bend }; }
+
+function drawEdge(e, now) {
+  const a = e.a, b = e.b;
+  const related = S.hover || S.selected;
+  if (e.type !== 'tree' && (!related || (a !== related && b !== related))) return;
+  const vis = Math.min(a.ap, b.ap);
+  if (vis <= 0.01) return;
+  const dimA = e.type === 'tree' ? Math.max(0.68, Math.min(a.dim, b.dim)) : Math.min(a.dim, b.dim);
+  const hot = S.focusCenter && (a === S.focusCenter || b === S.focusCenter) && !S.path;
+  const c = ctrl(a, b, e.type === 'tree' ? 0.05 : 0.16);
+  const k = cam.k;
+  let col, w, al, dash = null;
+  if (e.type === 'tree') {
+    col = b.color; al = (a.kind === 'root' ? 0.81 : 0.67); w = a.kind === 'root' ? 5.6 : a.kind === 'module' ? 3.7 : 2.3;
+  } else {
+    col = e.todo ? '#ffb74d' : EDGE_COLOR[e.type]; const cw = Math.log2(e.count + 1);
+    w = (e.type === 'data' ? 0.9 : 1.1) + cw * 0.9;
+    al = ({ mention: 0.28, data: 0.3, uses: 0.42, applies: 0.26 })[e.type] ?? 0.48;
+    dash = e.todo ? [6, 4] : e.ref ? [2, 5] : ({ shares: [7, 5], mention: [1.5, 5], wiring:[9, 4], coverage:[5, 4], dependency:[2, 4], uses: [4, 4], applies: [2, 5] })[e.type] || null;
+    if (e.ref) al *= 0.6;
+  }
+  if (hot) { al = Math.min(1, al * 2.1); w *= 1.5; }
+  else if (e.type !== 'tree' && !S.focus && (S.layout === 'radial' || visNodes.length > 120)) al *= 0.4;
+  ctx.globalAlpha = al * dimA * vis;
+  ctx.strokeStyle = col; ctx.lineWidth = w / Math.sqrt(Math.max(k, 0.35));
+  if (dash) { ctx.setLineDash(dash.map(d => d / Math.max(k, 0.5))); if (hot) ctx.lineDashOffset = -now / 40 / Math.max(k, .5); }
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  if (e.type === 'tree' && S.layout === 'force' && a !== root) {
+    const ra = Math.hypot(a.x, a.y) || 1, rb = Math.hypot(b.x, b.y) || 1;
+    const control = (ra + rb) * 0.5;
+    ctx.bezierCurveTo(a.x * control / ra, a.y * control / ra,
+      b.x * control / rb, b.y * control / rb, b.x, b.y);
+  } else {
+    ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+  }
+  ctx.stroke();
+  if (dash) { ctx.setLineDash([]); ctx.lineDashOffset = 0; }
+  if (e.ab || e.ba) {
+    const arrow = (t, rev) => {
+      const p = qPoint(a, c, b, t), d = qTan(a, c, b, t);
+      let ang = Math.atan2(d.y, d.x); if (rev) ang += Math.PI;
+      const s = (5 + w) / Math.sqrt(Math.max(k, 0.35));
+      ctx.fillStyle = col; ctx.beginPath();
+      ctx.moveTo(p.x + Math.cos(ang) * s, p.y + Math.sin(ang) * s);
+      ctx.lineTo(p.x + Math.cos(ang + 2.5) * s, p.y + Math.sin(ang + 2.5) * s);
+      ctx.lineTo(p.x + Math.cos(ang - 2.5) * s, p.y + Math.sin(ang - 2.5) * s); ctx.fill();
+    };
+    if (e.ab) arrow(0.58, false);
+    if (e.ba) arrow(0.42, true);
+  }
+  if (hot && e.type !== 'tree') particles(a, c, b, e, now, col);
+  ctx.globalAlpha = 1;
+}
+
+function particles(a, c, b, e, now, col, forcedDir) {
+  const dirs = forcedDir ? [forcedDir] : e.type === 'flow' ? [e.ab && 1, e.ba && -1].filter(Boolean) : [1, -1];
+  const speed = 0.00045;
+  ctx.fillStyle = col;
+  for (const dir of dirs) for (let i = 0; i < 3; i++) {
+    let t = ((now * speed + i / 3) % 1); if (dir < 0) t = 1 - t;
+    const p = qPoint(a, c, b, t);
+    const rr = 2.6 / Math.sqrt(Math.max(cam.k, 0.35));
+    ctx.globalAlpha = Math.sin(Math.PI * t) * 0.95;
+    ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, 7); ctx.fill();
+  }
+}
+
+function shape(n, r) {
+  ctx.beginPath();
+  if (n.branchRole) { ctx.rect(n.x - r * .77, n.y - r * .77, r * 1.54, r * 1.54); }
+  else if (n.kind === 'table') { const s = r * 0.95; const rr = s * 0.3; ctx.roundRect ? ctx.roundRect(n.x - s, n.y - s, s * 2, s * 2, rr) : ctx.rect(n.x - s, n.y - s, s * 2, s * 2); }
+  else if (n.kind === 'api') polygon(n, r * 1.1, 6, Math.PI / 6);
+  else if (n.kind === 'dep') polygon(n, r * 1.08, 8, Math.PI / 8);
+  else if (n.kind === 'agent') polygon(n, r * 1.3, 4, 0);
+  else if (n.kind === 'ci') polygon(n, r * 1.35, 3, -Math.PI / 2);
+  else if (n.kind === 'rule') { const s = r * 0.95; ctx.roundRect ? ctx.roundRect(n.x - s, n.y - s, s * 2, s * 2, s * 0.15) : ctx.rect(n.x - s, n.y - s, s * 2, s * 2); }
+  else ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+}
+function polygon(n, r, sides, rot) {
+  for (let i = 0; i < sides; i++) { const a = rot + i * Math.PI * 2 / sides; ctx[i ? 'lineTo' : 'moveTo'](n.x + Math.cos(a) * r, n.y + Math.sin(a) * r); }
+  ctx.closePath();
+}
+
+function drawNode(n, now) {
+  const ap = n.ap; if (ap <= 0.01) return;
+  const r = n.r * easeOutBack(Math.min(1, ap));
+  const alpha = n.dim * Math.min(1, ap * 1.4);
+  const isSel = n === S.selected, isHover = n === S.hover;
+  const onPath = S.path && S.focus && S.focus.has(n);
+  ctx.globalAlpha = alpha;
+
+  if (n.kind === 'root' || n.kind === 'module' || isSel || onPath) {
+    const pulse = 1 + Math.sin(now / 900 + n.x * 0.01) * 0.08;
+    const gr = r * (n.kind === 'root' ? 3.2 : 2.5) * pulse;
+    const g = ctx.createRadialGradient(n.x, n.y, r * 0.6, n.x, n.y, gr);
+    g.addColorStop(0, hexA(n.kind === 'root' ? '#8ab4ff' : n.color, isSel ? 0.45 : 0.28)); g.addColorStop(1, hexA(n.color, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(n.x, n.y, gr, 0, 7); ctx.fill();
+  }
+
+  const collapsed = n.children.length && !S.expanded.has(n.id);
+  if (n.kind === 'cluster' || n.kind === 'module') {
+    ctx.fillStyle = hexA(n.color, n.kind === 'module' ? 0.24 : 0.16);
+    shape(n, r); ctx.fill();
+    ctx.lineWidth = n.kind === 'module' ? 3 : 2.2; ctx.strokeStyle = n.color;
+    if (collapsed) ctx.setLineDash([4, 3]);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.38, 0, 7); ctx.fill();
+  } else {
+    const g = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.4, r * 0.1, n.x, n.y, r);
+    g.addColorStop(0, n.kind === 'root' ? '#ffffff' : lighten(n.color, 0.55)); g.addColorStop(1, n.kind === 'root' ? '#8ab4ff' : n.color);
+    ctx.fillStyle = g; shape(n, r); ctx.fill();
+    if (n.kind === 'root') { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.stroke(); }
+    if (n.kind === 'doc' || n.kind === 'prompt') { ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.stroke(); }
+    if (n.deprecated) { ctx.lineWidth = 1.2; ctx.setLineDash([2, 2]); ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.setLineDash([]); }
+    if (n.kind === 'step') {
+      ctx.fillStyle = '#1a1206'; ctx.font = `700 ${r * 0.95}px Segoe UI`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(n.step, n.x, n.y + 0.5);
+      if (n.userInput) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(n.x, n.y, r + 2.5, 0, 7); ctx.stroke(); }
+    }
+  }
+
+  if (collapsed && n.kind !== 'root') {
+    const bx = n.x + r * 0.78, by = n.y - r * 0.78, br = Math.max(6.5, 8 / Math.sqrt(cam.k));
+    ctx.fillStyle = '#0d1430'; ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fill();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = n.color; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `600 ${br * 1.05}px Segoe UI`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.children.length > 99 ? '99' : String(n.children.length), bx, by + 0.5);
+  }
+  if (n.warn && cam.k > 0.7 && n.kind === 'screen') {
+    ctx.fillStyle = '#ffb74d'; ctx.beginPath(); ctx.arc(n.x + r * 0.75, n.y - r * 0.75, Math.max(2.2, r * 0.32), 0, 7); ctx.fill();
+  }
+  if (n.pinned) {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(n.x, n.y + r + 3.5, 2, 0, 7); ctx.fill();
+  }
+  if (isSel || isHover || (S.pathFrom === n)) {
+    ctx.lineWidth = 1.6 / Math.sqrt(cam.k); ctx.strokeStyle = isSel ? '#fff' : 'rgba(255,255,255,.6)';
+    ctx.setLineDash([5, 4]); ctx.lineDashOffset = -now / 35;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r + 6, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+const LABEL_PX = { root: 17, module: 15, cluster: 12.5, screen: 11.5, doc: 11.5, table: 10.5, api: 10.5, step: 11.5, skill: 11, agent: 11, ci: 11, rule: 11, prompt: 11, dep: 11 };
+const LABEL_RANK = { root: 0, module: 1, cluster: 2, doc: 3, step: 3, dep: 3, screen: 4, skill: 4, agent: 4, ci: 4, rule: 4, prompt: 4, table: 5, api: 5 };
+function labelOrder() {
+  const pri = n => n === S.selected || n === S.hover ? -10 : (S.focus && S.focus.has(n) ? -2 : 0) + LABEL_RANK[n.kind] - Math.min(0.9, degree(n) / 40);
+  return visNodes.slice().sort((a, b) => pri(a) - pri(b));
+}
+function drawLabel(n, placed) {
+  if (n.ap < 0.3) return;
+  const k = cam.k, inFocus = S.focus && S.focus.has(n);
+  let show = n.kind === 'root' || n.kind === 'module'
+    || (n.branchRole && k > 0.22)
+    || ((n.kind === 'cluster' || n.kind === 'doc') && k > 0.3)
+    || ((n.kind === 'step' || n.kind === 'dep') && k > 0.45)
+    || (n.kind !== 'table' && n.kind !== 'api' && k > 0.85)
+    || (k > 1.5)
+    || n === S.selected || n === S.hover || (inFocus && k > 0.35);
+  if (!show) return;
+  const px = LABEL_PX[n.kind] * clamp(Math.sqrt(k), 0.85, 1.25);
+  const fs = px / k;
+  const weight = n.kind === 'root' || n.kind === 'module' ? 700 : n.kind === 'cluster' ? 600 : 500;
+  ctx.font = `${weight} ${fs}px "Segoe UI",system-ui,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const y = n.y + n.r + 5 / k;
+  let text = n.label; if (text.length > 38 && n !== S.selected && n !== S.hover) text = text.slice(0, 36) + '…';
+  const tw = ctx.measureText(text).width, rect = { x0: n.x - tw / 2 - 3 / k, x1: n.x + tw / 2 + 3 / k, y0: y, y1: y + fs * 1.2 };
+  const must = n === S.selected || n === S.hover || n.kind === 'root' || n.kind === 'module';
+  if (!must && placed.some(r => r.x0 < rect.x1 && r.x1 > rect.x0 && r.y0 < rect.y1 && r.y1 > rect.y0)) return;
+  placed.push(rect);
+  ctx.globalAlpha = n.dim * Math.min(1, n.ap);
+  ctx.lineJoin = 'round'; ctx.lineWidth = 3.5 / k; ctx.strokeStyle = 'rgba(7,11,23,.9)';
+  ctx.strokeText(text, n.x, y);
+  ctx.fillStyle = n.deprecated ? '#8a8fa3' : n.kind === 'cluster' ? lighten(n.color, 0.45) : n.kind === 'screen' || WF_ITEM.has(n.kind) ? '#dfe6fa' : n.kind === 'module' || n.kind === 'root' ? '#fff' : lighten(n.color, 0.3);
+  ctx.fillText(text, n.x, y);
+  ctx.globalAlpha = 1;
+}
+
+function drawPath(now) {
+  if (!S.path) return;
+  const ps = S.path.nodes.map(rep);
+  for (let i = 0; i < ps.length - 1; i++) {
+    const a = ps[i], b = ps[i + 1]; if (!a || !b || a === b) continue;
+    const c = ctrl(a, b, 0.1);
+    ctx.globalAlpha = 0.22; ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 12 / Math.sqrt(cam.k);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke();
+    ctx.globalAlpha = 0.95; ctx.lineWidth = 2.6 / Math.sqrt(cam.k);
+    ctx.stroke();
+    particles(a, c, b, null, now, '#fff6cf', 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function frame(now) {
+  tick();
+  if (S.tween) {
+    const t = S.tween, p = clamp((now - t.t0) / t.dur, 0, 1), e = ease(p);
+    let tx = t.x, ty = t.y;
+    if (typeof t.follow === 'function') { const g = t.follow(); tx = g.x; ty = g.y; t.k = g.k; }
+    else if (t.follow) { const c = camFor(t.follow.x, t.follow.y, t.k); tx = c.x; ty = c.y; }
+    cam.x = lerp(t.fx, tx, e); cam.y = lerp(t.fy, ty, e); cam.k = lerp(t.fk, t.k, e);
+    if (p >= 1) S.tween = null;
+  } else if (S.follow) {
+    // Keep the selection centered while the layout settles; any pan, zoom or drag by the user ends this.
+    const f = S.follow, n = f.n;
+    if (n !== S.selected || !visSet.has(n) || userMovedAt > f.since || S.path) S.follow = null;
+    else { const c = camFor(n.x, n.y, cam.k); cam.x += (c.x - cam.x) * 0.1; cam.y += (c.y - cam.y) * 0.1; }
+  }
+  for (const n of visNodes) {
+    n.ap = motionInput.checked ? 1 : clamp((now - n.apAt) / 520, 0, 1);
+    const target = !S.focus || S.focus.has(n) ? 1 : (S.path ? 0.1 : 0.14);
+    n.dim += (target - n.dim) * (motionInput.checked ? 1 : 0.14);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2, H / 2); ctx.scale(cam.k, cam.k); ctx.translate(-cam.x, -cam.y);
+  drawGrid();
+  const visualTime = motionInput.checked ? 0 : now;
+  for (const e of visEdges) drawEdge(e, visualTime);
+  drawPath(visualTime);
+  for (const n of visNodes) drawNode(n, visualTime);
+  const placed = []; for (const n of labelOrder()) drawLabel(n, placed);
+  ctx.restore();
+  if ((frameCount++ & 1) === 0) drawMini();
+  requestAnimationFrame(frame);
+}
+let frameCount = 0;
+
+function drawMini() {
+  const w = mc.width, h = mc.height;
+  mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, w, h);
+  if (!visNodes.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of visNodes) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
+  const pad = 80; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  const s = Math.min(w / (x1 - x0), h / (y1 - y0));
+  const ox = (w - (x1 - x0) * s) / 2, oy = (h - (y1 - y0) * s) / 2;
+  mini = { x0, y0, s, ox, oy };
+  mctx.globalAlpha = 0.25; mctx.strokeStyle = '#8ab4ff'; mctx.lineWidth = 1;
+  mctx.beginPath();
+  for (const e of visEdges) if (e.type === 'tree') { mctx.moveTo(ox + (e.a.x - x0) * s, oy + (e.a.y - y0) * s); mctx.lineTo(ox + (e.b.x - x0) * s, oy + (e.b.y - y0) * s); }
+  mctx.stroke();
+  for (const n of visNodes) {
+    mctx.globalAlpha = n.dim * 0.9; mctx.fillStyle = n.color;
+    const rr = Math.max(1.2 * dpr, n.r * s * 1.2);
+    mctx.beginPath(); mctx.arc(ox + (n.x - x0) * s, oy + (n.y - y0) * s, rr, 0, 7); mctx.fill();
+  }
+  const tl = toWorld(0, 0), br = toWorld(W, H);
+  mctx.globalAlpha = 1; mctx.strokeStyle = 'rgba(255,255,255,.75)'; mctx.lineWidth = 1.2 * dpr;
+  mctx.fillStyle = 'rgba(138,180,255,.08)';
+  const rx = ox + (tl.x - x0) * s, ry = oy + (tl.y - y0) * s, rw = (br.x - tl.x) * s, rh = (br.y - tl.y) * s;
+  mctx.fillRect(rx, ry, rw, rh); mctx.strokeRect(rx, ry, rw, rh);
+}
+let mini = null;
+
+// ---------- interaction ----------
+function hit(sx, sy) {
+  const p = toWorld(sx, sy);
+  for (let i = visNodes.length - 1; i >= 0; i--) {
+    const n = visNodes[i]; if (n.ap < 0.3) continue;
+    const r = n.r + touchSlop / cam.k;
+    if ((p.x - n.x) ** 2 + (p.y - n.y) ** 2 < r * r) return n;
+  }
+  return null;
+}
+let down = null, lastClick = { t: 0, n: undefined };
+const touches = new Map();
+let pinch = null, touchSlop = 5;
+const midOf = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+function startPinch() {
+  drag = null; down = null; cv.classList.remove('drag'); hideTip(); S.tween = null;
+  const [a, b] = [...touches.values()], m = midOf(a, b);
+  pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, k0: cam.k, w: toWorld(m.x, m.y) };
+}
+function endTouch(ev) {
+  touches.delete(ev.pointerId);
+  if (!pinch) return false;
+  if (touches.size < 2) {
+    pinch = null;
+    // The finger still down keeps panning from where it is, without a jump or a click.
+    const rest = [...touches.values()][0];
+    down = rest ? { x: rest.x, y: rest.y, n: null, moved: true, cx: cam.x, cy: cam.y, button: 0 } : null;
+  }
+  return true;
+}
+cv.addEventListener('pointerdown', ev => {
+  try { cv.setPointerCapture(ev.pointerId); } catch { /* capture is optional */ }
+  touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  touchSlop = ev.pointerType === 'touch' ? 14 : 5;
+  if (touches.size === 2) { startPinch(); return; }
+  if (touches.size > 2 || pinch) return;
+  const n = hit(ev.clientX, ev.clientY);
+  down = { x: ev.clientX, y: ev.clientY, n, moved: false, cx: cam.x, cy: cam.y, button: ev.button };
+  hideTip();
+});
+cv.addEventListener('pointermove', ev => {
+  if (touches.has(ev.pointerId)) touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch && touches.size >= 2) {
+    const [a, b] = [...touches.values()], m = midOf(a, b);
+    cam.k = clamp(pinch.k0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0, 0.06, 5);
+    userMovedAt = performance.now();
+    cam.x = pinch.w.x - (m.x - W / 2) / cam.k; cam.y = pinch.w.y - (m.y - H / 2) / cam.k;
+    return;
+  }
+  if (down && down.button === 0) {
+    const dx = ev.clientX - down.x, dy = ev.clientY - down.y;
+    if (!down.moved && dx * dx + dy * dy > touchSlop * touchSlop) {
+      down.moved = true;
+      if (down.n) {
+        const desc = []; const walk = m => m.children.forEach(c => { if (visSet.has(c)) { desc.push(c); walk(c); } }); walk(down.n);
+        drag = { node: down.n, desc }; cv.classList.add('drag');
+      } else cv.classList.add('drag');
+      S.tween = null;
+    }
+    if (down.moved) {
+      userMovedAt = performance.now();
+      if (drag) {
+        const p = toWorld(ev.clientX, ev.clientY), n = drag.node;
+        const ddx = p.x - n.x, ddy = p.y - n.y;
+        n.x = p.x; n.y = p.y;
+        for (const d of drag.desc) if (!d.pinned) { d.x += ddx * 0.92; d.y += ddy * 0.92; }
+        S.alpha = Math.max(S.alpha, 0.3);
+      } else { cam.x = down.cx - dx / cam.k; cam.y = down.cy - dy / cam.k; }
+    }
+    return;
+  }
+  if (ev.pointerType === 'touch') return;
+  const n = hit(ev.clientX, ev.clientY);
+  if (n !== S.hover) { S.hover = n; updateFocus(); }
+  cv.classList.toggle('point', !!n);
+  if (n) showTip(n, ev.clientX, ev.clientY); else hideTip();
+});
+cv.addEventListener('pointerup', ev => {
+  if (endTouch(ev)) return;
+  if (!down) return;
+  const d = down; down = null; cv.classList.remove('drag');
+  if (drag) { drag.node.pinned = true; drag = null; S.alpha = Math.max(S.alpha, 0.25); return; }
+  if (d.moved || d.button !== 0) return;
+  const now = performance.now();
+  const dbl = now - lastClick.t < 330 && lastClick.n === d.n;
+  lastClick = { t: now, n: d.n };
+  if (d.n) { if (dbl) onDouble(d.n); else onClick(d.n); }
+  else if (dbl) fit(); else clearSelection();
+});
+cv.addEventListener('pointercancel', ev => { if (!endTouch(ev)) { down = null; drag = null; cv.classList.remove('drag'); } });
+cv.addEventListener('pointerleave', () => { if (S.hover) { S.hover = null; updateFocus(); } hideTip(); });
+cv.addEventListener('contextmenu', ev => {
+  ev.preventDefault();
+  const n = hit(ev.clientX, ev.clientY);
+  if (n) { n.pinned = !n.pinned; S.alpha = Math.max(S.alpha, 0.3); toast(n.pinned ? `Pinned ${n.label}` : `Unpinned ${n.label}`); }
+});
+cv.addEventListener('wheel', ev => {
+  ev.preventDefault(); S.tween = null; userMovedAt = performance.now();
+  const before = toWorld(ev.clientX, ev.clientY);
+  cam.k = clamp(cam.k * Math.exp(-ev.deltaY * 0.0014), 0.06, 5);
+  const after = toWorld(ev.clientX, ev.clientY);
+  cam.x += before.x - after.x; cam.y += before.y - after.y;
+}, { passive: false });
+
+function onClick(n) {
+  if (S.pathFrom && S.pathFrom !== n) { tracePath(S.pathFrom, n); return; }
+  if (n.children.length && !S.expanded.has(n.id)) { n._openedAt = performance.now(); S.selected = n; expand(n); }
+  select(n);
+}
+function onDouble(n) {
+  if (!n.children.length || n === root) { focusCam(n, Math.max(cam.k, 1.4)); return; }
+  if (n._openedAt && performance.now() - n._openedAt < 600) return;
+  if (S.expanded.has(n.id)) collapse(n); else expand(n);
+}
+function expand(n, quiet) {
+  S.expanded.add(n.id); rebuild();
+  if (quiet) return;
+  if (S.selected === n) { frameSelection(n); return; }
+  setTimeout(() => { const kids = n.children.filter(c => visSet.has(c)); if (kids.some(offscreen)) fit([n, ...kids], 800, Math.max(cam.k, 1.1)); }, 650);
+}
+function collapse(n) {
+  const rm = m => { S.expanded.delete(m.id); m.children.forEach(rm); };
+  rm(n);
+  if (S.selected && !visSetAfterCollapse(S.selected, n)) S.selected = n;
+  rebuild(); renderPanel(); renderCrumbs();
+}
+const visSetAfterCollapse = (sel, n) => !isAncestor(n, sel);
+const offscreen = n => { const p = toScreen(n.x, n.y), r = freeRect(); return p.x < r.x0 + 30 || p.x > r.x1 - 30 || p.y < 30 || p.y > H - 30; };
+
+// Tables and endpoints follow the last selected screen, cluster or module; with nothing selected they show for every screen.
+const scopesData = n => n && n !== root && !isWf(n) && n.kind !== 'table' && n.kind !== 'api';
+function scopeScreens() {
+  const s = S.dataScope; if (!s) return null;
+  const out = new Set(); const walk = m => { out.add(m); m.children.forEach(walk); }; walk(s); return out;
+}
+const dataLayersOn = () => S.layers.table || S.layers.api;
+function holdSelected() {
+  const n = S.selected; if (!n || !visSet.has(n)) return;
+  n._hold = true; clearTimeout(n._holdT); n._holdT = setTimeout(() => { n._hold = false; }, 1600);
+  frameSelection(n);
+}
+function setDataScope(n) {
+  if (S.dataScope === n) return false;
+  S.dataScope = n;
+  if (!dataLayersOn()) return false;
+  rebuild(); holdSelected();
+  return true;
+}
+
+function select(n, opts = {}) {
+  const changed = S.selected !== n;
+  S.selected = n; S.hover = null;
+  if (n.id.startsWith('wiring:') && S.layers.wiring) {
+    for (const {e,o} of adj.get(n)) if (e.type === 'wiring') reveal(o);
+    rebuild();
+  }
+  if (scopesData(n)) setDataScope(n); else if (n === root) setDataScope(null);
+  updateFocus(); renderPanel(); renderCrumbs();
+  if (opts.fly) focusCam(n, opts.k || Math.max(cam.k, n.kind === 'screen' ? 1.25 : 0.9));
+  else if (changed || opts.frame) frameSelection(n);
+}
+function clearSelection() {
+  if (S.pathFrom) { S.pathFrom = null; toast('Path tracing canceled'); }
+  S.selected = null; S.path = null; setDataScope(null); updateFocus(); renderPanel(); renderCrumbs();
+}
+
+function reveal(n) {
+  if (n.module && S.hiddenMods.has(n.module)) { S.hiddenMods.delete(n.module); renderChips(); }
+  if (n.kind === 'table' || n.kind === 'api') {
+    S.layers[n.kind] = true; if (n.hub) S.layers.hubs = true; syncToggles();
+    const users = adj.get(n).map(a => a.o);
+    if (!users.some(u => rep(u))) {
+      for (const u of users) { if (u.module) S.hiddenMods.delete(u.module); for (let p = u.p; p; p = p.p) S.expanded.add(p.id); }
+      renderChips();
+    }
+  }
+  for (let p = n.p; p; p = p.p) S.expanded.add(p.id);
+}
+function goTo(n) {
+  if (S.pathFrom && S.pathFrom !== n) { tracePath(S.pathFrom, n); return; }
+  S.path = null; reveal(n); if (n.module === 'docs/wiki/agent-governance.md' && n.children.length) S.expanded.add(n.id); S.selected = n; if (scopesData(n)) S.dataScope = n; rebuild(); select(n, { frame: true });
+}
+
+// ---------- path tracing ----------
+const W_EDGE = { wiring:1, coverage:1.2, dependency:1.2, flow: 1, shares: 1.3, mention: 1.7, data: 1.9, uses: 1.6, applies: 1.8 };
+function tracePath(a, b) {
+  S.pathFrom = null;
+  const dist = new Map([[a, 0]]), prev = new Map(), done = new Set();
+  const nb = n => {
+    const out = adj.get(n).filter(x => S.layers[x.e.type]).map(x => ({ o: x.o, w: W_EDGE[x.e.type], rel: x.e.type, out: x.out }));
+    if (n.p) out.push({ o: n.p, w: 2.6, rel: 'tree', out: false });
+    for (const c of n.children) out.push({ o: c, w: 2.6, rel: 'tree', out: true });
+    return out;
+  };
+  const queue = [a];
+  while (queue.length) {
+    queue.sort((x, y) => dist.get(x) - dist.get(y));
+    const u = queue.shift(); if (done.has(u)) continue; done.add(u);
+    if (u === b) break;
+    for (const { o, w, rel, out } of nb(u)) {
+      const nd = dist.get(u) + w;
+      if (nd < (dist.has(o) ? dist.get(o) : Infinity)) { dist.set(o, nd); prev.set(o, { u, rel, out }); queue.push(o); }
+    }
+  }
+  if (!prev.has(b)) { toast('No connection found'); return; }
+  const list = [b], rels = [];
+  for (let c = b; c !== a;) { const p = prev.get(c); rels.unshift(p); list.unshift(p.u); c = p.u; }
+  for (const n of list) reveal(n);
+  S.path = { nodes: list, rels }; S.selected = b; S.dataScope = null;
+  rebuild();
+  updateFocus(); renderPanel(); renderCrumbs();
+  setTimeout(() => fit(list, 900, 1.3), 450);
+  toast(`${list.length - 1} step${list.length === 2 ? '' : 's'} from ${a.label} to ${b.label}`);
+}
+function startPath(n) { S.pathFrom = n; S.path = null; updateFocus(); toast(`Now click or search the second node to trace a path from ${n.label}`, 4000); }
+
+// ---------- tooltip / toast ----------
+const tip = $('#tip');
+function showTip(n, x, y) {
+  tip.replaceChildren();
+  tip.append(el('div', { class: 'k' }, (n.level || KIND[n.kind]) + (MOD[n.module] ? ' · ' + MOD[n.module].label : '')), el('b', {}, n.branchLabel || (n.title && n.kind !== 'cluster' && n.kind !== 'module' ? n.title : n.label)));
+  const preview = detailGroups(n)[0]?.[1][0];
+  if (n.summary) tip.append(el('p', {}, rich(n.summary.length > 170 ? n.summary.slice(0, 168) + '…' : n.summary)));
+  if (preview) tip.append(el("p", {}, preview.label + ": " + preview.description.split(". ")[0] + "."));
+  if (!n.summary && !preview && n.rel) tip.append(el("p", {}, n.rel));
+  const bits = [];
+  const connected = adj.get(n).filter(a => layerNames[a.e.type] && S.layers[a.e.type]);
+  if (connected.length) bits.push(connected.slice(0, 3).map(a => a.o.label).join(' · '));
+  if (n.children.length) bits.push(`${n.children.length} inside · ${S.expanded.has(n.id) ? 'double-click to collapse' : 'click to open'}`);
+  if (detailGroups(n).length) bits.push(detailGroups(n).map(([title]) => title).join(' · '));
+  if (adj.get(n).length) bits.push(adj.get(n).length + ' related links');
+  if (n.kind === 'table' || n.kind === 'api') bits.push(`used by ${adj.get(n).length} screens`);
+  if (WF_ITEM.has(n.kind)) { const u = adj.get(n).filter(a => a.out && a.e.type === 'uses').map(a => a.o.label); if (u.length) bits.push('relies on ' + u.join(', ')); }
+  if (n.kind === 'dep') bits.push(`needed by ${adj.get(n).length}`);
+  if (S.pathFrom) bits.push('click to trace the path here');
+  if (bits.length) tip.append(el('div', { class: 'h' }, bits.join(' · ')));
+  const tw = Math.min(330, W - 16), left = Math.max(8, x + 18 + tw > W ? x - tw - 12 : x + 18);
+  tip.classList.add('on');
+  tip.style.left = left + 'px'; tip.style.top = Math.max(8, Math.min(y + 14, H - tip.offsetHeight - 10)) + 'px';
+}
+function hideTip() { tip.classList.remove('on'); }
+let toastT = 0;
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
+
+// ---------- DOM helpers (all text is set with textContent) ----------
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'on') for (const [ev, fn] of Object.entries(v)) e.addEventListener(ev, fn);
+    else if (k === 'style') e.setAttribute('style', v);
+    else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function rich(s) {
+  const f = document.createDocumentFragment();
+  String(s).split(/(`[^`]+`)/).forEach(part => {
+    if (/^`[^`]+`$/.test(part)) f.append(el('code', {}, part.slice(1, -1))); else if (part) f.append(document.createTextNode(part));
+  });
+  return f;
+}
+const dot = c => el('i', { class: 'dot', style: `background:${c};box-shadow:0 0 8px ${c}` });
+function nodeItem(n, meta) {
+  return el('button', { type: 'button', class: 'li', on: { click: () => goTo(n), mouseenter: () => { if (visSet.has(n)) { S.hover = n; updateFocus(); } }, mouseleave: () => { S.hover = null; updateFocus(); } } },
+    dot(n.color), el('span', { class: 'lab' }, n.label), meta ? el('span', { class: 'meta' }, meta) : null);
+}
+function section(title, count, ...body) {
+  return el('div', { class: 'sec' }, el('h4', {}, title, count != null ? el('span', { class: 'n' }, String(count)) : null), ...body);
+}
+function capList(items, max, render) {
+  if (items.length <= max) return el('div', { class: 'list' }, items.map(render));
+  const wrap = el('div', { class: 'list' }, items.slice(0, max).map(render));
+  const more = el('details', {}, el('summary', {}, `${items.length - max} more`), el('div', { class: 'list' }, items.slice(max).map(render)));
+  return el('div', {}, wrap, more);
+}
+const repoDirectories = new Set(GRAPH.nodes.filter(n => n.kind === 'directory').map(n => n.id));
+const encodePath = p => p.split('/').map(encodeURIComponent).join('/');
+function repositoryUrl(path, anchor, line) {
+  const type = repoDirectories.has(path) ? 'tree' : 'blob';
+  const fragment = anchor ? '#' + encodeURIComponent(anchor) : line ? '#L' + line : '';
+  return DATA.repo + '/' + type + '/' + DATA.branch + '/' + encodePath(path) + fragment;
+}
+let checkout = '';
+try { checkout = localStorage.getItem('knowledge-checkout') || ''; } catch {}
+function openCheckout(path) {
+  if (!checkout) {
+    const input = prompt('Enter the absolute path to your local repository checkout');
+    if (!input) return;
+    const normalized = input.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!/^(?:[a-z]:\/|\/)[^?#]*$/i.test(normalized) || normalized.split('/').includes('..')) {
+      toast('Enter an absolute checkout path'); return;
+    }
+    checkout = normalized;
+    try { localStorage.setItem('knowledge-checkout', checkout); } catch {}
+  }
+  const a = el('a', {href: 'vscode://file/' + encodePath(checkout).replace(/^([a-z])%3A/i, '$1:') + '/' + encodePath(path)});
+  a.click();
+}
+function detailGroups(n) {
+  return (n.sections || Object.keys(n.cardRefs || {})).map(group =>
+    [group, n.sections ? GRAPH.cards[group] : n.cardRefs[group].map(i => GRAPH.cards[group][i])]);
+}
+function sourceLink(path, anchor, line, label) {
+  return el('a', {href: repositoryUrl(path, anchor, line), target:'_blank', rel:'noopener',
+    title: path}, label || path.split('/').pop() + (line ? ':' + line : ''));
+}
+const repositoryChildren = new Map();
+for (const node of nodes) {
+  if (!node.rel) continue;
+  const folder = node.rel.includes('/') ? node.rel.slice(0, node.rel.lastIndexOf('/')) : 'references';
+  if (!repositoryChildren.has(folder)) repositoryChildren.set(folder, []);
+  repositoryChildren.get(folder).push(node);
+}
+for (const entries of repositoryChildren.values()) entries.sort((a, b) =>
+  Number(b.kind === 'cluster') - Number(a.kind === 'cluster') || a.rel.localeCompare(b.rel));
+const layerNames = { wiring:'Wiring connections', coverage:'Test coverage', dependency:'Dependencies' };
+function relationItem(e, primary, secondary) {
+  const refs = e.evidence || (e.sourceLine ? [{path:e.from, line:e.sourceLine}] : [{path:e.from}]);
+  return el('div', {class:'layer-item', style:'--edge:' + EDGE_COLOR[e.type]},
+    nodeItem(primary, primary.branchRole), secondary ? nodeItem(secondary, secondary.branchRole) : null,
+    el('p', {class:'index-summary'}, e.label),
+    e.note ? el('p', {class:'index-summary'}, e.note) : null,
+    el('div', {class:'fact-sources'}, refs.map(s => sourceLink(s.path, null, s.line))));
+}
+function guidedViews(n, bd) {
+  const telemetry = 'docs/wiki/telemetry-and-dashboard.md';
+  const governance = 'docs/wiki/agent-governance.md';
+  const views = (GRAPH.guidedViews || []).filter(g =>
+    (g.area === 'telemetry' && (n.module === telemetry || n.id === telemetry)) ||
+    (g.area === 'governance' && (n.module === governance || n.id === governance)) ||
+    g.steps.some(step => step.node === n.id));
+  if (!views.length) return;
+  const cards = views.map(g => {
+    const show = () => {
+      const list = g.steps.map(step => byId.get(step.node));
+      for (const item of list) reveal(item);
+      S.path = {nodes:list, rels:list.slice(1).map(() => ({rel:'flow',out:true}))};
+      S.pathFrom = null;
+      S.selected = list.at(-1);
+      rebuild(); renderPanel(); renderCrumbs();
+      setTimeout(() => fit(list, 420), 260);
+    };
+    return el('details', {class:'fact'}, el('summary', {}, g.title),
+      el('p', {}, g.summary),
+      el('ol', {class:'guided-steps'}, g.steps.map(step => el('li', {},
+        nodeItem(byId.get(step.node)), el('p', {}, step.label), sourceLink(step.node,null,step.line,'View source')))),
+      g.area === 'telemetry' ? el('button', {class:'btn',on:{click:show}}, 'Highlight this path') : null);
+  });
+  bd.append(section('Follow how it connects', views.length, ...cards));
+}
+function arduinoBody(n, bd) {
+  const groups = detailGroups(n);
+  if (n.branchRole === 'Screen') groups.sort(([a], [b]) => Number(b === 'Dashboard display') - Number(a === 'Dashboard display'));
+  const shortcuts = el("nav", {class:"detail-nav", "aria-label":"Inspector sections"});
+  const jump = (label, target) => shortcuts.append(el("button", {type:"button", class:"btn", on:{click:() => target.scrollIntoView({block:"start"})}}, label));
+  if (groups.length) bd.append(shortcuts);
+  guidedViews(n, bd);
+  if (n.wiringIndex && S.layers.wiring) {
+    const paths = edges.filter(e => e.pinIndex);
+    const wiring = section('Wiring at a glance', paths.length, capList(paths, 10, e =>
+      relationItem(e, byId.get(e.s), byId.get(e.t))));
+    bd.append(wiring);
+  }
+  for (const [type, title] of Object.entries(layerNames)) {
+    if (!S.layers[type]) continue;
+    const links = adj.get(n).filter(a => a.e.type === type);
+    if (!links.length) continue;
+    const show = () => {
+      for (const {o} of links) reveal(o);
+      rebuild(); frameSelection(n);
+    };
+    const group = section(title, links.length,
+      el('button', {class:'btn', on:{click:show}}, 'Show on map'),
+      capList(links, 7, ({e,o}) => relationItem(e, o)));
+    bd.append(group);
+    if (groups.length) jump(title, group);
+  }
+
+  for (const [title, cards] of groups) {
+    const list = capList(cards, 10, card => el('article', {class:'fact'}, el('h5', {}, card.label),
+      el('p', {}, card.description), el('div', {class:'fact-sources'},
+        card.sources.map(s => sourceLink(s.path, null, s.line)))));
+    const content = section(title, null, list);
+    bd.append(content);
+    jump(title, content);
+  }
+  const browsable = n.fileType === 'Directory' || n.id === 'references';
+  const children = n.level === 'Main index' ? n.children.filter(child => child.level) : n.children;
+  if (n.p || n.children.length) {
+    const hierarchy = section(n.level === 'Main index' ? 'Domain indexes' : 'Hierarchy', null,
+      n.p && nodeItem(n.p, 'Parent'),
+      !browsable && children.length ? capList(children, 12, child =>
+        el('div', {}, nodeItem(child, child.level || child.fileType || 'Repository files'),
+          child.level && child.summary ? el('p', {class:'index-summary'}, child.summary.split(/(?<=\.)\s/)[0]) : null)) : null);
+    bd.append(hierarchy);
+    if (groups.length) jump('Related nodes', hierarchy);
+  }
+  if (browsable) {
+    const entries = repositoryChildren.get(n.id) || [];
+    if (entries.length) bd.append(section('Files and folders', entries.length, capList(entries, 14, entry => nodeItem(entry, entry.branchRole || entry.fileType))));
+  }
+  for (const [title, entries] of [['Contents', n.outlineEntries], ['Symbols and tests', n.codeEntries]]) {
+    if (entries?.length) bd.append(section(title, entries.length, capList(entries, 12, entry =>
+      el('div', {class:'reference-row'}, sourceLink(n.rel, entry.anchor, entry.line, entry.label),
+        el('span', {class:'meta'}, entry.kind + ' · line ' + entry.line)))));
+  }
+  const related = adj.get(n);
+  for (const [title, filter] of [
+    ['Supporting files', a => a.out && a.e.type === 'uses'],
+    ['Outgoing links', a => a.out && a.e.relation === 'link'],
+    ['Backlinks and usages', a => !a.out && !layerNames[a.e.type]],
+  ]) {
+    const group = related.filter(filter);
+    if (group.length) bd.append(section(title, group.length,
+      title === 'Supporting files' ? el('p', {class:'index-summary'}, 'Firmware, tests, and docs that explain or verify this topic.') : null,
+      capList(group, 8, ({e,o}) =>
+      el('div', {class:'reference-row'}, nodeItem(o, e.anchor || e.relation === 'connection' ? e.label : e.relation === 'includes' ? 'Include / import' : null),
+        sourceLink(o.rel, e.to === o.rel ? e.anchor : null, e.to === o.rel ? e.line : null, 'GitHub')))));
+  }
+  if (n.unresolved?.length) bd.append(section('Unresolved references in this file', n.unresolved.length,
+    capList(n.unresolved, 6, name => el('code', {}, name))));
+  if (n.body) {
+    const detail = el('details', {class:'note-body'}, el('summary', {}, 'Read the wiki note'),
+      el('div', {class:'note-text'}, n.body));
+    bd.append(section('Wiki note', null, detail));
+  }
+  if (!n.summary && n.rel && !detailGroups(n).length) {
+    bd.prepend(el('p', {class:'sum'}, n.rel));
+  }
+}
+
+// ---------- panel ----------
+const panel = $('#panel');
+function renderPanel() {
+  const n = S.selected;
+  document.body.classList.toggle('panel', !!n);
+  panel.classList.toggle('on', !!n);
+  dockMini();
+  if (!n) return;
+  const hd = $('#phd'), bd = $('#pbd');
+  hd.replaceChildren(); bd.replaceChildren();
+  hd.append(el('button', { class: 'x', title: 'Close (Esc)', on: { click: clearSelection } }, '✕'));
+  const pills = el('div', { class: 'pills' }, el('span', { class: 'pill c', style: `--c:${n.color}` }, n.level || KIND[n.kind]));
+  if (n.fileType && n.kind !== 'screen') pills.append(el('span', {class:'pill'}, n.fileType));
+  if (MOD[n.module] && n.kind !== 'module') pills.append(el('span', { class: 'pill c', style: `--c:${MOD[n.module].color}` }, MOD[n.module].label));
+  for (const b of n.bu || []) if (!MOD[n.module] || BU[b] !== MOD[n.module].label) pills.append(el('span', { class: 'pill' }, BU[b] || b));
+  if (n.glance && n.glance.Kind) pills.append(el('span', { class: 'pill' }, n.glance.Kind.split(',')[0].slice(0, 32)));
+  hd.append(pills, el('h2', {}, n.kind === 'cluster' || n.kind === 'module' || n.kind === 'screen' ? n.title || n.label : n.label));
+  if (n.status === "historical") pills.append(el("span", {class:"pill"}, "Historical"));
+  if (n.summary) hd.append(el('p', { class: 'sum' }, rich(n.summary)));
+  const acts = el('div', { class: 'acts' });
+  if (n.children.length && n !== root) acts.append(el('button', { class: 'btn', on: { click: () => { S.expanded.has(n.id) ? collapse(n) : expand(n); renderPanel(); } } }, S.expanded.has(n.id) ? 'Collapse' : 'Expand'));
+  acts.append(el('button', { class: 'btn', on: { click: () => focusCam(n, Math.max(cam.k, 1.2)) } }, 'Center'));
+  acts.append(el('button', { class: 'btn', on: { click: () => startPath(n) } }, 'Trace path…'));
+  if (n.rel) acts.append(el('button', {class:'btn', on:{click:() => openCheckout(n.rel)}}, 'Open in VS Code'), sourceLink(n.rel, null, null, 'GitHub'));
+  hd.append(acts);
+
+  if (S.path && S.path.nodes[S.path.nodes.length - 1] === n) bd.append(pathSection());
+  arduinoBody(n, bd);
+  bd.scrollTop = 0;
+}
+
+const REL_TXT = { wiring:['connects to','connects to'], coverage:['tests','tested by'],
+  dependency:['depends on','used by'], flow: ['opens', 'opened from'], shares: ['shares data with', 'shares data with'], mention: ['mentions', 'mentioned by'], data: ['uses', 'used by'], tree: ['contains', 'is part of'], uses: ['relies on', 'needed by'], applies: ['covers', 'covered by'] };
+function pathSection() {
+  const { nodes: ns, rels } = S.path;
+  const steps = el('div', { class: 'steps' });
+  ns.forEach((m, i) => {
+    const r = rels[i];
+    steps.append(el('div', { class: 'step', on: { click: () => goTo(m) } },
+      el('div', { class: 'rail' }, el('i', { style: `background:${m.color};--c:${m.color}` }), i < ns.length - 1 ? el('u') : null),
+      el('div', { class: 'body' }, el('b', {}, m.label), el('small', {}, `${KIND[m.kind]}${MOD[m.module] ? ' · ' + MOD[m.module].label : ''}`),
+        r ? el('small', { style: 'color:#ffe08a;margin-top:2px' }, `↓ ${r.rel === 'flow' && (isWf(m) || isWf(ns[i + 1])) ? (r.out ? 'hands off to' : 'is called from') : REL_TXT[r.rel][r.out ? 0 : 1]}`) : null)));
+  });
+  return section('Traced path', `${ns.length - 1} steps`, steps);
+}
+
+function renderCrumbs() {
+  const c = $('#crumbs'); c.replaceChildren();
+  const n = S.selected;
+  if (!n) { c.classList.remove('on'); return; }
+  const chain = []; for (let p = n; p; p = p.p) chain.unshift(p);
+  chain.forEach((m, i) => { if (i) c.append(el('em', {}, '›')); c.append(el('span', { on: { click: () => goTo(m) } }, m.label)); });
+  c.classList.add('on');
+}
+
+// ---------- search ----------
+const index = nodes.map(n => ({
+  n,
+  name: (n.label || '').toLowerCase(),
+  alt: [n.title, ...(n.aliases || []), n.screenId, ...(n.routes || []), n.path].filter(Boolean).map(s => [s, s.toLowerCase()]),
+  deep: [
+    ...[...(n.outlineEntries || []), ...(n.codeEntries || [])].map(e => [e.kind + ' · ' + e.label, e.label.toLowerCase()]),
+    ...(n.summary ? [['Summary', n.summary.toLowerCase()]] : []),
+    ...detailGroups(n).flatMap(([title, cards]) => cards.map(card => [title + ' · ' + card.label, (title + ' ' + card.label + ' ' + card.description).toLowerCase()])),
+    ...(n.trigger ? [['use when…', n.trigger.toLowerCase()]] : []),
+    ...(isWf(n) && n.summary ? [[n.summary.slice(0, 60) + '…', n.summary.toLowerCase()]] : []),
+    ...(n.outline || []).map(o => ['section ' + o, o.toLowerCase()]),
+    ...(n.tables || []).map(t => ['table ' + t, t.toLowerCase()]),
+    ...(n.apis || []).map(a => ['calls ' + a, a.toLowerCase()]),
+    ...(n.apiRefs || []).map(a => ['mentions ' + a, a.toLowerCase()]),
+    ...(n.fields || []).flatMap(f => [['field ' + f.label, f.label.toLowerCase()], ...f.names.map(x => ['field ' + x, x.toLowerCase()]), ...(f.props || []).map(p => ['sends ' + p, p.toLowerCase()])]),
+    ...(n.columns || []).map(c => ['column ' + c.col, c.col.toLowerCase()]),
+  ],
+}));
+function search(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const terms = q.split(/\s+/);
+  const out = [];
+  for (const it of index) {
+    let score = 0, hint = '';
+    for (const t of terms) {
+      let best = 0, h = '';
+      if (it.name === t) best = 140; else if (it.name.startsWith(t)) best = 100; else if (it.name.includes(t)) best = 72;
+      if (best < 50) for (const [orig, low] of it.alt) if (low.includes(t)) { const s = low === t ? 80 : 48; if (s > best) { best = s; h = 'aka ' + orig; } }
+      if (best < 25) for (const [orig, low] of it.deep) if (low.includes(t)) { best = 22; h = orig; break; }
+      if (!best) { score = 0; break; }
+      score += best; if (h && !hint) hint = h;
+    }
+    if (score) out.push({ n: it.n, score: score + (({ module: 12, cluster: 9, screen: 6, doc: 3, table: 0, api: 0, root: 0 })[it.n.kind] ?? 5) - (it.n.hub || it.n.deprecated ? 6 : 0), hint });
+  }
+  return out.sort((a, b) => b.score - a.score || a.n.label.localeCompare(b.n.label)).slice(0, 16);
+}
+const sIn = $('#search'), resBox = $('#results');
+let resList = [], resAct = 0;
+function renderResults() {
+  resBox.replaceChildren();
+  resList.forEach((r, i) => {
+    const n = r.n;
+    const sub = r.hint || (n.kind === 'screen' ? (n.p ? n.p.label : '') : n.summary || '');
+    resBox.append(el('div', { class: 'res' + (i === resAct ? ' act' : ''), on: { mousedown: ev => { ev.preventDefault(); pick(n); } } },
+      el('i', { class: 'dot', style: `background:${n.color}` }),
+      el('div', { class: 't' }, el('b', {}, n.label), sub ? el('span', {}, sub) : null),
+      el('span', { class: 'k' }, KIND[n.kind])));
+  });
+  resBox.classList.toggle('on', resList.length > 0);
+  if (sIn.value.trim() && !resList.length) { resBox.append(el('div', { style: 'color:var(--muted);padding:6px 9px' }, 'Nothing matches')); resBox.classList.add('on'); }
+}
+function pick(n) { resList = []; renderResults(); sIn.blur(); goTo(n); }
+sIn.addEventListener('input', () => { resList = search(sIn.value); resAct = 0; renderResults(); });
+sIn.addEventListener('keydown', ev => {
+  if (ev.key === 'ArrowDown') { resAct = Math.min(resList.length - 1, resAct + 1); renderResults(); ev.preventDefault(); }
+  else if (ev.key === 'ArrowUp') { resAct = Math.max(0, resAct - 1); renderResults(); ev.preventDefault(); }
+  else if (ev.key === 'Enter' && resList[resAct]) pick(resList[resAct].n);
+  else if (ev.key === 'Escape') { sIn.value = ''; resList = []; renderResults(); sIn.blur(); }
+});
+sIn.addEventListener('blur', () => setTimeout(() => {
+  if (document.activeElement !== sIn) resBox.classList.remove('on');
+}, 150));
+sIn.addEventListener('focus', () => { if (resList.length) resBox.classList.add('on'); });
+
+// ---------- controls ----------
+function setLayout(l) {
+  S.layout = l;
+  document.querySelectorAll('#layoutSeg button').forEach(b => b.classList.toggle('on', b.dataset.l === l));
+  for (const n of visNodes) n.pinned = false;
+  layoutBranches();
+  if (S.selected) frameSelection(S.selected); else setTimeout(() => fit(visNodes, 500), 330);
+}
+document.querySelectorAll('#layoutSeg button').forEach(b => b.addEventListener('click', () => setLayout(b.dataset.l)));
+function syncToggles() { document.querySelectorAll('[data-layer]').forEach(i => { i.checked = !!S.layers[i.dataset.layer]; }); }
+document.querySelectorAll('[data-layer]').forEach(i => i.addEventListener('change', () => {
+  S.layers[i.dataset.layer] = i.checked;
+  if (!i.checked && S.path?.rels.some(step => step.rel === i.dataset.layer)) S.path = null;
+  rebuild();
+  if (S.selected && layerNames[i.dataset.layer]) select(S.selected, {frame: true});
+  if (['table', 'api', 'hubs'].includes(i.dataset.layer) && S.selected) {
+    holdSelected();
+    if (i.checked && S.dataScope) toast(`Showing ${i.dataset.layer === 'table' ? 'tables' : i.dataset.layer === 'api' ? 'endpoints' : 'common ones'} for ${S.dataScope.label} only. Press Esc to see them for everything.`, 3500);
+  }
+}));
+function renderChips() {
+  const box = $('#modChips'); box.replaceChildren();
+  for (const m of modOrder) if (m !== WF) box.append(el('button', { type: 'button', class: 'chip' + (S.hiddenMods.has(m) ? ' off' : ''), 'aria-pressed': String(!S.hiddenMods.has(m)), title: 'Shift-click to show only this module', style: `--c:${MOD[m].color}`, on: { click: ev => toggleMod(m, ev.shiftKey) } }, el('i'), MOD[m].label));
+  syncWorkButton();
+}
+function toggleMod(m, solo) {
+  // Solo works across the screen modules only; How we work keeps its own on/off state.
+  if (solo) { const mods = modOrder.filter(x => x !== WF), wfOff = S.hiddenMods.has(WF); const only = mods.every(x => x === m || S.hiddenMods.has(x)) && !S.hiddenMods.has(m); S.hiddenMods = new Set(only ? [] : mods.filter(x => x !== m)); if (wfOff) S.hiddenMods.add(WF); }
+  else if (S.hiddenMods.has(m)) S.hiddenMods.delete(m); else S.hiddenMods.add(m);
+  if (S.dataScope && modHidden(S.dataScope)) S.dataScope = null;
+  if (S.selected && modHidden(S.selected)) { S.selected = null; renderPanel(); renderCrumbs(); }
+  renderChips(); rebuild(); setTimeout(() => fit(visNodes, 800), 500);
+}
+function syncWorkButton() {
+  const on = !S.hiddenMods.has(WF), t = $('#tWork'), u = $('#tUses');
+  if (t) t.checked = on;
+  if (u) u.classList.toggle('off', !on);
+  document.body.classList.toggle('wf', on); dockMini();
+}
+function toggleWork() {
+  const wf = byId.get(WF); if (!wf) return;
+  if (S.hiddenMods.has(WF)) {
+    S.hiddenMods.delete(WF); S.expanded.add(WF); S.expanded.add(WF + '/steps');
+    renderChips(); rebuild({ alpha: 1 }); syncWorkButton();
+    setTimeout(() => { const steps = byId.get(WF + '/steps'); select(steps || wf, { frame: true }); }, 500);
+  } else { toggleMod(WF); syncWorkButton(); }
+}
+function expandAll() { for (const n of nodes) if (n.children.length) S.expanded.add(n.id); rebuild({ alpha: 1 }); setTimeout(() => fit(visNodes, 1000), 1300); }
+function collapseAll() {
+  S.expanded = new Set(['root']); S.path = null; rebuild();
+  if (S.selected && !visSet.has(S.selected)) { S.selected = null; S.dataScope = null; rebuild(); }
+  renderPanel(); renderCrumbs(); setTimeout(() => fit(visNodes, 900), 600);
+}
+function unpinAll() { for (const n of nodes) n.pinned = false; S.alpha = 0.8; toast('All nodes unpinned'); }
+$('#bExpand').onclick = expandAll; $('#bCollapse').onclick = collapseAll; $('#bFit').onclick = () => fit();
+$('#bUnpin').onclick = unpinAll; $('#bHelp').onclick = () => $('#help').classList.add('on');
+$('#help').addEventListener('click', ev => { if (ev.target.id === 'help') $('#help').classList.remove('on'); });
+const toggleLeft = () => { document.body.classList.toggle('leftoff'); dockMini(); };
+$('#collapseLeft').onclick = toggleLeft; $('#showLeft').onclick = toggleLeft;
+
+mc.addEventListener('pointerdown', ev => {
+  const go = e => { if (!mini) return; const r = mc.getBoundingClientRect(); const x = ((e.clientX - r.left) * dpr - mini.ox) / mini.s + mini.x0, y = ((e.clientY - r.top) * dpr - mini.oy) / mini.s + mini.y0; S.tween = null; cam.x = x; cam.y = y; };
+  go(ev); mc.setPointerCapture(ev.pointerId);
+  const mv = e => go(e), up = () => { mc.removeEventListener('pointermove', mv); mc.removeEventListener('pointerup', up); };
+  mc.addEventListener('pointermove', mv); mc.addEventListener('pointerup', up);
+});
+
+addEventListener('keydown', ev => {
+  if (ev.target === sIn) return;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const k = ev.key;
+  if (k === '/') { ev.preventDefault(); if (document.body.classList.contains('leftoff')) toggleLeft(); sIn.focus(); sIn.select(); }
+  else if (k === 'Escape') { if ($('#help').classList.contains('on')) $('#help').classList.remove('on'); else clearSelection(); }
+  else if (k === 'f' || k === 'F') fit();
+  else if (k === 'e' || k === 'E') expandAll();
+  else if (k === 'c' || k === 'C') collapseAll();
+  else if (k === 'u' || k === 'U') unpinAll();
+  else if (k === 'm' || k === 'M') setLayout(S.layout === 'force' ? 'radial' : 'force');
+  else if (k === 'h' || k === 'H') toggleLeft();
+  else if ((k === 'w' || k === 'W') && byId.has(WF)) toggleWork();
+  else if (k === 'z' || k === 'Z') toggleFull();
+  else if (k === 'p' || k === 'P') { if (S.selected) startPath(S.selected); else toast('Select a node first'); }
+  else if (k === '?') $('#help').classList.toggle('on');
+});
+addEventListener('resize', resize);
+
+function toggleFull() {
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  const req = document.documentElement.requestFullscreen;
+  if (!req) { toast('This browser does not support full screen; press F11 instead'); return; }
+  req.call(document.documentElement).catch(() => toast('The browser blocked full screen; press F11 instead'));
+}
+$('#bFull').onclick = toggleFull;
+document.addEventListener('fullscreenchange', () => { $('#bFull').firstChild.textContent = document.fullscreenElement ? 'Exit full screen ' : 'Full screen '; });
+// A window that extends past the screen's work area (behind the taskbar) hides the bottom of every panel.
+let tallWarned = false;
+function checkWindowFits() {
+  if (tallWarned || document.fullscreenElement || !window.screen || !screen.availHeight) return;
+  const bottom = (window.screenY || 0) + window.outerHeight, workBottom = (screen.availTop || 0) + screen.availHeight;
+  if (bottom - workBottom > 12) { tallWarned = true; toast('Your browser window runs past the bottom of the screen, so panels look cut off. Press Z for full screen or maximize the window.', 7000); }
+}
+addEventListener('resize', checkWindowFits);
+setTimeout(checkWindowFits, 1800);
+
+// ---------- boot ----------
+$('#mapTitle').textContent = DATA.title || 'Knowledge Map';
+if (DATA.buildCommand) $('#buildCmd').textContent = DATA.buildCommand;
+$('#mainIndex').onclick = () => goTo(root);
+$('#browseFiles').onclick = () => goTo(byId.get('references'));
+$('#stats').textContent = GRAPH.inventory.files + ' files · ' + GRAPH.inventory.directories + ' folders · input ' + GRAPH.revision;
+$('#srcPath').textContent = DATA.source;
+if (innerWidth <= 760) document.body.classList.add('leftoff');
+resize(); renderChips(); syncToggles();
+rebuild({ intro: true, alpha: 1 });
+for (const n of visNodes) { n.x = n.tx; n.y = n.ty; }
+S.alpha = 0;
+fit(visNodes, 1);
+const target = { ...cam }; if (!motionInput.checked) cam.k = target.k * 0.35;
+requestAnimationFrame(t => { flyTo(target.x, target.y, target.k, 1600); const now = performance.now(); for (const n of visNodes) n.apAt = now + 150 + n.depth * 220 + Math.random() * 160; requestAnimationFrame(frame); });
+setTimeout(() => { $('#intro').style.opacity = 0; setTimeout(() => $('#intro').remove(), 900); }, 250);
+})();
+</script>
+</body>
+</html>

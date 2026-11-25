@@ -1,4 +1,5 @@
 ---
+parent: control-pipeline.md
 sources:
   - sketches/dual_track_control/src/domain/drive/CurvatureDrive.cpp
 ---

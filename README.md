@@ -13,6 +13,36 @@ Wi-Fi dashboard you open on your phone.
 
 ---
 
+## Explore the project
+
+### Malaki SuperTracks dashboard
+
+See the original Malaki SuperTracks dashboard mockup from issue #81.
+
+[![Malaki SuperTracks dashboard design](docs/images/malaki-supertracks-original.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html "Open Malaki SuperTracks dashboard")
+
+[Open Malaki SuperTracks dashboard](https://boulaajaj.github.io/Arduino-DiggerSetup/dashboard-demo.html)
+
+### 3D hardware explorer
+
+Rotate and zoom the drivetrain. Select a component to trace wiring, thermal protection, alerts, and tests.
+
+[![Interactive 3D view of the Arduino Digger drivetrain](docs/images/hardware-explorer.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/hardware-explorer.html "Open 3D hardware explorer")
+
+[Open 3D hardware explorer](https://boulaajaj.github.io/Arduino-DiggerSetup/hardware-explorer.html)
+
+### Interactive knowledge map
+
+Follow the project index through subsystem branches to the screens, files, and tests behind them.
+
+[![Arduino Digger knowledge map with labeled domain and code branches](docs/images/knowledge-map.png)](https://boulaajaj.github.io/Arduino-DiggerSetup/knowledge-explorer-kit.html "Open Interactive knowledge map")
+
+[Open Interactive knowledge map](https://boulaajaj.github.io/Arduino-DiggerSetup/knowledge-explorer-kit.html)
+
+[Browse the Markdown wiki](docs/wiki/home.md).
+
+---
+
 ## ✨ What It Can Do
 
 - **Tank / curvature mixing** — one stick (or wheel + trigger) blends into smooth

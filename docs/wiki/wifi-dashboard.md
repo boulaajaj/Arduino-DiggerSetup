@@ -1,4 +1,5 @@
 ---
+parent: telemetry-and-dashboard.md
 sources:
   - sketches/dual_track_control/src/infrastructure/network/
   - dashboard/index.html
@@ -12,6 +13,8 @@ only, permanently** — there is no control input over Wi-Fi, and no code path
 from the network to motor output
 ([telemetry and dashboard](telemetry-and-dashboard.md)).
 
+- [Dashboard display and status](dashboard-display.md) — gauges, freshness,
+  connection recovery, and browser safety indicators.
 - Current AP name, addresses, stream cadence, and endpoints:
   [CLAUDE.md](../../CLAUDE.md) (canonical)
 - Source of truth for the page is `dashboard/index.html`;

@@ -23,5 +23,7 @@ jobs:
           python-version: "3.12"
       - name: Self-test (every failure mode must fire)
         run: python scripts/check_wiki_selftest.py
-      - name: Lint the wiki
-        run: python scripts/check_wiki.py
+      - name: Self-test the graph generator
+        run: python scripts/build_knowledge_graph_selftest.py
+      - name: Lint the wiki and verify the generated knowledge graph
+        run: python scripts/build_knowledge_graph.py --check

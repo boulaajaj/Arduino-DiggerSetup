@@ -173,7 +173,7 @@ void loop() {
     Serial.print(" Good="); Serial.print(goodFrames);
     Serial.print(" Bad="); Serial.println(badFrames);
     for (uint8_t i = 0; i < NUM_ESCS; i++) {
-      ESCTelemetry *t = &telem[i];
+      const ESCTelemetry *t = &telem[i];
       Serial.print("#  ESC"); Serial.print(i); Serial.print(": ");
       if (!t->valid) {
         Serial.println("no data yet");
